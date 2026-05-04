@@ -1,4 +1,5 @@
 // Copyright 2015 Sorint.lab
+// Copyright 2026 WoozyMasta
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -206,7 +207,7 @@ func (p *PostgresKeeper) walLevel(db *cluster.DB) string {
 		"logical", // pg >= 10
 	}
 
-	maj, min, err := p.pgm.BinaryVersion()
+	maj, min, err := p.binaryVersion()
 	if err != nil {
 		// in case we fail to parse the binary version then log it and just use "hot_standby" that works for all versions
 		log.Warnf("failed to get postgres binary version: %v", err)
@@ -265,6 +266,13 @@ func (p *PostgresKeeper) walKeepSize(db *cluster.DB) string {
 	return walKeepSize
 }
 
+func (p *PostgresKeeper) binaryVersion() (int, int, error) {
+	if p.pgBinaryVersion != nil {
+		return p.pgBinaryVersion()
+	}
+	return p.pgm.BinaryVersion()
+}
+
 func (p *PostgresKeeper) mandatoryPGParameters(db *cluster.DB) common.Parameters {
 	params := common.Parameters{
 		"unix_socket_directories": common.PgUnixSocketDirectories,
@@ -272,7 +280,7 @@ func (p *PostgresKeeper) mandatoryPGParameters(db *cluster.DB) common.Parameters
 		"hot_standby":             "on",
 	}
 
-	maj, _, err := p.pgm.BinaryVersion()
+	maj, _, err := p.binaryVersion()
 	if err != nil {
 		// in case we fail to parse the binary version don't return any wal_keep_segments or wal_keep_size
 		log.Warnf("failed to get postgres binary version: %v", err)
@@ -489,6 +497,8 @@ type PostgresKeeper struct {
 	pgm *pg.Manager
 	end chan error
 
+	pgBinaryVersion func() (int, int, error)
+
 	localStateMutex  sync.Mutex
 	keeperLocalState *KeeperLocalState
 	dbLocalState     *DBLocalState
@@ -594,7 +604,7 @@ func (p *PostgresKeeper) updateKeeperInfo() error {
 		return nil
 	}
 
-	maj, min, err := p.pgm.BinaryVersion()
+	maj, min, err := p.binaryVersion()
 	if err != nil {
 		// in case we fail to parse the binary version then log it and just report maj and min as 0
 		log.Warnf("failed to get postgres binary version: %v", err)
@@ -830,6 +840,7 @@ func (p *PostgresKeeper) Start(ctx context.Context) {
 	// (RequestTimeout) after a changed cluster config
 	pgm := pg.NewManager(p.pgBinPath, p.dataDir, p.getLocalConnParams(), p.getLocalReplConnParams(), p.pgSUAuthMethod, p.pgSUUsername, p.pgSUPassword, p.pgReplAuthMethod, p.pgReplUsername, p.pgReplPassword, p.requestTimeout)
 	p.pgm = pgm
+	p.pgBinaryVersion = pgm.BinaryVersion
 
 	_ = p.pgm.StopIfStarted(true)
 
@@ -911,7 +922,7 @@ func (p *PostgresKeeper) resync(db, masterDB, followedDB *cluster.DB, tryPgrewin
 		}
 	}
 
-	maj, min, err := p.pgm.BinaryVersion()
+	maj, min, err := p.binaryVersion()
 	if err != nil {
 		// in case we fail to parse the binary version then log it and just don't use replSlot
 		log.Warnf("failed to get postgres binary version: %v", err)

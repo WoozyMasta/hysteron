@@ -23,6 +23,29 @@ import (
 	pg "github.com/sorintlab/stolon/internal/postgresql"
 )
 
+func BenchmarkKeeperCreatePGParameters(b *testing.B) {
+	p := &PostgresKeeper{
+		pgListenAddress: "127.0.0.1",
+		pgPort:          "5432",
+		dbLocalState: &DBLocalState{
+			InitPGParameters: common.Parameters{
+				"max_connections": "100",
+				"shared_buffers":  "128MB",
+			},
+		},
+		pgBinaryVersion: func() (int, int, error) { return 13, 0, nil },
+	}
+	db := benchmarkKeeperDB()
+
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		parameters := p.createPGParameters(db)
+		if parameters["wal_keep_size"] == "" {
+			b.Fatal("empty wal_keep_size")
+		}
+	}
+}
+
 func BenchmarkKeeperCreateRecoveryOptions(b *testing.B) {
 	p := &PostgresKeeper{}
 	standbySettings := &cluster.StandbySettings{
@@ -49,6 +72,31 @@ func BenchmarkKeeperCreateRecoveryOptions(b *testing.B) {
 		if options.RecoveryParameters["primary_conninfo"] == "" {
 			b.Fatal("empty primary_conninfo")
 		}
+	}
+}
+
+func benchmarkKeeperDB() *cluster.DB {
+	return &cluster.DB{
+		UID:        "db-0",
+		Generation: cluster.InitialGeneration,
+		Spec: &cluster.DBSpec{
+			KeeperUID:            "keeper-0",
+			InitMode:             cluster.DBInitModeNone,
+			Role:                 common.RoleMaster,
+			IncludeConfig:        true,
+			MaxStandbys:          8,
+			AdditionalWalSenders: 2,
+			UsePgrewind:          true,
+			PGParameters: cluster.PGParameters{
+				"shared_buffers": "256MB",
+				"work_mem":       "16MB",
+			},
+			SynchronousReplication:      true,
+			SynchronousStandbys:         []string{"db-1", "db-2"},
+			ExternalSynchronousStandbys: []string{"external_sync"},
+			Followers:                   []string{"db-1", "db-2"},
+			AdditionalReplicationSlots:  []string{"extra"},
+		},
 	}
 }
 

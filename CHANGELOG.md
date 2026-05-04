@@ -39,6 +39,9 @@ The format is based on [Keep a Changelog][], and this project adheres to
   modernization batch.
 * Update Prometheus monitoring dependencies in a separate controlled runtime
   modernization batch.
+* Internalize and modernize the TCP proxy previously provided by
+  `github.com/sorintlab/pollon` as `internal/tcpproxy`, removing the old
+  `pollon` and `tcpkeepalive` dependencies.
 
 ## v0.17.0
 

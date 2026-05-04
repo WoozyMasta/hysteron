@@ -29,7 +29,7 @@ import (
 
 func BenchmarkProxyCheckEnabledMaster(b *testing.B) {
 	c := benchmarkProxyChecker(benchmarkProxyClusterData(true))
-	defer c.stopPollonProxy()
+	defer c.stopTCPProxy()
 	if err := c.Check(); err != nil {
 		b.Fatal(err)
 	}
@@ -45,7 +45,7 @@ func BenchmarkProxyCheckEnabledMaster(b *testing.B) {
 
 func BenchmarkProxyCheckDisabledProxy(b *testing.B) {
 	c := benchmarkProxyChecker(benchmarkProxyClusterData(false))
-	defer c.stopPollonProxy()
+	defer c.stopTCPProxy()
 	if err := c.Check(); err != nil {
 		b.Fatal(err)
 	}
@@ -64,7 +64,7 @@ func BenchmarkProxySetProxyInfo(b *testing.B) {
 
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		if err := c.SetProxyInfo(c.e, cluster.InitialGeneration, cluster.DefaultProxyTimeout); err != nil {
+		if err := c.SetProxyInfo(cluster.InitialGeneration, cluster.DefaultProxyTimeout); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -87,7 +87,7 @@ func benchmarkProxyChecker(cd *cluster.ClusterData) *ClusterChecker {
 		port:               cfg.port,
 		stopListening:      true,
 		e:                  &benchmarkProxyStore{cd: cd},
-		endPollonProxyCh:   make(chan error, 1),
+		endTCPProxyCh:      make(chan error, 1),
 		proxyCheckInterval: cluster.DefaultProxyCheckInterval,
 		proxyTimeout:       cluster.DefaultProxyTimeout,
 	}

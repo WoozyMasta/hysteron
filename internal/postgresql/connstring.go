@@ -15,7 +15,9 @@
 package postgresql
 
 import (
+	"errors"
 	"fmt"
+	"maps"
 	"net/url"
 	"reflect"
 	"sort"
@@ -50,9 +52,7 @@ func (cp ConnParams) Equals(cp2 ConnParams) bool {
 
 func (cp ConnParams) Copy() ConnParams {
 	ncp := ConnParams{}
-	for k, v := range cp {
-		ncp[k] = v
-	}
+	maps.Copy(ncp, cp)
 	return ncp
 }
 
@@ -135,7 +135,7 @@ func ParseConnString(name string) (ConnParams, error) {
 			for !unicode.IsSpace(r) {
 				if r == '\\' {
 					if r, ok = s.Next(); !ok {
-						return nil, fmt.Errorf(`missing character after backslash`)
+						return nil, errors.New(`missing character after backslash`)
 					}
 				}
 				valRunes = append(valRunes, r)
@@ -148,7 +148,7 @@ func ParseConnString(name string) (ConnParams, error) {
 		quote:
 			for {
 				if r, ok = s.Next(); !ok {
-					return nil, fmt.Errorf(`unterminated quoted string literal in connection string`)
+					return nil, errors.New(`unterminated quoted string literal in connection string`)
 				}
 				switch r {
 				case '\'':

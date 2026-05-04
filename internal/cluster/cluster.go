@@ -16,6 +16,7 @@ package cluster
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"sort"
@@ -418,52 +419,52 @@ func (os *ClusterSpec) WithDefaults() *ClusterSpec {
 func (os *ClusterSpec) Validate() error {
 	s := os.WithDefaults()
 	if s.SleepInterval.Duration < 0 {
-		return fmt.Errorf("sleepInterval must be positive")
+		return errors.New("sleepInterval must be positive")
 	}
 	if s.RequestTimeout.Duration < 0 {
-		return fmt.Errorf("requestTimeout must be positive")
+		return errors.New("requestTimeout must be positive")
 	}
 	if s.ConvergenceTimeout.Duration < 0 {
-		return fmt.Errorf("convergenceTimeout must be positive")
+		return errors.New("convergenceTimeout must be positive")
 	}
 	if s.InitTimeout.Duration < 0 {
-		return fmt.Errorf("initTimeout must be positive")
+		return errors.New("initTimeout must be positive")
 	}
 	if s.SyncTimeout.Duration < 0 {
-		return fmt.Errorf("syncTimeout must be positive")
+		return errors.New("syncTimeout must be positive")
 	}
 	if s.DBWaitReadyTimeout.Duration < 0 {
-		return fmt.Errorf("dbWaitReadyTimeout must be positive")
+		return errors.New("dbWaitReadyTimeout must be positive")
 	}
 	if s.FailInterval.Duration < 0 {
-		return fmt.Errorf("failInterval must be positive")
+		return errors.New("failInterval must be positive")
 	}
 	if s.DeadKeeperRemovalInterval.Duration < 0 {
-		return fmt.Errorf("deadKeeperRemovalInterval must be positive")
+		return errors.New("deadKeeperRemovalInterval must be positive")
 	}
 	if s.ProxyCheckInterval.Duration < 0 {
-		return fmt.Errorf("proxyCheckInterval must be positive")
+		return errors.New("proxyCheckInterval must be positive")
 	}
 	if s.ProxyTimeout.Duration < 0 {
-		return fmt.Errorf("proxyTimeout must be positive")
+		return errors.New("proxyTimeout must be positive")
 	}
 	if s.ProxyCheckInterval.Duration >= s.ProxyTimeout.Duration {
-		return fmt.Errorf("proxyCheckInterval should be less than proxyTimeout")
+		return errors.New("proxyCheckInterval should be less than proxyTimeout")
 	}
 	if *s.MaxStandbys < 1 {
-		return fmt.Errorf("maxStandbys must be at least 1")
+		return errors.New("maxStandbys must be at least 1")
 	}
 	if *s.MaxStandbysPerSender < 1 {
-		return fmt.Errorf("maxStandbysPerSender must be at least 1")
+		return errors.New("maxStandbysPerSender must be at least 1")
 	}
 	if *s.MaxSynchronousStandbys < 1 {
-		return fmt.Errorf("maxSynchronousStandbys must be at least 1")
+		return errors.New("maxSynchronousStandbys must be at least 1")
 	}
 	if *s.MaxSynchronousStandbys < *s.MinSynchronousStandbys {
-		return fmt.Errorf("maxSynchronousStandbys must be greater or equal to minSynchronousStandbys")
+		return errors.New("maxSynchronousStandbys must be greater or equal to minSynchronousStandbys")
 	}
 	if s.InitMode == nil {
-		return fmt.Errorf("initMode undefined")
+		return errors.New("initMode undefined")
 	}
 	for _, replicationSlot := range s.AdditionalMasterReplicationSlots {
 		if err := validateReplicationSlot(replicationSlot); err != nil {
@@ -474,33 +475,33 @@ func (os *ClusterSpec) Validate() error {
 	// The unique validation we're doing on pgHBA entries is that they don't contain a newline character
 	for _, e := range s.PGHBA {
 		if strings.Contains(e, "\n") {
-			return fmt.Errorf("pgHBA entries cannot contain newline characters")
+			return errors.New("pgHBA entries cannot contain newline characters")
 		}
 	}
 
 	switch *s.InitMode {
 	case ClusterInitModeNew:
 		if *s.Role == ClusterRoleStandby {
-			return fmt.Errorf("invalid cluster role standby when initMode is \"new\"")
+			return errors.New("invalid cluster role standby when initMode is \"new\"")
 		}
 
 	case ClusterInitModeExisting:
 		if s.ExistingConfig == nil {
-			return fmt.Errorf("existingConfig undefined. Required when initMode is \"existing\"")
+			return errors.New("existingConfig undefined. Required when initMode is \"existing\"")
 		}
 		if s.ExistingConfig.KeeperUID == "" {
-			return fmt.Errorf("existingConfig.keeperUID undefined")
+			return errors.New("existingConfig.keeperUID undefined")
 		}
 
 	case ClusterInitModePITR:
 		if s.PITRConfig == nil {
-			return fmt.Errorf("pitrConfig undefined. Required when initMode is \"pitr\"")
+			return errors.New("pitrConfig undefined. Required when initMode is \"pitr\"")
 		}
 		if s.PITRConfig.DataRestoreCommand == "" {
-			return fmt.Errorf("pitrConfig.DataRestoreCommand undefined")
+			return errors.New("pitrConfig.DataRestoreCommand undefined")
 		}
 		if s.PITRConfig.RecoveryTargetSettings != nil && *s.Role == ClusterRoleStandby {
-			return fmt.Errorf("cannot define pitrConfig.RecoveryTargetSettings when required cluster role is standby")
+			return errors.New("cannot define pitrConfig.RecoveryTargetSettings when required cluster role is standby")
 		}
 
 	default:
@@ -518,7 +519,7 @@ func (os *ClusterSpec) Validate() error {
 	case ClusterRoleMaster:
 	case ClusterRoleStandby:
 		if s.StandbyConfig == nil {
-			return fmt.Errorf("standbyConfig undefined. Required when cluster role is \"standby\"")
+			return errors.New("standbyConfig undefined. Required when cluster role is \"standby\"")
 		}
 	default:
 		return fmt.Errorf("unknown role: %q", *s.InitMode)
@@ -544,10 +545,10 @@ func (c *Cluster) UpdateSpec(ns *ClusterSpec) error {
 	ds := s.WithDefaults()
 	dns := ns.WithDefaults()
 	if *ds.InitMode != *dns.InitMode {
-		return fmt.Errorf("cannot change cluster init mode")
+		return errors.New("cannot change cluster init mode")
 	}
 	if *ds.Role == ClusterRoleMaster && *dns.Role == ClusterRoleStandby {
-		return fmt.Errorf("cannot update a cluster from master role to standby role")
+		return errors.New("cannot update a cluster from master role to standby role")
 	}
 	c.Spec = ns
 	return nil

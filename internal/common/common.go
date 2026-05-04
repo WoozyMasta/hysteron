@@ -16,6 +16,7 @@
 package common
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -52,7 +53,7 @@ var Roles = []Role{
 
 func UID() string {
 	u := uuid.Must(uuid.NewV4())
-	return fmt.Sprintf("%x", u[:4])
+	return hex.EncodeToString(u[:4])
 }
 
 func UUID() string {

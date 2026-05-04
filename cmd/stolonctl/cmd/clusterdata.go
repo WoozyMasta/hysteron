@@ -17,6 +17,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -102,7 +103,7 @@ func isSafeToWriteClusterData(store store.Store) error {
 		return err
 	} else if cd != nil {
 		if !writeClusterdataOpts.forceYes {
-			return fmt.Errorf("WARNING: cluster data already available use --yes to override")
+			return errors.New("WARNING: cluster data already available use --yes to override")
 		} else {
 			stdout("WARNING: The current cluster data will be removed")
 		}

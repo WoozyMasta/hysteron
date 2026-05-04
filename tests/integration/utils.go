@@ -29,6 +29,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"sync"
@@ -39,7 +40,6 @@ import (
 	"github.com/sorintlab/stolon/internal/common"
 	pg "github.com/sorintlab/stolon/internal/postgresql"
 	"github.com/sorintlab/stolon/internal/store"
-	"github.com/sorintlab/stolon/internal/util"
 
 	"github.com/gofrs/uuid"
 	_ "github.com/lib/pq"
@@ -1212,7 +1212,7 @@ func WaitClusterDataKeepers(keepersUIDs []string, e *store.KVBackedStore, timeou
 		}
 		// Check for db on keeper to be initialized
 		for _, keeper := range cd.Keepers {
-			if !util.StringInSlice(keepersUIDs, keeper.UID) {
+			if !slices.Contains(keepersUIDs, keeper.UID) {
 				goto end
 			}
 		}
@@ -1243,7 +1243,7 @@ func WaitClusterSyncedXLogPos(keepers []*TestKeeper, xLogPos uint64, e *store.KV
 		}
 		// Check for db on keeper to be initialized
 		for _, keeper := range cd.Keepers {
-			if !util.StringInSlice(keepersUIDs, keeper.UID) {
+			if !slices.Contains(keepersUIDs, keeper.UID) {
 				continue
 			}
 			for _, db := range cd.DBs {

@@ -100,7 +100,7 @@ func renderJSON(status Status, generateErr error) {
 	}
 }
 
-func marshalJSON(value interface{}) {
+func marshalJSON(value any) {
 	output, err := json.MarshalIndent(value, "", "\t")
 	if err != nil {
 		die("failed to marshal error: %v", err)

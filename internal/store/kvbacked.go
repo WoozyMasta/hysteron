@@ -18,6 +18,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"path/filepath"
@@ -127,14 +128,14 @@ func NewKVStore(cfg Config) (KVStore, error) {
 			scheme = curscheme
 		}
 		if scheme != curscheme {
-			return nil, fmt.Errorf("all the endpoints must have the same scheme")
+			return nil, errors.New("all the endpoints must have the same scheme")
 		}
 		addrs = append(addrs, addr)
 	}
 
 	var tlsConfig *tls.Config
 	if scheme != "http" && scheme != "https" {
-		return nil, fmt.Errorf("endpoints scheme must be http or https")
+		return nil, errors.New("endpoints scheme must be http or https")
 	}
 	if scheme == "https" {
 		var err error

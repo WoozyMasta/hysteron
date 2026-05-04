@@ -18,13 +18,16 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"maps"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -225,7 +228,7 @@ func (p *PostgresKeeper) walLevel(db *cluster.DB) string {
 
 	if db.Spec.PGParameters != nil {
 		if l, ok := db.Spec.PGParameters["wal_level"]; ok {
-			if util.StringInSlice(additionalValidWalLevels, l) {
+			if slices.Contains(additionalValidWalLevels, l) {
 				walLevel = l
 			}
 		}
@@ -289,7 +292,7 @@ func (p *PostgresKeeper) mandatoryPGParameters(db *cluster.DB) common.Parameters
 	if maj >= 13 {
 		params["wal_keep_size"] = p.walKeepSize(db)
 	} else {
-		params["wal_keep_segments"] = fmt.Sprintf("%d", p.walKeepSegments(db))
+		params["wal_keep_segments"] = strconv.Itoa(p.walKeepSegments(db))
 	}
 
 	return params
@@ -360,20 +363,14 @@ func (p *PostgresKeeper) createPGParameters(db *cluster.DB) common.Parameters {
 	// Include init parameters if include config is required
 	dbls := p.dbLocalStateCopy()
 	if db.Spec.IncludeConfig {
-		for k, v := range dbls.InitPGParameters {
-			parameters[k] = v
-		}
+		maps.Copy(parameters, dbls.InitPGParameters)
 	}
 
 	// Copy user defined pg parameters
-	for k, v := range db.Spec.PGParameters {
-		parameters[k] = v
-	}
+	maps.Copy(parameters, db.Spec.PGParameters)
 
 	// Add/Replace mandatory PGParameters
-	for k, v := range p.mandatoryPGParameters(db) {
-		parameters[k] = v
-	}
+	maps.Copy(parameters, p.mandatoryPGParameters(db))
 
 	parameters["listen_addresses"] = p.pgListenAddress
 
@@ -680,7 +677,7 @@ func parseSynchronousStandbyNames(s string) ([]string, error) {
 			rest := strings.Join(spacesSplit[1:], " ")
 			inBrackets := strings.TrimSpace(rest)
 			if !strings.HasPrefix(inBrackets, "(") || !strings.HasSuffix(inBrackets, ")") {
-				return nil, fmt.Errorf("synchronous standby string has number but lacks brackets")
+				return nil, errors.New("synchronous standby string has number but lacks brackets")
 			}
 			withoutBrackets := strings.TrimRight(strings.TrimLeft(inBrackets, "("), ")")
 			entries = strings.Split(withoutBrackets, ",")
@@ -737,7 +734,7 @@ func (p *PostgresKeeper) GetPGState(pctx context.Context) (*cluster.PostgresStat
 		log.Debugw("got configured pg parameters", "pgParameters", pgParameters)
 		filteredPGParameters := common.Parameters{}
 		for k, v := range pgParameters {
-			if !util.StringInSlice(managedPGParameters, k) {
+			if !slices.Contains(managedPGParameters, k) {
 				filteredPGParameters[k] = v
 			}
 		}
@@ -1019,7 +1016,7 @@ func (p *PostgresKeeper) updateReplSlots(curReplSlots []string, uid string, foll
 
 	// Create internal replication slots
 	for slot := range internalReplSlots {
-		if !util.StringInSlice(curReplSlots, slot) {
+		if !slices.Contains(curReplSlots, slot) {
 			log.Infow("creating replication slot", "slot", slot)
 			if err := p.pgm.CreateReplicationSlot(slot); err != nil {
 				log.Errorw("failed to create replication slot", "slot", slot, zap.Error(err))

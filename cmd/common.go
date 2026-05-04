@@ -15,6 +15,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -100,17 +101,17 @@ func init() {
 
 func CheckCommonConfig(cfg *CommonConfig) error {
 	if cfg.ClusterName == "" {
-		return fmt.Errorf("cluster name required")
+		return errors.New("cluster name required")
 	}
 	if cfg.StoreBackend == "" {
-		return fmt.Errorf("store backend type required")
+		return errors.New("store backend type required")
 	}
 
 	switch cfg.StoreBackend {
 	case "etcdv3":
 	case "kubernetes":
 		if cfg.KubeResourceKind == "" {
-			return fmt.Errorf("unspecified kubernetes resource kind")
+			return errors.New("unspecified kubernetes resource kind")
 		}
 		if cfg.KubeResourceKind != "configmap" {
 			return fmt.Errorf("wrong kubernetes resource kind: %q", cfg.KubeResourceKind)

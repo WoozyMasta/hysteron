@@ -58,7 +58,8 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Check or explicitly discard remaining command, PostgreSQL, and store cleanup
   errors so `errcheck` is clean.
 * Clean up initial style lint findings for whitespace, unconvert, gocritic,
-  predeclared, and prealloc.
+  predeclared, prealloc, and perfsprint.
+* Replace the internal string-slice membership helper with `slices.Contains`.
 
 ## v0.17.0
 

@@ -14,16 +14,10 @@
 
 package util
 
-import "sort"
-
-func StringInSlice(s []string, e string) bool {
-	for _, v := range s {
-		if v == e {
-			return true
-		}
-	}
-	return false
-}
+import (
+	"slices"
+	"sort"
+)
 
 // CompareStringSlice compares two slices of strings, a nil slice is considered an empty one
 func CompareStringSlice(a []string, b []string) bool {
@@ -66,7 +60,7 @@ func CompareStringSliceNoOrder(a []string, b []string) bool {
 func CommonElements(a []string, b []string) []string {
 	common := []string{}
 	for _, v := range a {
-		if StringInSlice(b, v) {
+		if slices.Contains(b, v) {
 			common = append(common, v)
 		}
 	}
@@ -77,7 +71,7 @@ func CommonElements(a []string, b []string) []string {
 func Difference(a []string, b []string) []string {
 	diff := []string{}
 	for _, v := range a {
-		if !StringInSlice(b, v) {
+		if !slices.Contains(b, v) {
 			diff = append(diff, v)
 		}
 	}

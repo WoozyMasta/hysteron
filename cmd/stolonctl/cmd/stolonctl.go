@@ -85,27 +85,27 @@ func Execute() {
 	}
 }
 
-func stderr(format string, a ...interface{}) {
+func stderr(format string, a ...any) {
 	out := fmt.Sprintf(format, a...)
 	if _, err := fmt.Fprintln(os.Stderr, strings.TrimSuffix(out, "\n")); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func stdout(format string, a ...interface{}) {
+func stdout(format string, a ...any) {
 	out := fmt.Sprintf(format, a...)
 	if _, err := fmt.Fprintln(os.Stdout, strings.TrimSuffix(out, "\n")); err != nil {
 		die("write stdout: %v", err)
 	}
 }
 
-func writeOutput(w io.Writer, format string, a ...interface{}) {
+func writeOutput(w io.Writer, format string, a ...any) {
 	if _, err := fmt.Fprintf(w, format, a...); err != nil {
 		die("write output: %v", err)
 	}
 }
 
-func die(format string, a ...interface{}) {
+func die(format string, a ...any) {
 	stderr(format, a...)
 	os.Exit(1)
 }

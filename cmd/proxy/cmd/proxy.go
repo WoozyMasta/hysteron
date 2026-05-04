@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"slices"
 	"sync"
 	"time"
 
@@ -32,7 +33,6 @@ import (
 	slog "github.com/sorintlab/stolon/internal/log"
 	"github.com/sorintlab/stolon/internal/store"
 	"github.com/sorintlab/stolon/internal/tcpproxy"
-	"github.com/sorintlab/stolon/internal/util"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/spf13/cobra"
@@ -278,7 +278,7 @@ func (c *ClusterChecker) Check() error {
 
 	// start proxing only if we are inside enabledProxies, this ensures that the
 	// sentinel has read our proxyinfo and knows we are alive
-	if util.StringInSlice(proxy.Spec.EnabledProxies, c.uid) {
+	if slices.Contains(proxy.Spec.EnabledProxies, c.uid) {
 		log.Infow("proxying to master address", "address", addr)
 		c.setProxyDestination(addr)
 	} else {

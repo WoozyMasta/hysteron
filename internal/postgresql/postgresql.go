@@ -287,7 +287,7 @@ func (p *Manager) StartTmpMerged() error {
 	}
 	tmpPostgresConfPath := filepath.Join(p.dataDir, tmpPostgresConf)
 
-	return p.start("-c", fmt.Sprintf("config_file=%s", tmpPostgresConfPath))
+	return p.start("-c", "config_file="+tmpPostgresConfPath)
 }
 
 func (p *Manager) Start() error {
@@ -371,7 +371,7 @@ func (p *Manager) start(args ...string) error {
 
 		select {
 		case <-exited:
-			return fmt.Errorf("postgres exited unexpectedly")
+			return errors.New("postgres exited unexpectedly")
 		default:
 		}
 
@@ -379,7 +379,7 @@ func (p *Manager) start(args ...string) error {
 	}
 
 	if !ok {
-		return fmt.Errorf("instance still starting")
+		return errors.New("instance still starting")
 	}
 
 	p.UpdateCurParameters()
@@ -478,7 +478,7 @@ func (p *Manager) StopIfStarted(fast bool) error {
 		return err
 	}
 	if started {
-		return fmt.Errorf("failed to stop")
+		return errors.New("failed to stop")
 	}
 	return nil
 }
@@ -502,7 +502,7 @@ func (p *Manager) WaitReady(timeout time.Duration) error {
 		}
 		time.Sleep(200 * time.Millisecond)
 	}
-	return fmt.Errorf("timeout waiting for db ready")
+	return errors.New("timeout waiting for db ready")
 }
 
 func (p *Manager) WaitRecoveryDone(timeout time.Duration) error {
@@ -536,7 +536,7 @@ func (p *Manager) WaitRecoveryDone(timeout time.Duration) error {
 		}
 	}
 
-	return fmt.Errorf("timeout waiting for db recovery")
+	return errors.New("timeout waiting for db recovery")
 }
 
 func (p *Manager) Promote() error {
@@ -928,7 +928,7 @@ func (p *Manager) SyncFromFollowedPGRewind(followedConnParams ConnParams, passwo
 	log.Infow("running pg_rewind")
 	name := filepath.Join(p.pgBinPath, "pg_rewind")
 	cmd := exec.Command(name, "--debug", "-D", p.dataDir, "--source-server="+followedConnString)
-	cmd.Env = append(os.Environ(), fmt.Sprintf("PGPASSFILE=%s", pgpass.Name()))
+	cmd.Env = append(os.Environ(), "PGPASSFILE="+pgpass.Name())
 	log.Debugw("execing cmd", "cmd", cmd)
 
 	// Pipe command's std[err|out] to parent.
@@ -976,7 +976,7 @@ func (p *Manager) SyncFromFollowed(followedConnParams ConnParams, replSlot strin
 	}
 	cmd := exec.Command(name, args...)
 
-	cmd.Env = append(os.Environ(), fmt.Sprintf("PGPASSFILE=%s", pgpass.Name()))
+	cmd.Env = append(os.Environ(), "PGPASSFILE="+pgpass.Name())
 	log.Debugw("execing cmd", "cmd", cmd)
 
 	// Pipe pg_basebackup's stderr to our stderr.
@@ -1021,7 +1021,7 @@ func (p *Manager) RemoveAll() error {
 		}
 	}
 	if started {
-		return fmt.Errorf("cannot remove postregsql database. Instance is active")
+		return errors.New("cannot remove postregsql database. Instance is active")
 	}
 	return os.RemoveAll(p.dataDir)
 }

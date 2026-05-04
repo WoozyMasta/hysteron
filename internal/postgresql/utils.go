@@ -19,6 +19,7 @@ import (
 	"bufio"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -42,11 +43,11 @@ var (
 	postgresBinaryVersionRegexp = regexp.MustCompile(`.* \(PostgreSQL\) ([0-9\.]+).*`)
 )
 
-func dbExec(ctx context.Context, db *sql.DB, query string, args ...interface{}) (sql.Result, error) {
+func dbExec(ctx context.Context, db *sql.DB, query string, args ...any) (sql.Result, error) {
 	return db.ExecContext(ctx, query, args...)
 }
 
-func query(ctx context.Context, db *sql.DB, query string, args ...interface{}) (*sql.Rows, error) {
+func query(ctx context.Context, db *sql.DB, query string, args ...any) (*sql.Rows, error) {
 	return db.QueryContext(ctx, query, args...)
 }
 
@@ -76,7 +77,7 @@ func setPassword(ctx context.Context, connParams ConnParams, username, password 
 		return err
 	}
 
-	query := fmt.Sprintf("set local log_statement = %s", pq.QuoteLiteral("none"))
+	query := fmt.Sprintf("set local log_statement = %s", pq.QuoteLiteral("none")) //nolint:perfsprint
 	if _, err = tx.ExecContext(ctx, query); err != nil {
 		_ = tx.Rollback()
 		return err
@@ -102,7 +103,7 @@ func createRole(ctx context.Context, connParams ConnParams, roles []string, user
 		return err
 	}
 
-	query := fmt.Sprintf("set local log_statement = %s", pq.QuoteLiteral("none"))
+	query := fmt.Sprintf("set local log_statement = %s", pq.QuoteLiteral("none")) //nolint:perfsprint
 	if _, err = tx.ExecContext(ctx, query); err != nil {
 		_ = tx.Rollback()
 		return err
@@ -139,7 +140,7 @@ func alterRole(ctx context.Context, connParams ConnParams, roles []string, usern
 		return err
 	}
 
-	query := fmt.Sprintf("set local log_statement = %s", pq.QuoteLiteral("none"))
+	query := fmt.Sprintf("set local log_statement = %s", pq.QuoteLiteral("none")) //nolint:perfsprint
 	if _, err = tx.ExecContext(ctx, query); err != nil {
 		_ = tx.Rollback()
 		return err
@@ -186,7 +187,7 @@ func getReplicationSlots(ctx context.Context, connParams ConnParams, maj int) ([
 	if err != nil {
 		return nil, err
 	}
-	defer ignoreClose(rows)
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var slotName string
 		if err := rows.Scan(&slotName); err != nil {
@@ -234,7 +235,7 @@ func getSyncStandbys(ctx context.Context, connParams ConnParams) ([]string, erro
 	if err != nil {
 		return nil, err
 	}
-	defer ignoreClose(rows)
+	defer func() { _ = rows.Close() }()
 
 	syncStandbys := []string{}
 	for rows.Next() {
@@ -284,7 +285,7 @@ func GetSystemData(ctx context.Context, replConnParams ConnParams) (*SystemData,
 	if err != nil {
 		return nil, err
 	}
-	defer ignoreClose(rows)
+	defer func() { _ = rows.Close() }()
 	var systemData *SystemData
 	if rows.Next() {
 		var sd SystemData
@@ -303,7 +304,7 @@ func GetSystemData(ctx context.Context, replConnParams ConnParams) (*SystemData,
 		return nil, err
 	}
 	if systemData == nil {
-		return nil, fmt.Errorf("query returned 0 rows")
+		return nil, errors.New("query returned 0 rows")
 	}
 	return systemData, nil
 }
@@ -348,7 +349,7 @@ func getTimelinesHistory(ctx context.Context, timeline uint64, replConnParams Co
 	if err != nil {
 		return nil, err
 	}
-	defer ignoreClose(rows)
+	defer func() { _ = rows.Close() }()
 	var tlsh []*TimelineHistory
 	if rows.Next() {
 		var timelineFile string
@@ -365,7 +366,7 @@ func getTimelinesHistory(ctx context.Context, timeline uint64, replConnParams Co
 		return nil, err
 	}
 	if tlsh == nil {
-		return nil, fmt.Errorf("query returned 0 rows")
+		return nil, errors.New("query returned 0 rows")
 	}
 	return tlsh, nil
 }
@@ -431,7 +432,7 @@ func getConfigFilePGParameters(ctx context.Context, connParams ConnParams) (comm
 		if err != nil {
 			return nil, err
 		}
-		defer ignoreClose(rows)
+		defer func() { _ = rows.Close() }()
 		for rows.Next() {
 			var name, setting string
 			if err = rows.Scan(&name, &setting); err != nil {
@@ -450,7 +451,7 @@ func getConfigFilePGParameters(ctx context.Context, connParams ConnParams) (comm
 	if err != nil {
 		return nil, err
 	}
-	defer ignoreClose(rows)
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var name, setting, source string
 		if err = rows.Scan(&name, &setting, &source); err != nil {
@@ -471,7 +472,7 @@ func hasPGFileSettings(ctx context.Context, db *sql.DB) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	defer ignoreClose(rows)
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		return true, nil
@@ -494,7 +495,7 @@ func isRestartRequiredUsingPendingRestart(ctx context.Context, connParams ConnPa
 	if err != nil {
 		return isRestartRequired, err
 	}
-	defer ignoreClose(rows)
+	defer func() { _ = rows.Close() }()
 	if rows.Next() {
 		if err := rows.Scan(&isRestartRequired); err != nil {
 			return isRestartRequired, err
@@ -520,13 +521,13 @@ func isRestartRequiredUsingPgSettingsContext(ctx context.Context, connParams Con
 	if err != nil {
 		return false, err
 	}
-	defer ignoreClose(stmt)
+	defer func() { _ = stmt.Close() }()
 
 	rows, err := stmt.Query(pq.Array(changedParams))
 	if err != nil {
 		return isRestartRequired, err
 	}
-	defer ignoreClose(rows)
+	defer func() { _ = rows.Close() }()
 	if rows.Next() {
 		if err := rows.Scan(&isRestartRequired); err != nil {
 			return isRestartRequired, err
@@ -598,7 +599,7 @@ func XlogPosToWalFileNameNoTimeline(xLogPos uint64) string {
 
 func WalFileNameNoTimeLine(name string) (string, error) {
 	if !IsWalFileName(name) {
-		return "", fmt.Errorf("bad wal file name")
+		return "", errors.New("bad wal file name")
 	}
 	return name[8:24], nil
 }

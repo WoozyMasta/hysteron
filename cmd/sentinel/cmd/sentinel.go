@@ -17,12 +17,14 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net/http"
 	"os"
 	"os/signal"
 	"reflect"
+	"slices"
 	"sort"
 	"sync"
 	"syscall"
@@ -368,7 +370,7 @@ func (s *Sentinel) activeProxiesInfos(proxiesInfo cluster.ProxiesInfo) cluster.P
 
 func (s *Sentinel) findInitialKeeper(cd *cluster.ClusterData) (*cluster.Keeper, error) {
 	if len(cd.Keepers) < 1 {
-		return nil, fmt.Errorf("no keepers registered")
+		return nil, errors.New("no keepers registered")
 	}
 	r := s.RandFn(len(cd.Keepers))
 	keys := []string{}
@@ -1016,7 +1018,7 @@ func (s *Sentinel) updateCluster(cd *cluster.ClusterData, pis cluster.ProxiesInf
 						log.Warnw("cannot choose synchronous standby since there are no common elements between the latest master reported synchronous standbys and the db spec ones", "reported", curMasterDB.Status.SynchronousStandbys, "spec", curMasterDB.Spec.SynchronousStandbys)
 					} else {
 						for _, nm := range bestNewMasters {
-							if util.StringInSlice(commonSyncStandbys, nm.UID) {
+							if slices.Contains(commonSyncStandbys, nm.UID) {
 								bestNewMasterDB = nm
 								break
 							}
@@ -1450,7 +1452,7 @@ func (s *Sentinel) updateCluster(cd *cluster.ClusterData, pis cluster.ProxiesInf
 							continue
 						}
 						// Don't remove standbys marked as synchronous standbys
-						if util.StringInSlice(masterDB.Spec.SynchronousStandbys, db.UID) {
+						if slices.Contains(masterDB.Spec.SynchronousStandbys, db.UID) {
 							continue
 						}
 						if _, ok := goodStandbys[db.UID]; !ok {
@@ -1466,7 +1468,7 @@ func (s *Sentinel) updateCluster(cd *cluster.ClusterData, pis cluster.ProxiesInf
 							break
 						}
 						// Don't remove standbys marked as synchronous standbys
-						if util.StringInSlice(masterDB.Spec.SynchronousStandbys, db.UID) {
+						if slices.Contains(masterDB.Spec.SynchronousStandbys, db.UID) {
 							continue
 						}
 						log.Infow("removing good standby in excess", "db", db.UID)
@@ -1561,7 +1563,7 @@ func (s *Sentinel) updateCluster(cd *cluster.ClusterData, pis cluster.ProxiesInf
 
 	// check that we haven't changed the current cd or there's a bug somewhere
 	if !reflect.DeepEqual(origcd, cd) {
-		return nil, fmt.Errorf("cd was changed in updateCluster, this shouldn't happen")
+		return nil, errors.New("cd was changed in updateCluster, this shouldn't happen")
 	}
 	return newcd, nil
 }

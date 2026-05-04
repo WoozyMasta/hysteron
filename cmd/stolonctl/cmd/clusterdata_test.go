@@ -21,7 +21,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/sorintlab/stolon/internal/cluster"
-	"github.com/sorintlab/stolon/internal/mock/store"
+	mock_store "github.com/sorintlab/stolon/internal/mock/store"
 )
 
 func TestWriteClusterdata(t *testing.T) {

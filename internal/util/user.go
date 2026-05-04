@@ -15,7 +15,7 @@
 package util
 
 import (
-	"fmt"
+	"errors"
 	"os"
 	"os/user"
 )
@@ -31,5 +31,5 @@ func GetUser() (string, error) {
 		return name, nil
 	}
 
-	return "", fmt.Errorf("cannot detect current user")
+	return "", errors.New("cannot detect current user")
 }

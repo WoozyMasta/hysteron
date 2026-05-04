@@ -16,7 +16,9 @@ package v0
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"maps"
 	"strings"
 	"time"
 )
@@ -64,27 +66,29 @@ type Config struct {
 	PGParameters map[string]string
 }
 
+//go:fix inline
 func StringP(s string) *string {
-	return &s
+	return new(s)
 }
 
+//go:fix inline
 func UintP(u uint) *uint {
-	return &u
+	return new(u)
 }
 
+//go:fix inline
 func BoolP(b bool) *bool {
-	return &b
+	return new(b)
 }
 
+//go:fix inline
 func DurationP(d Duration) *Duration {
-	return &d
+	return new(d)
 }
 
 func MapStringP(m map[string]string) *map[string]string {
 	nm := map[string]string{}
-	for k, v := range m {
-		nm[k] = v
-	}
+	maps.Copy(nm, m)
 	return &nm
 }
 
@@ -108,25 +112,25 @@ func (c *NilConfig) Copy() *NilConfig {
 	}
 	var nc NilConfig
 	if c.RequestTimeout != nil {
-		nc.RequestTimeout = DurationP(*c.RequestTimeout)
+		nc.RequestTimeout = new(*c.RequestTimeout)
 	}
 	if c.SleepInterval != nil {
-		nc.SleepInterval = DurationP(*c.SleepInterval)
+		nc.SleepInterval = new(*c.SleepInterval)
 	}
 	if c.KeeperFailInterval != nil {
-		nc.KeeperFailInterval = DurationP(*c.KeeperFailInterval)
+		nc.KeeperFailInterval = new(*c.KeeperFailInterval)
 	}
 	if c.MaxStandbysPerSender != nil {
-		nc.MaxStandbysPerSender = UintP(*c.MaxStandbysPerSender)
+		nc.MaxStandbysPerSender = new(*c.MaxStandbysPerSender)
 	}
 	if c.SynchronousReplication != nil {
-		nc.SynchronousReplication = BoolP(*c.SynchronousReplication)
+		nc.SynchronousReplication = new(*c.SynchronousReplication)
 	}
 	if c.InitWithMultipleKeepers != nil {
-		nc.InitWithMultipleKeepers = BoolP(*c.InitWithMultipleKeepers)
+		nc.InitWithMultipleKeepers = new(*c.InitWithMultipleKeepers)
 	}
 	if c.UsePGRewind != nil {
-		nc.UsePGRewind = BoolP(*c.UsePGRewind)
+		nc.UsePGRewind = new(*c.UsePGRewind)
 	}
 	if c.PGParameters != nil {
 		nc.PGParameters = MapStringP(*c.PGParameters)
@@ -142,9 +146,7 @@ func (c *Config) Copy() *Config {
 	nc := *c
 	// Do a real deeep copy of the PGParameters map
 	nm := map[string]string{}
-	for k, v := range c.PGParameters {
-		nm[k] = v
-	}
+	maps.Copy(nm, c.PGParameters)
 	nc.PGParameters = nm
 	return &nc
 }
@@ -171,16 +173,16 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 
 func (c *NilConfig) Validate() error {
 	if c.RequestTimeout != nil && c.RequestTimeout.Duration < 0 {
-		return fmt.Errorf("request_timeout must be positive")
+		return errors.New("request_timeout must be positive")
 	}
 	if c.SleepInterval != nil && c.SleepInterval.Duration < 0 {
-		return fmt.Errorf("sleep_interval must be positive")
+		return errors.New("sleep_interval must be positive")
 	}
 	if c.KeeperFailInterval != nil && c.KeeperFailInterval.Duration < 0 {
-		return fmt.Errorf("keeper_fail_interval must be positive")
+		return errors.New("keeper_fail_interval must be positive")
 	}
 	if c.MaxStandbysPerSender != nil && *c.MaxStandbysPerSender < 1 {
-		return fmt.Errorf("max_standbys_per_sender must be at least 1")
+		return errors.New("max_standbys_per_sender must be at least 1")
 	}
 	return nil
 }
@@ -196,16 +198,16 @@ func (c *NilConfig) MergeDefaults() {
 		c.KeeperFailInterval = &Duration{DefaultKeeperFailInterval}
 	}
 	if c.MaxStandbysPerSender == nil {
-		c.MaxStandbysPerSender = UintP(DefaultMaxStandbysPerSender)
+		c.MaxStandbysPerSender = new(uint(DefaultMaxStandbysPerSender))
 	}
 	if c.SynchronousReplication == nil {
-		c.SynchronousReplication = BoolP(DefaultSynchronousReplication)
+		c.SynchronousReplication = new(DefaultSynchronousReplication)
 	}
 	if c.InitWithMultipleKeepers == nil {
-		c.InitWithMultipleKeepers = BoolP(DefaultInitWithMultipleKeepers)
+		c.InitWithMultipleKeepers = new(DefaultInitWithMultipleKeepers)
 	}
 	if c.UsePGRewind == nil {
-		c.UsePGRewind = BoolP(DefaultUsePGRewind)
+		c.UsePGRewind = new(DefaultUsePGRewind)
 	}
 	if c.PGParameters == nil {
 		c.PGParameters = &map[string]string{}

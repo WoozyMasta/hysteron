@@ -27,6 +27,8 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Add initial sentinel, proxy, store, keeper, cluster data, and PostgreSQL
   helper benchmarks plus benchmark baseline notes.
 * Fix atomic file writes with absolute paths on Windows.
+* Raise the Go module baseline to Go 1.25 and fix stricter format-string vet
+  findings.
 
 ## v0.17.0
 

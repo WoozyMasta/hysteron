@@ -246,7 +246,7 @@ func TestGenerateHBA(t *testing.T) {
 			for _, o := range tt.out {
 				b.WriteString(fmt.Sprintf("%s\n", o))
 			}
-			t.Errorf(b.String())
+			t.Errorf("%s", b.String())
 		}
 	}
 }

@@ -205,7 +205,7 @@ func printTree(dbuid string, cd *cluster.ClusterData, level int, prefix string, 
 	if dbuid == cd.Cluster.Status.Master {
 		out += " (master)"
 	}
-	stdout(out)
+	stdout("%s", out)
 	db := cd.DBs[dbuid]
 	followers := db.Spec.Followers
 	c := len(followers)

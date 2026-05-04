@@ -40,7 +40,7 @@ var CmdStolonCtl = &cobra.Command{
 	PersistentPreRun: func(c *cobra.Command, args []string) {
 		if c.Name() != "stolonctl" && c.Name() != "version" {
 			if err := cmd.CheckCommonConfig(&cfg.CommonConfig); err != nil {
-				die(err.Error())
+				die("%s", err.Error())
 			}
 		}
 	},

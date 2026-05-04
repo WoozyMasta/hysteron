@@ -1,4 +1,5 @@
 // Copyright 2017 Sorint.lab
+// Copyright 2026 WoozyMasta
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,12 +17,15 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"go.etcd.io/etcd/api/v3/v3rpc/rpctypes"
 	etcdclientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/concurrency"
 )
+
+const maxEtcdRevision = uint64(1<<63 - 1)
 
 func fromEtcV3Error(err error) error {
 	switch err {
@@ -31,6 +35,20 @@ func fromEtcV3Error(err error) error {
 		return ErrElectionNoLeader
 	}
 	return err
+}
+
+func revisionToLastIndex(revision int64) (uint64, error) {
+	if revision < 0 {
+		return 0, fmt.Errorf("negative etcd revision %d", revision)
+	}
+	return uint64(revision), nil
+}
+
+func lastIndexToRevision(lastIndex uint64) (int64, error) {
+	if lastIndex > maxEtcdRevision {
+		return 0, fmt.Errorf("etcd revision %d exceeds int64 range", lastIndex)
+	}
+	return int64(lastIndex), nil
 }
 
 type etcdV3Store struct {
@@ -68,7 +86,11 @@ func (s *etcdV3Store) Get(pctx context.Context, key string) (*KVPair, error) {
 		return nil, ErrKeyNotFound
 	}
 	kv := resp.Kvs[0]
-	return &KVPair{Key: string(kv.Key), Value: kv.Value, LastIndex: uint64(kv.ModRevision)}, nil
+	lastIndex, err := revisionToLastIndex(kv.ModRevision)
+	if err != nil {
+		return nil, err
+	}
+	return &KVPair{Key: string(kv.Key), Value: kv.Value, LastIndex: lastIndex}, nil
 }
 
 func (s *etcdV3Store) List(pctx context.Context, directory string) ([]*KVPair, error) {
@@ -80,7 +102,11 @@ func (s *etcdV3Store) List(pctx context.Context, directory string) ([]*KVPair, e
 	}
 	kvPairs := make([]*KVPair, len(resp.Kvs))
 	for i, kv := range resp.Kvs {
-		kvPairs[i] = &KVPair{Key: string(kv.Key), Value: kv.Value, LastIndex: uint64(kv.ModRevision)}
+		lastIndex, err := revisionToLastIndex(kv.ModRevision)
+		if err != nil {
+			return nil, err
+		}
+		kvPairs[i] = &KVPair{Key: string(kv.Key), Value: kv.Value, LastIndex: lastIndex}
 	}
 	return kvPairs, nil
 }
@@ -100,7 +126,11 @@ func (s *etcdV3Store) AtomicPut(pctx context.Context, key string, value []byte, 
 	}
 	var cmp etcdclientv3.Cmp
 	if previous != nil {
-		cmp = etcdclientv3.Compare(etcdclientv3.ModRevision(key), "=", int64(previous.LastIndex))
+		lastRevision, err := lastIndexToRevision(previous.LastIndex)
+		if err != nil {
+			return nil, err
+		}
+		cmp = etcdclientv3.Compare(etcdclientv3.ModRevision(key), "=", lastRevision)
 	} else {
 		// key doens't exists
 		cmp = etcdclientv3.Compare(etcdclientv3.CreateRevision(key), "=", 0)
@@ -117,7 +147,11 @@ func (s *etcdV3Store) AtomicPut(pctx context.Context, key string, value []byte, 
 		return nil, ErrKeyModified
 	}
 	revision := tresp.Responses[0].GetResponsePut().Header.Revision
-	return &KVPair{Key: key, Value: value, LastIndex: uint64(revision)}, nil
+	lastIndex, err := revisionToLastIndex(revision)
+	if err != nil {
+		return nil, err
+	}
+	return &KVPair{Key: key, Value: value, LastIndex: lastIndex}, nil
 }
 
 func (s *etcdV3Store) Delete(pctx context.Context, key string) error {

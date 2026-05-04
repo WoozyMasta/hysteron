@@ -16,9 +16,9 @@
 package common
 
 import (
+	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -108,7 +108,7 @@ func (s Parameters) Diff(newParams Parameters) []string {
 // Copyright 2012, Google Inc. BSD-license, see licenses/LICENSE-BSD-3-Clause
 func WriteFileAtomicFunc(filename string, perm os.FileMode, writeFunc func(f io.Writer) error) error {
 	dir, name := filepath.Split(filename)
-	f, err := ioutil.TempFile(dir, name)
+	f, err := os.CreateTemp(dir, name)
 	if err != nil {
 		return err
 	}
@@ -127,7 +127,9 @@ func WriteFileAtomicFunc(filename string, perm os.FileMode, writeFunc func(f io.
 	}
 	// Any err should result in full cleanup.
 	if err != nil {
-		os.Remove(f.Name())
+		if removeErr := os.Remove(f.Name()); removeErr != nil {
+			return errors.Join(err, fmt.Errorf("remove temporary file %q: %w", f.Name(), removeErr))
+		}
 	}
 	return err
 }

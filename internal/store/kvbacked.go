@@ -98,7 +98,7 @@ type KVStore interface {
 
 func NewKVStore(cfg Config) (KVStore, error) {
 	if cfg.Backend != ETCDV3 {
-		return nil, fmt.Errorf("Unknown store backend: %q", cfg.Backend)
+		return nil, fmt.Errorf("unknown store backend: %q", cfg.Backend)
 	}
 
 	endpointsStr := cfg.Endpoints

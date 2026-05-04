@@ -26,8 +26,8 @@ import (
 
 var (
 	// ErrKeyNotFound is thrown when the key is not found in the store during a Get operation
-	ErrKeyNotFound      = errors.New("Key not found in store")
-	ErrKeyModified      = errors.New("Unable to complete atomic operation, key modified")
+	ErrKeyNotFound      = errors.New("key not found in store")
+	ErrKeyModified      = errors.New("unable to complete atomic operation, key modified")
 	ErrElectionNoLeader = errors.New("election: no leader")
 )
 

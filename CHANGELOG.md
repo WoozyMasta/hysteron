@@ -49,6 +49,8 @@ The format is based on [Keep a Changelog][], and this project adheres to
   ConfigMap locks to `coordination.k8s.io/Lease` locks.
 * Check PostgreSQL query row iteration errors and close prepared statements in
   helper code.
+* Clean up correctness lint issues in common helpers, PostgreSQL file handling,
+  and store revision conversions.
 
 ## v0.17.0
 

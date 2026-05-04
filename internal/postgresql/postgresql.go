@@ -1,4 +1,5 @@
 // Copyright 2015 Sorint.lab
+// Copyright 2026 WoozyMasta
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -203,8 +203,8 @@ func (p *Manager) UpdateCurHba() {
 }
 
 func (p *Manager) Init(initConfig *InitConfig) error {
-	// ioutil.Tempfile already creates files with 0600 permissions
-	pwfile, err := ioutil.TempFile("", "pwfile")
+	// os.CreateTemp creates files with 0600 permissions.
+	pwfile, err := os.CreateTemp("", "pwfile")
 	if err != nil {
 		return err
 	}
@@ -240,7 +240,9 @@ func (p *Manager) Init(initConfig *InitConfig) error {
 	}
 	// remove the dataDir, so we don't end with an half initialized database
 	if err != nil {
-		os.RemoveAll(p.dataDir)
+		if removeErr := os.RemoveAll(p.dataDir); removeErr != nil {
+			return errors.Join(err, fmt.Errorf("remove data dir %q: %w", p.dataDir, removeErr))
+		}
 		return err
 	}
 	return nil
@@ -269,7 +271,9 @@ func (p *Manager) Restore(command string) error {
 	// On every error remove the dataDir, so we don't end with an half initialized database
 out:
 	if err != nil {
-		os.RemoveAll(p.dataDir)
+		if removeErr := os.RemoveAll(p.dataDir); removeErr != nil {
+			return errors.Join(err, fmt.Errorf("remove data dir %q: %w", p.dataDir, removeErr))
+		}
 		return err
 	}
 	return nil
@@ -351,12 +355,19 @@ func (p *Manager) start(args ...string) error {
 				fpid := scanner.Text()
 				if fpid == strconv.Itoa(pid) {
 					ok = true
-					fh.Close()
+					if err := fh.Close(); err != nil {
+						return fmt.Errorf("close postmaster pid file: %v", err)
+					}
 					break
 				}
 			}
+			if err := scanner.Err(); err != nil {
+				return fmt.Errorf("read postmaster pid file: %v", err)
+			}
+			if err := fh.Close(); err != nil {
+				return fmt.Errorf("close postmaster pid file: %v", err)
+			}
 		}
-		fh.Close()
 
 		select {
 		case <-exited:
@@ -744,10 +755,7 @@ func (p *Manager) writeConfs(useTmpPostgresConf bool) error {
 		return fmt.Errorf("error fetching pg version: %v", err)
 	}
 
-	writeRecoveryParamsInPostgresConf := false
-	if maj >= 12 {
-		writeRecoveryParamsInPostgresConf = true
-	}
+	writeRecoveryParamsInPostgresConf := maj >= 12
 
 	if err := p.writeConf(useTmpPostgresConf, writeRecoveryParamsInPostgresConf); err != nil {
 		return fmt.Errorf("error writing %s file: %v", postgresConf, err)
@@ -785,15 +793,15 @@ func (p *Manager) writeConf(useTmpPostgresConf, writeRecoveryParams bool) error 
 					return err
 				}
 				if !os.IsNotExist(err) {
-					if _, err := f.Write([]byte(fmt.Sprintf("include '%s'\n", postgresConf))); err != nil {
+					if _, err := fmt.Fprintf(f, "include '%s'\n", postgresConf); err != nil {
 						return err
 					}
 				}
 			}
 			for k, v := range p.parameters {
 				// Single quotes needs to be doubled
-				ev := strings.Replace(v, `'`, `''`, -1)
-				if _, err := f.Write([]byte(fmt.Sprintf("%s = '%s'\n", k, ev))); err != nil {
+				ev := strings.ReplaceAll(v, `'`, `''`)
+				if _, err := fmt.Fprintf(f, "%s = '%s'\n", k, ev); err != nil {
 					return err
 				}
 			}
@@ -802,7 +810,7 @@ func (p *Manager) writeConf(useTmpPostgresConf, writeRecoveryParams bool) error 
 				// write recovery parameters only if recoveryMode is not none
 				if p.recoveryOptions.RecoveryMode != RecoveryModeNone {
 					for n, v := range p.recoveryOptions.RecoveryParameters {
-						if _, err := f.Write([]byte(fmt.Sprintf("%s = '%s'\n", n, v))); err != nil {
+						if _, err := fmt.Fprintf(f, "%s = '%s'\n", n, v); err != nil {
 							return err
 						}
 					}
@@ -827,7 +835,7 @@ func (p *Manager) writeRecoveryConf() error {
 				}
 			}
 			for n, v := range p.recoveryOptions.RecoveryParameters {
-				if _, err := f.Write([]byte(fmt.Sprintf("%s = '%s'\n", n, v))); err != nil {
+				if _, err := fmt.Fprintf(f, "%s = '%s'\n", n, v); err != nil {
 					return err
 				}
 			}
@@ -897,8 +905,8 @@ func (p *Manager) SyncFromFollowedPGRewind(followedConnParams ConnParams, passwo
 		return fmt.Errorf("error removing postgresql.auto.conf file: %v", err)
 	}
 
-	// ioutil.Tempfile already creates files with 0600 permissions
-	pgpass, err := ioutil.TempFile("", "pgpass")
+	// os.CreateTemp creates files with 0600 permissions.
+	pgpass, err := os.CreateTemp("", "pgpass")
 	if err != nil {
 		return err
 	}
@@ -908,7 +916,7 @@ func (p *Manager) SyncFromFollowedPGRewind(followedConnParams ConnParams, passwo
 	host := followedConnParams.Get("host")
 	port := followedConnParams.Get("port")
 	user := followedConnParams.Get("user")
-	if _, err := pgpass.WriteString(fmt.Sprintf("%s:%s:*:%s:%s\n", host, port, user, password)); err != nil {
+	if _, err := fmt.Fprintf(pgpass, "%s:%s:*:%s:%s\n", host, port, user, password); err != nil {
 		return err
 	}
 
@@ -936,8 +944,8 @@ func (p *Manager) SyncFromFollowedPGRewind(followedConnParams ConnParams, passwo
 func (p *Manager) SyncFromFollowed(followedConnParams ConnParams, replSlot string) error {
 	fcp := followedConnParams.Copy()
 
-	// ioutil.Tempfile already creates files with 0600 permissions
-	pgpass, err := ioutil.TempFile("", "pgpass")
+	// os.CreateTemp creates files with 0600 permissions.
+	pgpass, err := os.CreateTemp("", "pgpass")
 	if err != nil {
 		return err
 	}
@@ -948,7 +956,7 @@ func (p *Manager) SyncFromFollowed(followedConnParams ConnParams, replSlot strin
 	port := fcp.Get("port")
 	user := fcp.Get("user")
 	password := fcp.Get("password")
-	if _, err = pgpass.WriteString(fmt.Sprintf("%s:%s:*:%s:%s\n", host, port, user, password)); err != nil {
+	if _, err = fmt.Fprintf(pgpass, "%s:%s:*:%s:%s\n", host, port, user, password); err != nil {
 		return err
 	}
 
@@ -1060,7 +1068,9 @@ func (p *Manager) OlderWalFile() (string, error) {
 		return "", err
 	}
 	names, err := f.Readdirnames(-1)
-	f.Close()
+	if closeErr := f.Close(); err == nil {
+		err = closeErr
+	}
 	if err != nil {
 		return "", err
 	}

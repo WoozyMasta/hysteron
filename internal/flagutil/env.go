@@ -35,7 +35,7 @@ func SetFlagsFromEnv(fs *flag.FlagSet, prefix string) (err error) {
 	})
 	fs.VisitAll(func(f *flag.Flag) {
 		if !alreadySet[f.Name] {
-			key := prefix + "_" + strings.ToUpper(strings.Replace(f.Name, "-", "_", -1))
+			key := prefix + "_" + strings.ToUpper(strings.ReplaceAll(f.Name, "-", "_"))
 			val := os.Getenv(key)
 			if val != "" {
 				if serr := fs.Set(f.Name, val); serr != nil {

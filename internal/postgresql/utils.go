@@ -591,7 +591,8 @@ func IsWalFileName(name string) bool {
 
 func XlogPosToWalFileNameNoTimeline(XLogPos uint64) string {
 	id := uint32(XLogPos >> 32)
-	offset := uint32(XLogPos)
+	// The WAL segment offset is defined by the lower 32 bits of the LSN.
+	offset := uint32(XLogPos) //nolint:gosec
 	// TODO(sgotti) for now we assume wal size is the default 16M size
 	seg := offset / WalSegSize
 	return fmt.Sprintf("%08X%08X", id, seg)

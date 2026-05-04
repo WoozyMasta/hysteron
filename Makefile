@@ -1,17 +1,23 @@
 RELEASE_MATRIX := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64
 
 GO          ?= go
-GOWORK      ?= off
-CGO_ENABLED ?= 0
 LINTER      ?= golangci-lint
 ALIGNER     ?= betteralign
 BENCHSTAT   ?= benchstat
-VULN        ?= govulncheck
+VULNCHECK   ?= govulncheck
+CRI         ?= docker
 BENCH_COUNT ?= 6
 BENCH_REF   ?= bench_baseline.txt
 
+CGO_ENABLED ?= 0
+GOFLAGS     ?= -buildvcs=auto -trimpath
+LDFLAGS     ?= -s -w
+GOWORK      ?= off
+GOFTAGS     ?= forceposix
+
 BINARIES   := stolon-keeper stolon-sentinel stolon-proxy stolonctl
 OUTPUT_DIR := build
+
 TEST_PACKAGES ?= $(shell GOWORK=off $(GO) list ./... | grep -v '/tests/integration$$')
 
 NATIVE_GOOS      := $(shell GOWORK=off $(GO) env GOOS)
@@ -23,20 +29,26 @@ ifeq ($(RACE),1)
 	EXTRA_BUILD_FLAGS := -race
 endif
 
-MODULE  := $(shell GOWORK=off $(GO) list -m -f '{{.Path}}')
-VERSION ?= $(shell git describe --match 'v[0-9]*' --dirty='.m' --always --tags 2>/dev/null || echo v0.0.0)
+VERSION := $(shell git describe --tags --abbrev=0 2>/dev/null || echo v0.0.0)
+COMMIT  := $(shell git rev-parse HEAD 2>/dev/null || echo unknown)
+DATE    := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+URL     ?= https://$(MODULE_PATH)
 
-LDFLAGS_X := -X '$(MODULE)/cmd.Version=$(VERSION)'
+LDFLAGS_X := \
+	-X 'main.Version=$(VERSION)' \
+	-X 'main.Commit=$(COMMIT)' \
+	-X 'main._buildTime=$(DATE)' \
+	-X 'main.URL=$(URL)'
 
 .PHONY: all build release clean check ci verify tidy tidy-check download fmt \
 	fmt-check vet lint lint-fix align align-fix test test-race test-short bench \
-	bench-fast bench-reset integration vuln tools tools-ci tool-golangci-lint \
-	tool-betteralign tool-benchstat tool-vuln docker
+	bench-fast bench-reset integration vulncheck tools tools-ci tool-golangci-lint \
+	tool-betteralign tool-benchstat tool-vulncheck container-build
 
 all: build
 
-check: verify tidy fmt vet lint-fix align-fix test
-ci: download tools-ci verify tidy-check fmt-check vet lint align test
+check: verify vulncheck tidy fmt vet lint-fix align-fix test
+ci: download tools-ci verify vulncheck tidy-check fmt-check vet lint align test
 
 clean:
 	rm -rf $(OUTPUT_DIR)
@@ -125,6 +137,9 @@ align-fix:
 	-$(ALIGNER) -apply ./...
 	$(ALIGNER) ./...
 
+vulncheck:
+	$(VULNCHECK) ./...
+
 test:
 	$(GO) test $(TEST_PACKAGES)
 
@@ -161,11 +176,8 @@ integration: build
 	STCTL_BIN="$(OUTPUT_DIR)/stolonctl$(NATIVE_EXTENSION)" \
 	$(GO) test -timeout 20m -v -count 1 ./tests/integration
 
-vuln:
-	$(VULN) ./...
-
-tools: tool-golangci-lint tool-betteralign tool-benchstat tool-vuln
-tools-ci: tool-golangci-lint tool-betteralign tool-vuln
+tools: tool-golangci-lint tool-betteralign tool-benchstat tool-govulncheck
+tools-ci: tool-golangci-lint tool-betteralign tool-govulncheck
 
 tool-golangci-lint:
 	$(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
@@ -176,11 +188,31 @@ tool-betteralign:
 tool-benchstat:
 	$(GO) install golang.org/x/perf/cmd/benchstat@latest
 
-tool-vuln:
+tool-govulncheck:
 	$(GO) install golang.org/x/vuln/cmd/govulncheck@latest
 
-docker:
+tool-cyclonedx:
+	$(GO) install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@latest
+
+release-notes:
+	@awk '\
+	/^<!--/,/^-->/ { next } \
+	/^## \[[0-9]+\.[0-9]+\.[0-9]+\]/ { if (found) exit; found=1; next } \
+	found { \
+		if (/^## \[/) { exit } \
+		if (/^$$/) { flush(); print; next } \
+		if (/^\* / || /^- /) { flush(); buf=$$0; next } \
+		if (/^###/ || /^\[/) { flush(); print; next } \
+		sub(/^[ \t]+/, ""); sub(/[ \t]+$$/, ""); \
+		if (buf != "") { buf = buf " " $$0 } else { buf = $$0 } \
+		next \
+	} \
+	function flush() { if (buf != "") { print buf; buf = "" } } \
+	END { flush() } \
+	' CHANGELOG.md
+
+container-build:
 	if [ -z "$${PGVERSION}" ]; then echo 'PGVERSION is undefined'; exit 1; fi; \
 	if [ -z "$${TAG}" ]; then echo 'TAG is undefined'; exit 1; fi; \
-	docker build --build-arg PGVERSION=$${PGVERSION} -t $${TAG} \
+	$(CRI) build --build-arg PGVERSION=$${PGVERSION} -t $${TAG} \
 		-f examples/kubernetes/image/docker/Dockerfile .

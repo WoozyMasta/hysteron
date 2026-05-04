@@ -483,6 +483,7 @@ func (os *ClusterSpec) Validate() error {
 		if *s.Role == ClusterRoleStandby {
 			return fmt.Errorf("invalid cluster role standby when initMode is \"new\"")
 		}
+
 	case ClusterInitModeExisting:
 		if s.ExistingConfig == nil {
 			return fmt.Errorf("existingConfig undefined. Required when initMode is \"existing\"")
@@ -490,6 +491,7 @@ func (os *ClusterSpec) Validate() error {
 		if s.ExistingConfig.KeeperUID == "" {
 			return fmt.Errorf("existingConfig.keeperUID undefined")
 		}
+
 	case ClusterInitModePITR:
 		if s.PITRConfig == nil {
 			return fmt.Errorf("pitrConfig undefined. Required when initMode is \"pitr\"")
@@ -500,9 +502,9 @@ func (os *ClusterSpec) Validate() error {
 		if s.PITRConfig.RecoveryTargetSettings != nil && *s.Role == ClusterRoleStandby {
 			return fmt.Errorf("cannot define pitrConfig.RecoveryTargetSettings when required cluster role is standby")
 		}
+
 	default:
 		return fmt.Errorf("unknown initMode: %q", *s.InitMode)
-
 	}
 
 	switch *s.DefaultSUReplAccessMode {
@@ -606,7 +608,7 @@ func NewKeeperFromKeeperInfo(ki *KeeperInfo) *Keeper {
 }
 
 func (kss Keepers) SortedKeys() []string {
-	keys := []string{}
+	keys := make([]string, 0, len(kss))
 	for k := range kss {
 		keys = append(keys, k)
 	}

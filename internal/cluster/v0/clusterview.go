@@ -28,7 +28,7 @@ const (
 type KeepersState map[string]*KeeperState
 
 func (kss KeepersState) SortedKeys() []string {
-	keys := []string{}
+	keys := make([]string, 0, len(kss))
 	for k := range kss {
 		keys = append(keys, k)
 	}

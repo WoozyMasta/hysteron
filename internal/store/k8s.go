@@ -146,7 +146,7 @@ func (s *KubeStore) AtomicPutClusterData(ctx context.Context, cd *cluster.Cluste
 					if ok {
 						// check that the previous cd is the same as the current one in the
 						// configmap annotation
-						if string(previous.Value) != string(curcd) {
+						if string(previous.Value) != curcd {
 							return ErrKeyModified
 						}
 					} else {

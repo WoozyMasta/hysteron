@@ -170,13 +170,13 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 }
 
 func (c *NilConfig) Validate() error {
-	if c.RequestTimeout != nil && (*c.RequestTimeout).Duration < 0 {
+	if c.RequestTimeout != nil && c.RequestTimeout.Duration < 0 {
 		return fmt.Errorf("request_timeout must be positive")
 	}
-	if c.SleepInterval != nil && (*c.SleepInterval).Duration < 0 {
+	if c.SleepInterval != nil && c.SleepInterval.Duration < 0 {
 		return fmt.Errorf("sleep_interval must be positive")
 	}
-	if c.KeeperFailInterval != nil && (*c.KeeperFailInterval).Duration < 0 {
+	if c.KeeperFailInterval != nil && c.KeeperFailInterval.Duration < 0 {
 		return fmt.Errorf("keeper_fail_interval must be positive")
 	}
 	if c.MaxStandbysPerSender != nil && *c.MaxStandbysPerSender < 1 {
@@ -216,9 +216,9 @@ func (c *NilConfig) ToConfig() *Config {
 	nc := c.Copy()
 	nc.MergeDefaults()
 	return &Config{
-		RequestTimeout:          (*nc.RequestTimeout).Duration,
-		SleepInterval:           (*nc.SleepInterval).Duration,
-		KeeperFailInterval:      (*nc.KeeperFailInterval).Duration,
+		RequestTimeout:          nc.RequestTimeout.Duration,
+		SleepInterval:           nc.SleepInterval.Duration,
+		KeeperFailInterval:      nc.KeeperFailInterval.Duration,
 		MaxStandbysPerSender:    *nc.MaxStandbysPerSender,
 		SynchronousReplication:  *nc.SynchronousReplication,
 		InitWithMultipleKeepers: *nc.InitWithMultipleKeepers,

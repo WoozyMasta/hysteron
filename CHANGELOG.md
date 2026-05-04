@@ -57,6 +57,8 @@ The format is based on [Keep a Changelog][], and this project adheres to
   `gexpect` pseudo-terminal dependency is Unix-only.
 * Check or explicitly discard remaining command, PostgreSQL, and store cleanup
   errors so `errcheck` is clean.
+* Clean up initial style lint findings for whitespace, unconvert, gocritic,
+  predeclared, and prealloc.
 
 ## v0.17.0
 

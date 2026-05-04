@@ -37,7 +37,9 @@ const (
 )
 
 var (
-	ValidReplSlotName = regexp.MustCompile("^[a-z0-9_]+$")
+	ValidReplSlotName           = regexp.MustCompile("^[a-z0-9_]+$")
+	timelineHistoryLineRegexp   = regexp.MustCompile(`(\S+)\s+(\S+)\s+(.*)$`)
+	postgresBinaryVersionRegexp = regexp.MustCompile(`.* \(PostgreSQL\) ([0-9\.]+).*`)
 )
 
 func dbExec(ctx context.Context, db *sql.DB, query string, args ...interface{}) (sql.Result, error) {
@@ -265,7 +267,7 @@ func PGLsnToInt(lsn string) (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	v := uint64(a)<<32 | b
+	v := a<<32 | b
 	return v, nil
 }
 
@@ -308,18 +310,15 @@ func GetSystemData(ctx context.Context, replConnParams ConnParams) (*SystemData,
 
 func parseTimelinesHistory(contents string) ([]*TimelineHistory, error) {
 	tlsh := []*TimelineHistory{}
-	regex, err := regexp.Compile(`(\S+)\s+(\S+)\s+(.*)$`)
-	if err != nil {
-		return nil, err
-	}
 
 	scanner := bufio.NewScanner(strings.NewReader(contents))
 	scanner.Split(bufio.ScanLines)
 
 	for scanner.Scan() {
-		m := regex.FindStringSubmatch(scanner.Text())
+		m := timelineHistoryLineRegexp.FindStringSubmatch(scanner.Text())
 		if len(m) == 4 {
 			var tlh TimelineHistory
+			var err error
 			if tlh.TimelineID, err = strconv.ParseUint(m[1], 10, 64); err != nil {
 				return nil, fmt.Errorf("cannot parse timelineID in timeline history line %q: %v", scanner.Text(), err)
 			}
@@ -330,7 +329,10 @@ func parseTimelinesHistory(contents string) ([]*TimelineHistory, error) {
 			tlsh = append(tlsh, &tlh)
 		}
 	}
-	return tlsh, err
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	return tlsh, nil
 }
 
 func getTimelinesHistory(ctx context.Context, timeline uint64, replConnParams ConnParams) ([]*TimelineHistory, error) {
@@ -539,11 +541,7 @@ func isRestartRequiredUsingPgSettingsContext(ctx context.Context, connParams Con
 
 func ParseBinaryVersion(v string) (int, int, error) {
 	// extract version (removing beta*, rc* etc...)
-	regex, err := regexp.Compile(`.* \(PostgreSQL\) ([0-9\.]+).*`)
-	if err != nil {
-		return 0, 0, err
-	}
-	m := regex.FindStringSubmatch(v)
+	m := postgresBinaryVersionRegexp.FindStringSubmatch(v)
 	if len(m) != 2 {
 		return 0, 0, fmt.Errorf("failed to parse postgres binary version: %q", v)
 	}
@@ -559,15 +557,15 @@ func ParseVersion(v string) (int, int, error) {
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to parse major %q: %v", parts[0], err)
 	}
-	min := 0
+	minor := 0
 	if len(parts) > 1 {
-		min, err = strconv.Atoi(parts[1])
+		minor, err = strconv.Atoi(parts[1])
 		if err != nil {
 			return 0, 0, fmt.Errorf("failed to parse minor %q: %v", parts[1], err)
 		}
 	}
 
-	return maj, min, nil
+	return maj, minor, nil
 }
 
 func IsWalFileName(name string) bool {
@@ -589,10 +587,10 @@ func IsWalFileName(name string) bool {
 	return true
 }
 
-func XlogPosToWalFileNameNoTimeline(XLogPos uint64) string {
-	id := uint32(XLogPos >> 32)
+func XlogPosToWalFileNameNoTimeline(xLogPos uint64) string {
+	id := uint32(xLogPos >> 32)
 	// The WAL segment offset is defined by the lower 32 bits of the LSN.
-	offset := uint32(XLogPos) //nolint:gosec
+	offset := uint32(xLogPos) //nolint:gosec
 	// TODO(sgotti) for now we assume wal size is the default 16M size
 	seg := offset / WalSegSize
 	return fmt.Sprintf("%08X%08X", id, seg)

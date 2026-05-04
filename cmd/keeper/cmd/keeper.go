@@ -206,7 +206,7 @@ func (p *PostgresKeeper) walLevel(db *cluster.DB) string {
 		"logical", // pg >= 10
 	}
 
-	maj, min, err := p.binaryVersion()
+	major, minor, err := p.binaryVersion()
 	if err != nil {
 		// in case we fail to parse the binary version then log it and just use "hot_standby" that works for all versions
 		log.Warnf("failed to get postgres binary version: %v", err)
@@ -215,11 +215,11 @@ func (p *PostgresKeeper) walLevel(db *cluster.DB) string {
 
 	// set default wal_level
 	walLevel := "hot_standby"
-	if maj == 9 {
-		if min >= 6 {
+	if major == 9 {
+		if minor >= 6 {
 			walLevel = "replica"
 		}
-	} else if maj >= 10 {
+	} else if major >= 10 {
 		walLevel = "replica"
 	}
 
@@ -395,7 +395,7 @@ func (p *PostgresKeeper) createPGParameters(db *cluster.DB) common.Parameters {
 
 	// Setup synchronous replication
 	if db.Spec.SynchronousReplication && (len(db.Spec.SynchronousStandbys) > 0 || len(db.Spec.ExternalSynchronousStandbys) > 0) {
-		synchronousStandbys := []string{}
+		synchronousStandbys := make([]string, 0, len(db.Spec.SynchronousStandbys)+len(db.Spec.ExternalSynchronousStandbys))
 		for _, synchronousStandby := range db.Spec.SynchronousStandbys {
 			synchronousStandbys = append(synchronousStandbys, common.StolonName(synchronousStandby))
 		}
@@ -603,7 +603,7 @@ func (p *PostgresKeeper) updateKeeperInfo() error {
 		return nil
 	}
 
-	maj, min, err := p.binaryVersion()
+	major, minor, err := p.binaryVersion()
 	if err != nil {
 		// in case we fail to parse the binary version then log it and just report maj and min as 0
 		log.Warnf("failed to get postgres binary version: %v", err)
@@ -615,8 +615,8 @@ func (p *PostgresKeeper) updateKeeperInfo() error {
 		ClusterUID: clusterUID,
 		BootUUID:   p.bootUUID,
 		PostgresBinaryVersion: cluster.PostgresBinaryVersion{
-			Maj: maj,
-			Min: min,
+			Maj: major,
+			Min: minor,
 		},
 		PostgresState: p.getLastPGState(),
 
@@ -921,13 +921,13 @@ func (p *PostgresKeeper) resync(db, masterDB, followedDB *cluster.DB, tryPgrewin
 		}
 	}
 
-	maj, min, err := p.binaryVersion()
+	major, minor, err := p.binaryVersion()
 	if err != nil {
 		// in case we fail to parse the binary version then log it and just don't use replSlot
 		log.Warnf("failed to get postgres binary version: %v", err)
 	}
 	replSlot := ""
-	if (maj == 9 && min >= 6) || maj > 10 {
+	if (major == 9 && minor >= 6) || major > 10 {
 		replSlot = common.StolonName(db.UID)
 	}
 
@@ -1997,10 +1997,8 @@ func keeper(c *cobra.Command, args []string) {
 	ipAddr, err := net.ResolveIPAddr("ip", cfg.pgAdvertiseAddress)
 	if err != nil {
 		log.Warnf("cannot resolve provided --%s %q: %v", listenAddFlag, cfg.pgAdvertiseAddress, err)
-	} else {
-		if ipAddr.IP.IsLoopback() {
-			log.Warnf("provided --%s %q is a loopback ip. This will be advertized to the other components and communication will fail if they are on different hosts", listenAddFlag, cfg.pgAdvertiseAddress)
-		}
+	} else if ipAddr.IP.IsLoopback() {
+		log.Warnf("provided --%s %q is a loopback ip. This will be advertized to the other components and communication will fail if they are on different hosts", listenAddFlag, cfg.pgAdvertiseAddress)
 	}
 
 	if _, ok := validAuthMethods[cfg.pgReplAuthMethod]; !ok {

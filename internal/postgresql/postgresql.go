@@ -705,7 +705,6 @@ func (p *Manager) IsInitialized() (bool, error) {
 			"pg_xact",
 			"pg_wal",
 		}...)
-
 	}
 	for _, f := range requiredFiles {
 		exists, err := fileExists(filepath.Join(p.dataDir, f))
@@ -1096,7 +1095,7 @@ func (p *Manager) OlderWalFile() (string, error) {
 
 // IsRestartRequired returns if a postgres restart is necessary
 func (p *Manager) IsRestartRequired(changedParams []string) (bool, error) {
-	maj, min, err := p.BinaryVersion()
+	major, minor, err := p.BinaryVersion()
 	if err != nil {
 		return false, fmt.Errorf("error fetching pg version: %v", err)
 	}
@@ -1104,7 +1103,7 @@ func (p *Manager) IsRestartRequired(changedParams []string) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeout)
 	defer cancel()
 
-	if maj == 9 && min < 5 {
+	if major == 9 && minor < 5 {
 		return isRestartRequiredUsingPgSettingsContext(ctx, p.localConnParams, changedParams)
 	}
 	return isRestartRequiredUsingPendingRestart(ctx, p.localConnParams)

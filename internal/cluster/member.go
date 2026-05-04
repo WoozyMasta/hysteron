@@ -162,7 +162,7 @@ func (p ProxiesInfo) DeepCopy() ProxiesInfo {
 }
 
 func (p ProxiesInfo) ToSlice() ProxiesInfoSlice {
-	pis := ProxiesInfoSlice{}
+	pis := make(ProxiesInfoSlice, 0, len(p))
 	for _, pi := range p {
 		pis = append(pis, pi)
 	}

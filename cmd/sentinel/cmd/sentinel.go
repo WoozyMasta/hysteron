@@ -162,7 +162,7 @@ func (s *Sentinel) SetDBNotIncreasingXLogPos(uid string) {
 	if _, ok := s.dbNotIncreasingXLogPos[uid]; !ok {
 		s.dbNotIncreasingXLogPos[uid] = 1
 	} else {
-		s.dbNotIncreasingXLogPos[uid] = s.dbNotIncreasingXLogPos[uid] + 1
+		s.dbNotIncreasingXLogPos[uid]++
 	}
 }
 
@@ -200,10 +200,10 @@ func (s *Sentinel) updateKeepersStatus(cd *cluster.ClusterData, keepersInfo clus
 		if kih, ok := kihs[keeperUID]; ok {
 			if kih.KeeperInfo.InfoUID == ki.InfoUID {
 				if !kih.Seen {
-					//Remove since it was already there and wasn't updated
+					// Remove since it was already there and wasn't updated
 					delete(tmpKeepersInfo, ki.UID)
 				} else if kih.Seen && timer.Since(kih.Timer) > s.sleepInterval {
-					//Remove since it wasn't updated
+					// Remove since it wasn't updated
 					delete(tmpKeepersInfo, ki.UID)
 				}
 			}
@@ -312,7 +312,6 @@ func (s *Sentinel) updateKeepersStatus(cd *cluster.ClusterData, keepersInfo clus
 		} else {
 			s.SetDBError(db.UID)
 		}
-
 	}
 
 	// Update dbs' healthy state
@@ -343,7 +342,6 @@ func (s *Sentinel) activeProxiesInfos(proxiesInfo cluster.ProxiesInfo) cluster.P
 		if _, ok := proxiesInfo[proxyUID]; !ok {
 			delete(pihs, proxyUID)
 		}
-
 	}
 
 	activeProxiesInfo := proxiesInfo.DeepCopy()
@@ -628,7 +626,6 @@ func (s *Sentinel) dbStatus(cd *cluster.ClusterData, dbUID string) dbStatus {
 		if db.Spec.InitMode == cluster.DBInitModeResync {
 			convergenceTimeout = cd.Cluster.DefSpec().SyncTimeout.Duration
 		}
-
 	}
 	convergenceState := s.dbConvergenceState(db, convergenceTimeout)
 	switch convergenceState {
@@ -1141,7 +1138,6 @@ func (s *Sentinel) updateCluster(cd *cluster.ClusterData, pis cluster.ProxiesInf
 
 			// Set standbys to follow master only if it's healthy and converged
 			if masterDB.Status.Healthy && s.dbConvergenceState(masterDB, clusterSpec.ConvergenceTimeout.Duration) == Converged {
-
 				// Remove old masters
 				toRemove := []*cluster.DB{}
 				for _, db := range newcd.DBs {
@@ -1223,7 +1219,6 @@ func (s *Sentinel) updateCluster(cd *cluster.ClusterData, pis cluster.ProxiesInf
 
 					// if the current known in sync syncstandbys are different than the required ones wait for them and remove non good ones
 					if !util.CompareStringSliceNoOrder(masterDB.Status.SynchronousStandbys, masterDB.Spec.SynchronousStandbys) {
-
 						// remove old syncstandbys from current status
 						masterDB.Status.SynchronousStandbys = util.CommonElements(masterDB.Status.SynchronousStandbys, masterDB.Spec.SynchronousStandbys)
 
@@ -1481,7 +1476,6 @@ func (s *Sentinel) updateCluster(cd *cluster.ClusterData, pis cluster.ProxiesInf
 					for _, db := range toRemove {
 						delete(newcd.DBs, db.UID)
 					}
-
 				} else {
 					// Add new dbs to substitute failed dbs, if there're available keepers.
 

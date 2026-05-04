@@ -33,6 +33,10 @@ The format is based on [Keep a Changelog][], and this project adheres to
   modernization batch.
 * Update the PostgreSQL driver dependency in a separate controlled runtime
   modernization batch.
+* Update the Cobra and pflag CLI dependencies in a separate controlled runtime
+  modernization batch.
+* Update small utility dependencies in a separate controlled runtime
+  modernization batch.
 
 ## v0.17.0
 

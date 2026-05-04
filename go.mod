@@ -5,21 +5,21 @@ require (
 	github.com/docker/leadership v0.1.0
 	github.com/docker/libkv v0.2.1
 	github.com/evanphx/json-patch v4.5.0+incompatible
-	github.com/gofrs/uuid v4.2.0+incompatible
+	github.com/gofrs/uuid v4.4.0+incompatible
 	github.com/golang/mock v1.6.0
 	github.com/google/go-cmp v0.7.0
 	github.com/hashicorp/consul/api v1.4.0
 	github.com/lib/pq v1.12.3
-	github.com/mattn/go-isatty v0.0.12
-	github.com/mitchellh/copystructure v1.0.0
+	github.com/mattn/go-isatty v0.0.22
+	github.com/mitchellh/copystructure v1.2.0
 	github.com/prometheus/client_golang v1.4.1
 	github.com/sgotti/gexpect v0.0.0-20210315095146-1ec64e69809b
 	github.com/sorintlab/pollon v0.0.0-20181009091703-248c68238c16
-	github.com/spf13/cobra v0.0.5
-	github.com/spf13/pflag v1.0.5
+	github.com/spf13/cobra v1.10.2
+	github.com/spf13/pflag v1.0.10
 	go.etcd.io/etcd v0.0.0-20201125193152-8a03d2e9614b
 	go.uber.org/zap v1.13.0
-	golang.org/x/sys v0.0.0-20210510120138-977fb7262007
+	golang.org/x/sys v0.28.0
 	k8s.io/api v0.17.3
 	k8s.io/apimachinery v0.17.3
 	k8s.io/client-go v0.17.3
@@ -41,7 +41,7 @@ require (
 	github.com/coreos/go-semver v0.2.0 // indirect
 	github.com/coreos/go-systemd v0.0.0-20180511133405-39ca1b05acc7 // indirect
 	github.com/coreos/pkg v0.0.0-20160727233714-3ac0863d7acf // indirect
-	github.com/cpuguy83/go-md2man v1.0.10 // indirect
+	github.com/cpuguy83/go-md2man/v2 v2.0.6 // indirect
 	github.com/creack/pty v1.1.11 // indirect
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible // indirect
 	github.com/fatih/color v1.9.0 // indirect
@@ -59,25 +59,26 @@ require (
 	github.com/hashicorp/golang-lru v0.5.1 // indirect
 	github.com/hashicorp/serf v0.8.2 // indirect
 	github.com/imdario/mergo v0.3.5 // indirect
-	github.com/inconshreveable/mousetrap v1.0.0 // indirect
+	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/json-iterator/go v1.1.9 // indirect
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
 	github.com/mattn/go-colorable v0.1.4 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/mapstructure v1.1.2 // indirect
-	github.com/mitchellh/reflectwalk v1.0.0 // indirect
+	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.1 // indirect
 	github.com/pkg/errors v0.8.1 // indirect
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.9.1 // indirect
 	github.com/prometheus/procfs v0.0.8 // indirect
-	github.com/russross/blackfriday v1.5.2 // indirect
+	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/sorintlab/tcpkeepalive v0.2.0 // indirect
 	go.uber.org/atomic v1.5.0 // indirect
 	go.uber.org/multierr v1.3.0 // indirect
 	go.uber.org/tools v0.0.0-20190618225709-2cfd321de3ee // indirect
+	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550 // indirect
 	golang.org/x/lint v0.0.0-20190930215403-16217165b5de // indirect
 	golang.org/x/mod v0.4.2 // indirect

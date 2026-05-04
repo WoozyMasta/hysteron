@@ -23,8 +23,10 @@ import (
 	"github.com/mitchellh/copystructure"
 )
 
+// KeepersInfo maps keeper UID to published keeper info.
 type KeepersInfo map[string]*KeeperInfo
 
+// DeepCopy returns an independent copy of keeper infos.
 func (k KeepersInfo) DeepCopy() KeepersInfo {
 	if k == nil {
 		return nil
@@ -39,6 +41,7 @@ func (k KeepersInfo) DeepCopy() KeepersInfo {
 	return nk.(KeepersInfo)
 }
 
+// KeeperInfo is the state published by one keeper.
 type KeeperInfo struct {
 	// An unique id for this info, used to know when this the keeper info
 	// has been updated
@@ -56,6 +59,7 @@ type KeeperInfo struct {
 	CanBeSynchronousReplica *bool `json:"canBeSynchronousReplica,omitempty"`
 }
 
+// DeepCopy returns an independent copy of keeper info.
 func (k *KeeperInfo) DeepCopy() *KeeperInfo {
 	if k == nil {
 		return nil
@@ -70,14 +74,17 @@ func (k *KeeperInfo) DeepCopy() *KeeperInfo {
 	return nk.(*KeeperInfo)
 }
 
+// PostgresTimelinesHistory is a list of PostgreSQL timeline history entries.
 type PostgresTimelinesHistory []*PostgresTimelineHistory
 
+// PostgresTimelineHistory is one PostgreSQL timeline history entry.
 type PostgresTimelineHistory struct {
 	TimelineID  uint64 `json:"timelineID,omitempty"`
 	SwitchPoint uint64 `json:"switchPoint,omitempty"`
 	Reason      string `json:"reason,omitempty"`
 }
 
+// GetTimelineHistory returns the entry for id, if present.
 func (tlsh PostgresTimelinesHistory) GetTimelineHistory(id uint64) *PostgresTimelineHistory {
 	for _, tlh := range tlsh {
 		if tlh.TimelineID == id {
@@ -87,6 +94,7 @@ func (tlsh PostgresTimelinesHistory) GetTimelineHistory(id uint64) *PostgresTime
 	return nil
 }
 
+// PostgresState is the PostgreSQL state observed by a keeper.
 type PostgresState struct {
 	UID        string `json:"uid,omitempty"`
 	Generation int64  `json:"generation,omitempty"`
@@ -106,6 +114,7 @@ type PostgresState struct {
 	OlderWalFile        string            `json:"olderWalFile,omitempty"`
 }
 
+// DeepCopy returns an independent copy of PostgreSQL state.
 func (p *PostgresState) DeepCopy() *PostgresState {
 	if p == nil {
 		return nil
@@ -120,16 +129,19 @@ func (p *PostgresState) DeepCopy() *PostgresState {
 	return np.(*PostgresState)
 }
 
+// SentinelsInfo is a sortable list of sentinel info records.
 type SentinelsInfo []*SentinelInfo
 
 func (s SentinelsInfo) Len() int           { return len(s) }
 func (s SentinelsInfo) Less(i, j int) bool { return s[i].UID < s[j].UID }
 func (s SentinelsInfo) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 
+// SentinelInfo is the state published by one sentinel.
 type SentinelInfo struct {
 	UID string
 }
 
+// ProxyInfo is the state published by one proxy.
 type ProxyInfo struct {
 	// An unique id for this info, used to know when the proxy info
 	// has been updated
@@ -145,8 +157,10 @@ type ProxyInfo struct {
 	ProxyTimeout time.Duration
 }
 
+// ProxiesInfo maps proxy UID to published proxy info.
 type ProxiesInfo map[string]*ProxyInfo
 
+// DeepCopy returns an independent copy of proxy infos.
 func (p ProxiesInfo) DeepCopy() ProxiesInfo {
 	if p == nil {
 		return nil
@@ -161,6 +175,7 @@ func (p ProxiesInfo) DeepCopy() ProxiesInfo {
 	return np.(ProxiesInfo)
 }
 
+// ToSlice returns proxy infos as a sortable slice.
 func (p ProxiesInfo) ToSlice() ProxiesInfoSlice {
 	pis := make(ProxiesInfoSlice, 0, len(p))
 	for _, pi := range p {
@@ -169,6 +184,7 @@ func (p ProxiesInfo) ToSlice() ProxiesInfoSlice {
 	return pis
 }
 
+// ProxiesInfoSlice is a sortable list of proxy info records.
 type ProxiesInfoSlice []*ProxyInfo
 
 func (p ProxiesInfoSlice) Len() int           { return len(p) }

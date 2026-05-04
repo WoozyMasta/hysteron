@@ -53,6 +53,7 @@ const (
 	fakeStandbyName = "stolonfakestandby"
 )
 
+// CmdSentinel is the root stolon-sentinel command.
 var CmdSentinel = &cobra.Command{
 	Use:     "stolon-sentinel",
 	Run:     sentinel,
@@ -140,26 +141,31 @@ func (s *Sentinel) setSentinelInfo(ctx context.Context, ttl time.Duration) error
 	return nil
 }
 
+// SetKeeperError marks a keeper as having a recent error.
 func (s *Sentinel) SetKeeperError(uid string) {
 	if _, ok := s.keeperErrorTimers[uid]; !ok {
 		s.keeperErrorTimers[uid] = timer.Now()
 	}
 }
 
+// CleanKeeperError clears the recent error marker for a keeper.
 func (s *Sentinel) CleanKeeperError(uid string) {
 	delete(s.keeperErrorTimers, uid)
 }
 
+// SetDBError marks a database as having a recent error.
 func (s *Sentinel) SetDBError(uid string) {
 	if _, ok := s.dbErrorTimers[uid]; !ok {
 		s.dbErrorTimers[uid] = timer.Now()
 	}
 }
 
+// CleanDBError clears the recent error marker for a database.
 func (s *Sentinel) CleanDBError(uid string) {
 	delete(s.dbErrorTimers, uid)
 }
 
+// SetDBNotIncreasingXLogPos records a database check with no WAL progress.
 func (s *Sentinel) SetDBNotIncreasingXLogPos(uid string) {
 	if _, ok := s.dbNotIncreasingXLogPos[uid]; !ok {
 		s.dbNotIncreasingXLogPos[uid] = 1
@@ -168,6 +174,7 @@ func (s *Sentinel) SetDBNotIncreasingXLogPos(uid string) {
 	}
 }
 
+// CleanDBNotIncreasingXLogPos clears the WAL progress stall counter.
 func (s *Sentinel) CleanDBNotIncreasingXLogPos(uid string) {
 	delete(s.dbNotIncreasingXLogPos, uid)
 }
@@ -1602,11 +1609,15 @@ func (s *Sentinel) updateChangeTimes(cd, newcd *cluster.ClusterData) {
 	}
 }
 
+// ConvergenceState describes database convergence progress.
 type ConvergenceState uint
 
 const (
+	// Converging means the database has not yet reached the wanted generation.
 	Converging ConvergenceState = iota
+	// Converged means the database reached the wanted generation.
 	Converged
+	// ConvergenceFailed means the database did not converge before timeout.
 	ConvergenceFailed
 )
 
@@ -1675,14 +1686,17 @@ func (s *Sentinel) dbConvergenceState(db *cluster.DB, timeout time.Duration) Con
 	return Converging
 }
 
+// KeeperInfoHistory tracks the latest keeper info observed by the sentinel.
 type KeeperInfoHistory struct {
 	KeeperInfo *cluster.KeeperInfo
 	Seen       bool
 	Timer      int64
 }
 
+// KeeperInfoHistories maps keeper UID to keeper info history.
 type KeeperInfoHistories map[string]*KeeperInfoHistory
 
+// DeepCopy returns an independent copy of keeper info histories.
 func (k KeeperInfoHistories) DeepCopy() KeeperInfoHistories {
 	if k == nil {
 		return nil
@@ -1697,18 +1711,22 @@ func (k KeeperInfoHistories) DeepCopy() KeeperInfoHistories {
 	return nk.(KeeperInfoHistories)
 }
 
+// DBConvergenceInfo tracks convergence timing for a database generation.
 type DBConvergenceInfo struct {
 	Generation int64
 	Timer      int64
 }
 
+// ProxyInfoHistory tracks the latest proxy info observed by the sentinel.
 type ProxyInfoHistory struct {
 	ProxyInfo *cluster.ProxyInfo
 	Timer     int64
 }
 
+// ProxyInfoHistories maps proxy UID to proxy info history.
 type ProxyInfoHistories map[string]*ProxyInfoHistory
 
+// DeepCopy returns an independent copy of proxy info histories.
 func (p ProxyInfoHistories) DeepCopy() ProxyInfoHistories {
 	if p == nil {
 		return nil
@@ -1723,6 +1741,7 @@ func (p ProxyInfoHistories) DeepCopy() ProxyInfoHistories {
 	return np.(ProxyInfoHistories)
 }
 
+// Sentinel computes and writes cluster state from observed keepers and proxies.
 type Sentinel struct {
 	uid string
 	cfg *config
@@ -1758,6 +1777,7 @@ type Sentinel struct {
 	proxyInfoHistories  ProxyInfoHistories
 }
 
+// NewSentinel creates a sentinel from command configuration.
 func NewSentinel(uid string, cfg *config, end chan bool) (*Sentinel, error) {
 	var initialClusterSpec *cluster.ClusterSpec
 	if cfg.initialClusterSpecFile != "" {
@@ -1803,6 +1823,7 @@ func NewSentinel(uid string, cfg *config, end chan bool) (*Sentinel, error) {
 	}, nil
 }
 
+// Start runs sentinel leader election and cluster reconciliation loops.
 func (s *Sentinel) Start(ctx context.Context) {
 	endCh := make(chan struct{})
 
@@ -1959,6 +1980,7 @@ func sigHandler(sigs chan os.Signal, cancel context.CancelFunc) {
 	cancel()
 }
 
+// Execute runs the stolon-sentinel command.
 func Execute() {
 	if err := flagutil.SetFlagsFromEnv(CmdSentinel.PersistentFlags(), "STSENTINEL"); err != nil {
 		log.Fatal(err)

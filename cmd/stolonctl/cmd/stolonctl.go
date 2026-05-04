@@ -35,6 +35,7 @@ const (
 	maxRetries = 3
 )
 
+// CmdStolonCtl is the root stolonctl command.
 var CmdStolonCtl = &cobra.Command{
 	Use:     "stolonctl",
 	Short:   "stolon command line client",
@@ -76,6 +77,7 @@ func versionCommand(_ *cobra.Command, _ []string) {
 	stdout("stolonctl version %s", cmd.Version)
 }
 
+// Execute runs the stolonctl command.
 func Execute() {
 	if err := flagutil.SetFlagsFromEnv(CmdStolonCtl.PersistentFlags(), "STOLONCTL"); err != nil {
 		log.Fatal(err)

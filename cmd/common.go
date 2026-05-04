@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package cmd contains shared command configuration and store helpers.
 package cmd
 
 import (
@@ -34,6 +35,7 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 )
 
+// CommonConfig contains shared command-line and store configuration.
 type CommonConfig struct {
 	IsStolonCtl bool
 
@@ -43,7 +45,7 @@ type CommonConfig struct {
 	StoreCertFile        string
 	StoreKeyFile         string
 	StoreCAFile          string
-	StoreSkipTlsVerify   bool
+	StoreSkipTLSVerify   bool
 	ClusterName          string
 	MetricsListenAddress string
 	LogColor             bool
@@ -56,6 +58,7 @@ type CommonConfig struct {
 	StoreTimeout         time.Duration
 }
 
+// AddCommonFlags registers flags shared by Stolon commands.
 func AddCommonFlags(cmd *cobra.Command, cfg *CommonConfig) {
 	cmd.PersistentFlags().StringVar(&cfg.ClusterName, "cluster-name", "", "cluster name")
 	cmd.PersistentFlags().StringVar(&cfg.StoreBackend, "store-backend", "", "store backend type (etcdv3 or kubernetes)")
@@ -64,7 +67,7 @@ func AddCommonFlags(cmd *cobra.Command, cfg *CommonConfig) {
 	cmd.PersistentFlags().StringVar(&cfg.StorePrefix, "store-prefix", common.StorePrefix, "the store base prefix")
 	cmd.PersistentFlags().StringVar(&cfg.StoreCertFile, "store-cert-file", "", "certificate file for client identification to the store")
 	cmd.PersistentFlags().StringVar(&cfg.StoreKeyFile, "store-key", "", "private key file for client identification to the store")
-	cmd.PersistentFlags().BoolVar(&cfg.StoreSkipTlsVerify, "store-skip-tls-verify", false, "skip store certificate verification (insecure!!!)")
+	cmd.PersistentFlags().BoolVar(&cfg.StoreSkipTLSVerify, "store-skip-tls-verify", false, "skip store certificate verification (insecure!!!)")
 	cmd.PersistentFlags().StringVar(&cfg.StoreCAFile, "store-ca-file", "", "verify certificates of HTTPS-enabled store servers using this CA bundle")
 	cmd.PersistentFlags().StringVar(&cfg.MetricsListenAddress, "metrics-listen-address", "", "metrics listen address i.e \"0.0.0.0:8080\" (disabled by default)")
 	cmd.PersistentFlags().StringVar(&cfg.KubeResourceKind, "kube-resource-kind", "", `the k8s resource kind to be used to store stolon clusterdata (only "configmap" is currently supported; sentinel leader election uses leases)`)
@@ -100,6 +103,7 @@ func init() {
 	prometheus.MustRegister(clusterIdentifier)
 }
 
+// CheckCommonConfig validates shared command configuration.
 func CheckCommonConfig(cfg *CommonConfig) error {
 	if cfg.ClusterName == "" {
 		return errors.New("cluster name required")
@@ -131,6 +135,7 @@ func SetMetrics(cfg *CommonConfig, component string) {
 	clusterIdentifier.WithLabelValues(cfg.ClusterName, component).Set(1)
 }
 
+// IsColorLoggerEnable reports whether color logging should be enabled.
 func IsColorLoggerEnable(cmd *cobra.Command, cfg *CommonConfig) bool {
 	if cmd.PersistentFlags().Changed("log-color") {
 		return cfg.LogColor
@@ -138,6 +143,7 @@ func IsColorLoggerEnable(cmd *cobra.Command, cfg *CommonConfig) bool {
 	return isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())
 }
 
+// NewKVStore creates the configured key-value store backend.
 func NewKVStore(cfg *CommonConfig) (store.KVStore, error) {
 	return store.NewKVStore(store.Config{
 		Backend:       store.Backend(cfg.StoreBackend),
@@ -146,10 +152,11 @@ func NewKVStore(cfg *CommonConfig) (store.KVStore, error) {
 		CertFile:      cfg.StoreCertFile,
 		KeyFile:       cfg.StoreKeyFile,
 		CAFile:        cfg.StoreCAFile,
-		SkipTLSVerify: cfg.StoreSkipTlsVerify,
+		SkipTLSVerify: cfg.StoreSkipTLSVerify,
 	})
 }
 
+// NewStore creates the configured cluster-data store.
 func NewStore(cfg *CommonConfig) (store.Store, error) {
 	var s store.Store
 
@@ -176,6 +183,7 @@ func NewStore(cfg *CommonConfig) (store.Store, error) {
 	return s, nil
 }
 
+// NewElection creates the configured sentinel leader election backend.
 func NewElection(cfg *CommonConfig, uid string) (store.Election, error) {
 	var election store.Election
 

@@ -35,6 +35,7 @@ var cmdStatus = &cobra.Command{
 	Short: "Display the current cluster status",
 }
 
+// StatusOptions contains stolonctl status options.
 type StatusOptions struct {
 	Format string
 }
@@ -46,6 +47,7 @@ func init() {
 	CmdStolonCtl.AddCommand(cmdStatus)
 }
 
+// Status is the stolonctl status output model.
 type Status struct {
 	Sentinels []SentinelStatus `json:"sentinels"`
 	Proxies   []ProxyStatus    `json:"proxies"`
@@ -53,16 +55,19 @@ type Status struct {
 	Cluster   ClusterStatus    `json:"cluster"`
 }
 
+// SentinelStatus is the status output for one sentinel.
 type SentinelStatus struct {
 	UID    string `json:"uid"`
 	Leader bool   `json:"leader"`
 }
 
+// ProxyStatus is the status output for one proxy.
 type ProxyStatus struct {
 	UID        string `json:"uid"`
 	Generation int64  `json:"generation"`
 }
 
+// KeeperStatus is the status output for one keeper.
 type KeeperStatus struct {
 	UID                 string `json:"uid"`
 	ListenAddress       string `json:"listen_address"`
@@ -72,6 +77,7 @@ type KeeperStatus struct {
 	PgCurrentGeneration int64  `json:"pg_current_generation"`
 }
 
+// ClusterStatus is the status output for the cluster summary.
 type ClusterStatus struct {
 	Available       bool   `json:"available"`
 	MasterKeeperUID string `json:"master_keeper_uid"`

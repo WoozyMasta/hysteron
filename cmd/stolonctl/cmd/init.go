@@ -32,6 +32,7 @@ var cmdInit = &cobra.Command{
 	Short: "Initialize a new cluster",
 }
 
+// InitOptions contains stolonctl init options.
 type InitOptions struct {
 	file     string
 	forceYes bool

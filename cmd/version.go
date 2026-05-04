@@ -14,4 +14,5 @@
 
 package cmd
 
+// Version is the build-time Stolon version string.
 var Version = "No version defined at build time"

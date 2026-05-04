@@ -68,6 +68,12 @@ The format is based on [Keep a Changelog][], and this project adheres to
   preserve default and non-default output shapes.
 * Clean up the first low-risk revive findings for unused parameters, blank
   imports, and early-return control flow.
+* Clean up shared command and stolonctl command revive findings, including
+  comments and TLS naming.
+* Clean up keeper and sentinel command revive findings with package and exported
+  symbol comments.
+* Clean up cluster contract revive findings with documentation comments while
+  preserving existing public type names.
 
 ## v0.17.0
 

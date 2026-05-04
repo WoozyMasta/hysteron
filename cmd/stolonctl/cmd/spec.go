@@ -41,8 +41,10 @@ func init() {
 	CmdStolonCtl.AddCommand(cmdSpec)
 }
 
-// These wrappers intentionally differ only by omitempty tags to preserve the
-// user-visible `stolonctl spec` and `stolonctl spec --defaults` JSON output.
+// ClusterSpecNoDefaults serializes the cluster spec without default values.
+//
+// It intentionally differs from ClusterSpecDefaults only by omitempty tags to
+// preserve the user-visible `stolonctl spec` JSON output.
 type ClusterSpecNoDefaults struct { //nolint:dupl
 	SleepInterval                    *cluster.Duration         `json:"sleepInterval,omitempty"`
 	RequestTimeout                   *cluster.Duration         `json:"requestTimeout,omitempty"`
@@ -76,6 +78,7 @@ type ClusterSpecNoDefaults struct { //nolint:dupl
 	AutomaticPgRestart               *bool                     `json:"automaticPgRestart,omitempty"`
 }
 
+// ClusterSpecDefaults serializes the cluster spec with default values.
 type ClusterSpecDefaults struct { //nolint:dupl
 	SleepInterval                    *cluster.Duration         `json:"sleepInterval"`
 	RequestTimeout                   *cluster.Duration         `json:"requestTimeout"`

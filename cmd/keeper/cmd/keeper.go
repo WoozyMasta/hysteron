@@ -52,6 +52,7 @@ import (
 
 var log = slog.S()
 
+// CmdKeeper is the root stolon-keeper command.
 var CmdKeeper = &cobra.Command{
 	Use:     "stolon-keeper",
 	Run:     keeper,
@@ -63,11 +64,13 @@ const (
 	minWalKeepSegments          = 8
 )
 
+// KeeperLocalState is the keeper state persisted on local disk.
 type KeeperLocalState struct {
 	UID        string
 	ClusterUID string
 }
 
+// DBLocalState is the local database state persisted by the keeper.
 type DBLocalState struct {
 	UID        string
 	Generation int64
@@ -79,6 +82,7 @@ type DBLocalState struct {
 	InitPGParameters common.Parameters
 }
 
+// DeepCopy returns an independent copy of the local database state.
 func (s *DBLocalState) DeepCopy() *DBLocalState {
 	if s == nil {
 		return nil
@@ -467,6 +471,7 @@ func (p *PostgresKeeper) createRecoveryOptions(recoveryMode pg.RecoveryMode, sta
 	}
 }
 
+// PostgresKeeper reconciles local PostgreSQL state with cluster data.
 type PostgresKeeper struct {
 	cfg *config
 
@@ -508,6 +513,7 @@ type PostgresKeeper struct {
 	canBeSynchronousReplica *bool
 }
 
+// NewPostgresKeeper creates a PostgreSQL keeper from command configuration.
 func NewPostgresKeeper(cfg *config, end chan error) (*PostgresKeeper, error) {
 	e, err := cmd.NewStore(&cfg.CommonConfig)
 	if err != nil {
@@ -638,6 +644,7 @@ func (p *PostgresKeeper) updatePGState(pctx context.Context) {
 	p.lastPGState = pgState
 }
 
+// GetInSyncStandbys returns Stolon standby UIDs currently reported as synchronous.
 func (p *PostgresKeeper) GetInSyncStandbys() ([]string, error) {
 	inSyncStandbysFullName, err := p.pgm.GetSyncStandbys()
 	if err != nil {
@@ -654,6 +661,7 @@ func (p *PostgresKeeper) GetInSyncStandbys() ([]string, error) {
 	return inSyncStandbys, nil
 }
 
+// GetPGState returns the current PostgreSQL state observed by the keeper.
 func (p *PostgresKeeper) GetPGState(_ context.Context) (*cluster.PostgresState, error) {
 	p.getPGStateMutex.Lock()
 	defer p.getPGStateMutex.Unlock()
@@ -757,6 +765,7 @@ func (p *PostgresKeeper) getLastPGState() *cluster.PostgresState {
 	return pgState
 }
 
+// Start runs keeper reconciliation loops until the context is canceled.
 func (p *PostgresKeeper) Start(ctx context.Context) {
 	endSMCh := make(chan struct{})
 	endPgStatecheckerCh := make(chan struct{})
@@ -1854,6 +1863,7 @@ func sigHandler(sigs chan os.Signal, cancel context.CancelFunc) {
 	cancel()
 }
 
+// Execute runs the stolon-keeper command.
 func Execute() {
 	if err := flagutil.SetFlagsFromEnv(CmdKeeper.PersistentFlags(), "STKEEPER"); err != nil {
 		log.Fatal(err)

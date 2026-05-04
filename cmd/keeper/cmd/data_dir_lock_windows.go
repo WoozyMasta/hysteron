@@ -14,6 +14,7 @@
 
 //go:build windows
 
+// Package cmd implements the stolon-keeper command.
 package cmd
 
 import (

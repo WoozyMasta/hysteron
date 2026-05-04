@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package cluster defines Stolon cluster-data contracts and helpers.
 package cluster
 
 import (
@@ -28,66 +29,100 @@ import (
 	util "github.com/sorintlab/stolon/internal/postgresql"
 )
 
+// Uint16P returns a pointer to u.
 func Uint16P(u uint16) *uint16 {
 	return new(u)
 }
+
+// Uint32P returns a pointer to u.
 func Uint32P(u uint32) *uint32 {
 	return new(u)
 }
 
+// BoolP returns a pointer to b.
 func BoolP(b bool) *bool {
 	return new(b)
 }
 
 const (
+	// CurrentCDFormatVersion is the supported cluster-data format version.
 	CurrentCDFormatVersion uint64 = 1
 )
 
 const (
+	// DefaultStoreTimeout is the default timeout for store requests.
 	DefaultStoreTimeout = 5 * time.Second
 
+	// DefaultDBNotIncreasingXLogPosTimes is the default tolerated stalled WAL checks.
 	DefaultDBNotIncreasingXLogPosTimes = 10
 
-	DefaultSleepInterval                              = 5 * time.Second
-	DefaultRequestTimeout                             = 10 * time.Second
-	DefaultConvergenceTimeout                         = 30 * time.Second
-	DefaultInitTimeout                                = 5 * time.Minute
-	DefaultSyncTimeout                                = 0
-	DefaultDBWaitReadyTimeout                         = 60 * time.Second
-	DefaultFailInterval                               = 20 * time.Second
-	DefaultDeadKeeperRemovalInterval                  = 48 * time.Hour
-	DefaultProxyCheckInterval                         = 5 * time.Second
-	DefaultProxyTimeout                               = 15 * time.Second
-	DefaultMaxStandbys               uint16           = 20
-	DefaultMaxStandbysPerSender      uint16           = 3
-	DefaultMaxStandbyLag                              = 1024 * 1204
-	DefaultSynchronousReplication                     = false
-	DefaultMinSynchronousStandbys    uint16           = 1
-	DefaultMaxSynchronousStandbys    uint16           = 1
-	DefaultAdditionalWalSenders                       = 5
-	DefaultUsePgrewind                                = false
-	DefaultMergePGParameter                           = true
-	DefaultRole                      ClusterRole      = ClusterRoleMaster
-	DefaultSUReplAccess              SUReplAccessMode = SUReplAccessAll
-	DefaultAutomaticPgRestart                         = false
+	// DefaultSleepInterval is the default interval between cluster checks.
+	DefaultSleepInterval = 5 * time.Second
+	// DefaultRequestTimeout is the default timeout for component requests.
+	DefaultRequestTimeout = 10 * time.Second
+	// DefaultConvergenceTimeout is the default database convergence timeout.
+	DefaultConvergenceTimeout = 30 * time.Second
+	// DefaultInitTimeout is the default database initialization timeout.
+	DefaultInitTimeout = 5 * time.Minute
+	// DefaultSyncTimeout is the default database sync timeout.
+	DefaultSyncTimeout = 0
+	// DefaultDBWaitReadyTimeout is the default timeout for database readiness.
+	DefaultDBWaitReadyTimeout = 60 * time.Second
+	// DefaultFailInterval is the default interval before marking a component unhealthy.
+	DefaultFailInterval = 20 * time.Second
+	// DefaultDeadKeeperRemovalInterval is the default interval before removing dead keepers.
+	DefaultDeadKeeperRemovalInterval = 48 * time.Hour
+	// DefaultProxyCheckInterval is the default interval between proxy checks.
+	DefaultProxyCheckInterval = 5 * time.Second
+	// DefaultProxyTimeout is the default proxy check timeout.
+	DefaultProxyTimeout = 15 * time.Second
+	// DefaultMaxStandbys is the default maximum number of standbys.
+	DefaultMaxStandbys uint16 = 20
+	// DefaultMaxStandbysPerSender is the default maximum number of standbys per sender.
+	DefaultMaxStandbysPerSender uint16 = 3
+	// DefaultMaxStandbyLag is the default maximum lag for failover candidates.
+	DefaultMaxStandbyLag = 1024 * 1204
+	// DefaultSynchronousReplication is the default synchronous replication setting.
+	DefaultSynchronousReplication = false
+	// DefaultMinSynchronousStandbys is the default minimum synchronous standby count.
+	DefaultMinSynchronousStandbys uint16 = 1
+	// DefaultMaxSynchronousStandbys is the default maximum synchronous standby count.
+	DefaultMaxSynchronousStandbys uint16 = 1
+	// DefaultAdditionalWalSenders is the default additional wal_senders count.
+	DefaultAdditionalWalSenders = 5
+	// DefaultUsePgrewind is the default pg_rewind setting.
+	DefaultUsePgrewind = false
+	// DefaultMergePGParameter is the default pg parameter merge setting.
+	DefaultMergePGParameter = true
+	// DefaultRole is the default cluster role.
+	DefaultRole ClusterRole = ClusterRoleMaster
+	// DefaultSUReplAccess is the default superuser replication access mode.
+	DefaultSUReplAccess SUReplAccessMode = SUReplAccessAll
+	// DefaultAutomaticPgRestart is the default automatic PostgreSQL restart setting.
+	DefaultAutomaticPgRestart = false
 )
 
 const (
-	NoGeneration      int64 = 0
+	// NoGeneration is the zero generation marker.
+	NoGeneration int64 = 0
+	// InitialGeneration is the first generation assigned to new objects.
 	InitialGeneration int64 = 1
 )
 
+// PGParameters maps PostgreSQL parameter names to values.
 type PGParameters map[string]string
 
+// FollowType identifies how a standby follows its source.
 type FollowType string
 
 const (
-	// Follow an db managed by a keeper in our cluster
+	// FollowTypeInternal follows a db managed by a keeper in our cluster.
 	FollowTypeInternal FollowType = "internal"
-	// Follow an external db
+	// FollowTypeExternal follows an external db.
 	FollowTypeExternal FollowType = "external"
 )
 
+// FollowConfig configures the source followed by a standby db.
 type FollowConfig struct {
 	Type FollowType `json:"type,omitempty"`
 	// Keeper ID to follow when Type is "internal"
@@ -97,64 +132,78 @@ type FollowConfig struct {
 	ArchiveRecoverySettings *ArchiveRecoverySettings `json:"archiveRecoverySettings,omitempty"`
 }
 
+// PostgresBinaryVersion contains the PostgreSQL major and minor version.
 type PostgresBinaryVersion struct {
 	Maj int
 	Min int
 }
 
-type ClusterPhase string
+// ClusterPhase identifies the current cluster lifecycle phase.
+type ClusterPhase string //nolint:revive
 
 const (
+	// ClusterPhaseInitializing means the cluster is being initialized.
 	ClusterPhaseInitializing ClusterPhase = "initializing"
-	ClusterPhaseNormal       ClusterPhase = "normal"
+	// ClusterPhaseNormal means the cluster is operating normally.
+	ClusterPhaseNormal ClusterPhase = "normal"
 )
 
-type ClusterRole string
+// ClusterRole identifies whether the cluster is primary or standby.
+type ClusterRole string //nolint:revive
 
 const (
-	ClusterRoleMaster  ClusterRole = "master"
+	// ClusterRoleMaster is a primary cluster role.
+	ClusterRoleMaster ClusterRole = "master"
+	// ClusterRoleStandby is a standby cluster role.
 	ClusterRoleStandby ClusterRole = "standby"
 )
 
-type ClusterInitMode string
+// ClusterInitMode identifies how a cluster is initialized.
+type ClusterInitMode string //nolint:revive
 
 const (
-	// Initialize a cluster starting from a freshly initialized database cluster. Valid only when cluster role is master.
+	// ClusterInitModeNew initializes a cluster from a fresh database cluster.
 	ClusterInitModeNew ClusterInitMode = "new"
-	// Initialize a cluster doing a point in time recovery on a keeper.
+	// ClusterInitModePITR initializes a cluster through point-in-time recovery.
 	ClusterInitModePITR ClusterInitMode = "pitr"
-	// Initialize a cluster with an user specified already populated db cluster.
+	// ClusterInitModeExisting initializes from an existing populated db cluster.
 	ClusterInitModeExisting ClusterInitMode = "existing"
 )
 
-func ClusterInitModeP(s ClusterInitMode) *ClusterInitMode {
+// ClusterInitModeP returns a pointer to s.
+func ClusterInitModeP(s ClusterInitMode) *ClusterInitMode { //nolint:revive
 	return new(s)
 }
 
-func ClusterRoleP(s ClusterRole) *ClusterRole {
+// ClusterRoleP returns a pointer to s.
+func ClusterRoleP(s ClusterRole) *ClusterRole { //nolint:revive
 	return new(s)
 }
 
+// DBInitMode identifies how a database is initialized.
 type DBInitMode string
 
 const (
+	// DBInitModeNone means no database initialization is requested.
 	DBInitModeNone DBInitMode = "none"
-	// Use existing db cluster data
+	// DBInitModeExisting uses existing db cluster data.
 	DBInitModeExisting DBInitMode = "existing"
-	// Initialize a db starting from a freshly initialized database cluster
+	// DBInitModeNew initializes a db from a fresh database cluster.
 	DBInitModeNew DBInitMode = "new"
-	// Initialize a db doing a point in time recovery
+	// DBInitModePITR initializes a db through point-in-time recovery.
 	DBInitModePITR DBInitMode = "pitr"
-	// Initialize a db doing a resync to a target database cluster
+	// DBInitModeResync initializes a db by resyncing from a target db cluster.
 	DBInitModeResync DBInitMode = "resync"
 )
 
+// NewConfig configures fresh database initialization.
 type NewConfig struct {
 	Locale        string `json:"locale,omitempty"`
 	Encoding      string `json:"encoding,omitempty"`
 	DataChecksums bool   `json:"dataChecksums,omitempty"`
 }
 
+// PITRConfig configures point-in-time recovery initialization.
 type PITRConfig struct {
 	// DataRestoreCommand defines the command to execute for restoring the db
 	// cluster data). %d is replaced with the full path to the db cluster
@@ -164,11 +213,12 @@ type PITRConfig struct {
 	RecoveryTargetSettings  *RecoveryTargetSettings  `json:"recoveryTargetSettings,omitempty"`
 }
 
+// ExistingConfig configures initialization from an existing keeper.
 type ExistingConfig struct {
 	KeeperUID string `json:"keeperUID,omitempty"`
 }
 
-// Standby config when role is standby
+// StandbyConfig configures the cluster when its role is standby.
 type StandbyConfig struct {
 	StandbySettings         *StandbySettings         `json:"standbySettings,omitempty"`
 	ArchiveRecoverySettings *ArchiveRecoverySettings `json:"archiveRecoverySettings,omitempty"`
@@ -197,20 +247,23 @@ type StandbySettings struct {
 	RecoveryMinApplyDelay string `json:"recoveryMinApplyDelay,omitempty"`
 }
 
+// SUReplAccessMode identifies default superuser replication access scope.
 type SUReplAccessMode string
 
 const (
-	// Allow access from every host
+	// SUReplAccessAll allows access from every host.
 	SUReplAccessAll SUReplAccessMode = "all"
-	// Allow access from standby server IPs only
+	// SUReplAccessStrict allows access from standby server IPs only.
 	SUReplAccessStrict SUReplAccessMode = "strict"
 )
 
+// SUReplAccessModeP returns a pointer to s.
 func SUReplAccessModeP(s SUReplAccessMode) *SUReplAccessMode {
 	return new(s)
 }
 
-type ClusterSpec struct {
+// ClusterSpec is the desired cluster configuration.
+type ClusterSpec struct { //nolint:revive
 	// Interval to wait before next check
 	SleepInterval *Duration `json:"sleepInterval,omitempty"`
 	// Time after which any request (keepers checks from sentinel etc...) will fail.
@@ -294,13 +347,15 @@ type ClusterSpec struct {
 	AutomaticPgRestart *bool `json:"automaticPgRestart"`
 }
 
-type ClusterStatus struct {
+// ClusterStatus is the observed cluster status.
+type ClusterStatus struct { //nolint:revive
 	CurrentGeneration int64        `json:"currentGeneration,omitempty"`
 	Phase             ClusterPhase `json:"phase,omitempty"`
 	// Master DB UID
 	Master string `json:"master,omitempty"`
 }
 
+// Cluster is the top-level cluster object in cluster data.
 type Cluster struct {
 	UID        string    `json:"uid,omitempty"`
 	Generation int64     `json:"generation,omitempty"`
@@ -311,6 +366,7 @@ type Cluster struct {
 	Status ClusterStatus `json:"status,omitempty"`
 }
 
+// DeepCopy returns an independent copy of the cluster.
 func (c *Cluster) DeepCopy() *Cluster {
 	nc, err := copystructure.Copy(c)
 	if err != nil {
@@ -322,6 +378,7 @@ func (c *Cluster) DeepCopy() *Cluster {
 	return nc.(*Cluster)
 }
 
+// DeepCopy returns an independent copy of the cluster spec.
 func (c *ClusterSpec) DeepCopy() *ClusterSpec {
 	nc, err := copystructure.Copy(c)
 	if err != nil {
@@ -341,9 +398,9 @@ func (c *Cluster) DefSpec() *ClusterSpec {
 
 // WithDefaults returns a new ClusterSpec with unspecified values populated with
 // their defaults
-func (os *ClusterSpec) WithDefaults() *ClusterSpec {
+func (c *ClusterSpec) WithDefaults() *ClusterSpec {
 	// Take a copy of the input ClusterSpec since we don't want to change the original
-	s := os.DeepCopy()
+	s := c.DeepCopy()
 	if s.SleepInterval == nil {
 		s.SleepInterval = &Duration{Duration: DefaultSleepInterval}
 	}
@@ -416,8 +473,8 @@ func (os *ClusterSpec) WithDefaults() *ClusterSpec {
 }
 
 // Validate validates a cluster spec.
-func (os *ClusterSpec) Validate() error {
-	s := os.WithDefaults()
+func (c *ClusterSpec) Validate() error {
+	s := c.WithDefaults()
 	if s.SleepInterval.Duration < 0 {
 		return errors.New("sleepInterval must be positive")
 	}
@@ -537,6 +594,7 @@ func validateReplicationSlot(replicationSlot string) error {
 	return nil
 }
 
+// UpdateSpec validates and replaces the cluster spec.
 func (c *Cluster) UpdateSpec(ns *ClusterSpec) error {
 	s := c.Spec
 	if err := ns.Validate(); err != nil {
@@ -554,6 +612,7 @@ func (c *Cluster) UpdateSpec(ns *ClusterSpec) error {
 	return nil
 }
 
+// NewCluster creates a new cluster with the initial generation.
 func NewCluster(uid string, cs *ClusterSpec) *Cluster {
 	c := &Cluster{
 		UID:        uid,
@@ -567,8 +626,10 @@ func NewCluster(uid string, cs *ClusterSpec) *Cluster {
 	return c
 }
 
+// KeeperSpec is the desired keeper configuration.
 type KeeperSpec struct{}
 
+// KeeperStatus is the observed keeper status.
 type KeeperStatus struct {
 	Healthy         bool      `json:"healthy,omitempty"`
 	LastHealthyTime time.Time `json:"lastHealthyTime,omitempty"`
@@ -583,6 +644,7 @@ type KeeperStatus struct {
 	CanBeSynchronousReplica *bool `json:"canBeSynchronousReplica,omitempty"`
 }
 
+// Keeper is a keeper object in cluster data.
 type Keeper struct {
 	// Keeper ID
 	UID        string    `json:"uid,omitempty"`
@@ -594,6 +656,7 @@ type Keeper struct {
 	Status KeeperStatus `json:"status,omitempty"`
 }
 
+// NewKeeperFromKeeperInfo creates a keeper object from keeper info.
 func NewKeeperFromKeeperInfo(ki *KeeperInfo) *Keeper {
 	return &Keeper{
 		UID:        ki.UID,
@@ -608,6 +671,7 @@ func NewKeeperFromKeeperInfo(ki *KeeperInfo) *Keeper {
 	}
 }
 
+// SortedKeys returns sorted keeper UIDs.
 func (kss Keepers) SortedKeys() []string {
 	keys := make([]string, 0, len(kss))
 	for k := range kss {
@@ -617,6 +681,7 @@ func (kss Keepers) SortedKeys() []string {
 	return keys
 }
 
+// DBSpec is the desired database configuration.
 type DBSpec struct {
 	// The KeeperUID this db is assigned to
 	KeeperUID string `json:"keeperUID,omitempty"`
@@ -660,6 +725,7 @@ type DBSpec struct {
 	ExternalSynchronousStandbys []string `json:"externalSynchronousStandbys"`
 }
 
+// DBStatus is the observed database status.
 type DBStatus struct {
 	Healthy bool `json:"healthy,omitempty"`
 
@@ -690,6 +756,7 @@ type DBStatus struct {
 	OlderWalFile string `json:"olderWalFile,omitempty"`
 }
 
+// DB is a database object in cluster data.
 type DB struct {
 	UID        string    `json:"uid,omitempty"`
 	Generation int64     `json:"generation,omitempty"`
@@ -700,14 +767,17 @@ type DB struct {
 	Status DBStatus `json:"status,omitempty"`
 }
 
+// ProxySpec is the desired proxy configuration.
 type ProxySpec struct {
 	MasterDBUID    string   `json:"masterDbUid,omitempty"`
 	EnabledProxies []string `json:"enabledProxies,omitempty"`
 }
 
+// ProxyStatus is the observed proxy status.
 type ProxyStatus struct {
 }
 
+// Proxy is a proxy object in cluster data.
 type Proxy struct {
 	UID        string    `json:"uid,omitempty"`
 	Generation int64     `json:"generation,omitempty"`
@@ -724,10 +794,12 @@ type Duration struct {
 	time.Duration
 }
 
+// MarshalJSON encodes Duration as a Go duration string.
 func (d Duration) MarshalJSON() ([]byte, error) {
 	return json.Marshal(d.String())
 }
 
+// UnmarshalJSON decodes Duration from a Go duration string.
 func (d *Duration) UnmarshalJSON(b []byte) error {
 	s := strings.Trim(string(b), `"`)
 	du, err := time.ParseDuration(s)
@@ -738,12 +810,16 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Keepers maps keeper UID to keeper object.
 type Keepers map[string]*Keeper
+
+// DBs maps db UID to db object.
 type DBs map[string]*DB
 
-// for simplicity keep all the changes to the various components atomic (using
-// an unique key)
-type ClusterData struct {
+// ClusterData stores the complete cluster-data document.
+//
+// For simplicity all component changes are kept atomic through a unique key.
+type ClusterData struct { //nolint:revive
 	// ClusterData format version. Used to detect incompatible
 	// version and do upgrade. Needs to be bumped when a non
 	// backward compatible change is done to the other struct
@@ -756,6 +832,7 @@ type ClusterData struct {
 	Proxy         *Proxy    `json:"proxy"`
 }
 
+// NewClusterData creates an initial cluster-data document.
 func NewClusterData(c *Cluster) *ClusterData {
 	return &ClusterData{
 		FormatVersion: CurrentCDFormatVersion,
@@ -766,6 +843,7 @@ func NewClusterData(c *Cluster) *ClusterData {
 	}
 }
 
+// DeepCopy returns an independent copy of cluster data.
 func (c *ClusterData) DeepCopy() *ClusterData {
 	nc, err := copystructure.Copy(c)
 	if err != nil {
@@ -777,8 +855,9 @@ func (c *ClusterData) DeepCopy() *ClusterData {
 	return nc.(*ClusterData)
 }
 
-func (cd *ClusterData) FindDB(keeper *Keeper) *DB {
-	for _, db := range cd.DBs {
+// FindDB returns the db assigned to keeper, if any.
+func (c *ClusterData) FindDB(keeper *Keeper) *DB {
+	for _, db := range c.DBs {
 		if db.Spec.KeeperUID == keeper.UID {
 			return db
 		}

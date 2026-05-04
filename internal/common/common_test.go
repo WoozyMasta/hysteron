@@ -1,4 +1,5 @@
 // Copyright 2018 Sorint.lab
+// Copyright 2026 WoozyMasta
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +16,8 @@
 package common_test
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/sorintlab/stolon/internal/common"
@@ -40,5 +43,21 @@ func TestDiffReturnsChangedParams(t *testing.T) {
 
 	if !util.CompareStringSliceNoOrder(expectedDiff, diff) {
 		t.Errorf("Expected diff is %v, but got %v", expectedDiff, diff)
+	}
+}
+
+func TestWriteFileAtomicWithAbsolutePath(t *testing.T) {
+	filename := filepath.Join(t.TempDir(), "postgresql.conf")
+
+	if err := common.WriteFileAtomic(filename, 0600, []byte("port = '5432'\n")); err != nil {
+		t.Fatalf("WriteFileAtomic failed: %v", err)
+	}
+
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		t.Fatalf("read file: %v", err)
+	}
+	if string(data) != "port = '5432'\n" {
+		t.Fatalf("unexpected data %q", string(data))
 	}
 }

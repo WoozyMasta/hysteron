@@ -1,4 +1,5 @@
 // Copyright 2015 Sorint.lab
+// Copyright 2026 WoozyMasta
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,7 +20,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"path"
+	"path/filepath"
 	"reflect"
 	"strings"
 
@@ -101,10 +102,12 @@ func (s Parameters) Diff(newParams Parameters) []string {
 // temporary file and then moving it. writeFunc is the func that will write
 // data to the file.
 // This function is taken from
-//   https://github.com/youtube/vitess/blob/master/go/ioutil2/ioutil.go
+//
+//	https://github.com/youtube/vitess/blob/master/go/ioutil2/ioutil.go
+//
 // Copyright 2012, Google Inc. BSD-license, see licenses/LICENSE-BSD-3-Clause
 func WriteFileAtomicFunc(filename string, perm os.FileMode, writeFunc func(f io.Writer) error) error {
-	dir, name := path.Split(filename)
+	dir, name := filepath.Split(filename)
 	f, err := ioutil.TempFile(dir, name)
 	if err != nil {
 		return err

@@ -6,8 +6,8 @@ require (
 	github.com/docker/libkv v0.2.1
 	github.com/evanphx/json-patch v4.5.0+incompatible
 	github.com/gofrs/uuid v4.2.0+incompatible
-	github.com/golang/mock v1.4.0
-	github.com/google/go-cmp v0.4.0
+	github.com/golang/mock v1.6.0
+	github.com/google/go-cmp v0.7.0
 	github.com/hashicorp/consul/api v1.4.0
 	github.com/lib/pq v1.3.0
 	github.com/mattn/go-isatty v0.0.12
@@ -19,7 +19,7 @@ require (
 	github.com/spf13/pflag v1.0.5
 	go.etcd.io/etcd v0.0.0-20201125193152-8a03d2e9614b
 	go.uber.org/zap v1.13.0
-	golang.org/x/sys v0.0.0-20210314195730-07df6a141424
+	golang.org/x/sys v0.0.0-20210510120138-977fb7262007
 	k8s.io/api v0.17.3
 	k8s.io/apimachinery v0.17.3
 	k8s.io/client-go v0.17.3
@@ -78,13 +78,15 @@ require (
 	go.uber.org/atomic v1.5.0 // indirect
 	go.uber.org/multierr v1.3.0 // indirect
 	go.uber.org/tools v0.0.0-20190618225709-2cfd321de3ee // indirect
-	golang.org/x/crypto v0.0.0-20190820162420-60c769a6c586 // indirect
+	golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550 // indirect
 	golang.org/x/lint v0.0.0-20190930215403-16217165b5de // indirect
-	golang.org/x/net v0.0.0-20191004110552-13f9640d40b9 // indirect
+	golang.org/x/mod v0.4.2 // indirect
+	golang.org/x/net v0.0.0-20210405180319-a5a99cb37ef4 // indirect
 	golang.org/x/oauth2 v0.0.0-20190604053449-0f29369cfe45 // indirect
 	golang.org/x/text v0.3.3 // indirect
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4 // indirect
-	golang.org/x/tools v0.0.0-20191029190741-b9c20aec41a5 // indirect
+	golang.org/x/tools v0.1.1 // indirect
+	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 	google.golang.org/appengine v1.5.0 // indirect
 	google.golang.org/genproto v0.0.0-20190819201941-24fa4b261c55 // indirect
 	google.golang.org/grpc v1.26.0 // indirect

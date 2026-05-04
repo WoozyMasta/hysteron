@@ -29,6 +29,8 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Fix atomic file writes with absolute paths on Windows.
 * Raise the Go module baseline to Go 1.25 and fix stricter format-string vet
   findings.
+* Update test and mock helper dependencies in the first controlled dependency
+  modernization batch.
 
 ## v0.17.0
 

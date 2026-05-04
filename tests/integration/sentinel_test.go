@@ -25,7 +25,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gofrs/uuid"
+	"github.com/google/uuid"
 	"github.com/sorintlab/stolon/internal/cluster"
 	"github.com/sorintlab/stolon/internal/common"
 	"github.com/sorintlab/stolon/internal/store"
@@ -45,7 +45,7 @@ func TestSentinelEnabledProxies(t *testing.T) {
 
 	storeEndpoints := fmt.Sprintf("%s:%s", tstore.listenAddress, tstore.port)
 
-	clusterName := uuid.Must(uuid.NewV4()).String()
+	clusterName := uuid.NewString()
 
 	storePath := filepath.Join(common.StorePrefix, clusterName)
 	sm := store.NewKVBackedStore(tstore.store, storePath)

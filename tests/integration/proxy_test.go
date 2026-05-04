@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gofrs/uuid"
+	"github.com/google/uuid"
 	"github.com/sorintlab/stolon/internal/cluster"
 	"github.com/sorintlab/stolon/internal/common"
 	"github.com/sorintlab/stolon/internal/store"
@@ -39,7 +39,7 @@ func TestProxyListening(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 
-	clusterName := uuid.Must(uuid.NewV4()).String()
+	clusterName := uuid.NewString()
 
 	tstore, err := NewTestStore(t, dir)
 	if err != nil {

@@ -57,6 +57,8 @@ The format is based on [Keep a Changelog][], and this project adheres to
   stdout/stderr pipe-based process runner and remove the `gexpect` dependency.
 * Move process-level integration tests behind an explicit `integration` build
   tag and isolate Unix freeze/resume signals behind platform helpers.
+* Use `github.com/google/uuid` for project UUID generation and remove the
+  direct `github.com/gofrs/uuid` dependency.
 * Check or explicitly discard remaining command, PostgreSQL, and store cleanup
   errors so `errcheck` is clean.
 * Clean up initial style lint findings for whitespace, unconvert, gocritic,

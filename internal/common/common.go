@@ -26,7 +26,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/gofrs/uuid"
+	"github.com/google/uuid"
 )
 
 const (
@@ -61,13 +61,13 @@ var Roles = []Role{
 
 // UID returns a short random identifier.
 func UID() string {
-	u := uuid.Must(uuid.NewV4())
+	u := uuid.New()
 	return hex.EncodeToString(u[:4])
 }
 
 // UUID returns a random UUID string.
 func UUID() string {
-	return uuid.Must(uuid.NewV4()).String()
+	return uuid.NewString()
 }
 
 const (

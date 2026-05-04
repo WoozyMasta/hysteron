@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build !windows
+//go:build integration
 
 package integration
 
@@ -22,7 +22,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"syscall"
 	"testing"
 	"time"
 
@@ -148,8 +147,8 @@ func TestSentinelEnabledProxies(t *testing.T) {
 	}
 
 	// freeze the proxy
-	t.Logf("SIGSTOPping proxy: %s", tp2.uid)
-	if err := tp2.Signal(syscall.SIGSTOP); err != nil {
+	t.Logf("freezing proxy: %s", tp2.uid)
+	if err := tp2.Freeze(); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
@@ -158,8 +157,8 @@ func TestSentinelEnabledProxies(t *testing.T) {
 	}
 
 	// unfreeze the proxy
-	t.Logf("SIGCONTing proxy: %s", tp2.uid)
-	if err := tp2.Signal(syscall.SIGCONT); err != nil {
+	t.Logf("resuming proxy: %s", tp2.uid)
+	if err := tp2.Resume(); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 

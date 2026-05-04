@@ -55,6 +55,8 @@ The format is based on [Keep a Changelog][], and this project adheres to
   timeouts, checked sentinel arithmetic, and CLI output flush errors.
 * Replace the integration test pseudo-terminal wrapper with a native
   stdout/stderr pipe-based process runner and remove the `gexpect` dependency.
+* Move process-level integration tests behind an explicit `integration` build
+  tag and isolate Unix freeze/resume signals behind platform helpers.
 * Check or explicitly discard remaining command, PostgreSQL, and store cleanup
   errors so `errcheck` is clean.
 * Clean up initial style lint findings for whitespace, unconvert, gocritic,

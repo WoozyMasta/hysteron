@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build !windows
+//go:build integration
 
 package integration
 
@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"syscall"
 	"testing"
 	"time"
 
@@ -233,8 +232,8 @@ func TestProxyListening(t *testing.T) {
 	}
 
 	// simulate the store in hang by freezing its process
-	t.Logf("SIGSTOPping the store: %s", tstore.uid)
-	if err := tstore.Signal(syscall.SIGSTOP); err != nil {
+	t.Logf("freezing the store: %s", tstore.uid)
+	if err := tstore.Freeze(); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
@@ -244,8 +243,8 @@ func TestProxyListening(t *testing.T) {
 	}
 
 	// resume the store
-	t.Logf("SIGCONTing the store: %s", tstore.uid)
-	if err := tstore.Signal(syscall.SIGCONT); err != nil {
+	t.Logf("resuming the store: %s", tstore.uid)
+	if err := tstore.Resume(); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 

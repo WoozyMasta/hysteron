@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build !windows
+//go:build integration
 
 package integration
 
@@ -435,6 +435,24 @@ func (p *Process) Signal(sig os.Signal) error {
 	return p.cmd.Cmd.Process.Signal(sig)
 }
 
+func (p *Process) Freeze() error {
+	sig, ok := freezeSignal()
+	if !ok {
+		p.t.Skip("process freezing is not supported on this platform")
+	}
+	p.t.Logf("freezing %s %s", p.name, p.uid)
+	return p.Signal(sig)
+}
+
+func (p *Process) Resume() error {
+	sig, ok := resumeSignal()
+	if !ok {
+		p.t.Skip("process resuming is not supported on this platform")
+	}
+	p.t.Logf("resuming %s %s", p.name, p.uid)
+	return p.Signal(sig)
+}
+
 func (p *Process) Kill() {
 	p.t.Logf("killing %s %s", p.name, p.uid)
 	if p.cmd == nil {
@@ -735,6 +753,24 @@ func (tk *TestKeeper) SignalPG(sig os.Signal) error {
 		return err
 	}
 	return p.Signal(sig)
+}
+
+func (tk *TestKeeper) FreezePG() error {
+	sig, ok := freezeSignal()
+	if !ok {
+		tk.t.Skip("PostgreSQL process freezing is not supported on this platform")
+	}
+	tk.t.Logf("freezing postgres for keeper %s", tk.uid)
+	return tk.SignalPG(sig)
+}
+
+func (tk *TestKeeper) ResumePG() error {
+	sig, ok := resumeSignal()
+	if !ok {
+		tk.t.Skip("PostgreSQL process resuming is not supported on this platform")
+	}
+	tk.t.Logf("resuming postgres for keeper %s", tk.uid)
+	return tk.SignalPG(sig)
 }
 
 func (tk *TestKeeper) isInRecovery() (bool, error) {

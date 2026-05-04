@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build !windows
+//go:build integration
 
 package integration
 
@@ -23,7 +23,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 
@@ -896,12 +895,12 @@ func testPartition1(t *testing.T, syncRepl, minSync0, usePgrewind bool, standbyC
 	}
 
 	// Freeze the keeper and postgres processes on the master
-	t.Logf("SIGSTOPping current master keeper: %s", master.uid)
-	if err := master.Signal(syscall.SIGSTOP); err != nil {
+	t.Logf("freezing current master keeper: %s", master.uid)
+	if err := master.Freeze(); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	t.Logf("SIGSTOPping current master postgres: %s", master.uid)
-	if err := master.SignalPG(syscall.SIGSTOP); err != nil {
+	t.Logf("freezing current master postgres: %s", master.uid)
+	if err := master.FreezePG(); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 	if err := standbys[0].WaitDBRole(common.RoleMaster, ptk, 60*time.Second); err != nil {
@@ -952,11 +951,11 @@ func testPartition1(t *testing.T, syncRepl, minSync0, usePgrewind bool, standbyC
 
 	// Make the master come back
 	t.Logf("Resuming old master keeper: %s", master.uid)
-	if err := master.Signal(syscall.SIGCONT); err != nil {
+	if err := master.Resume(); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 	t.Logf("Resuming old master postgres: %s", master.uid)
-	if err := master.SignalPG(syscall.SIGCONT); err != nil {
+	if err := master.ResumePG(); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 	// Wait replicated data to old master

@@ -1,4 +1,5 @@
 // Copyright 2015 Sorint.lab
+// Copyright 2026 WoozyMasta
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -207,6 +208,20 @@ func TestParseVersion(t *testing.T) {
 			if maj != tt.maj || min != tt.min {
 				t.Fatalf("#%d: wrong maj.min versio : got: %d.%d, want: %d.%d", i, maj, min, tt.maj, tt.min)
 			}
+		}
+	}
+}
+
+func TestValidateSupportedMajorVersion(t *testing.T) {
+	for _, major := range SupportedMajorVersions() {
+		if err := ValidateSupportedMajorVersion(major); err != nil {
+			t.Fatalf("expected PostgreSQL %d to be supported: %v", major, err)
+		}
+	}
+
+	for _, major := range []int{12, 13, 19} {
+		if err := ValidateSupportedMajorVersion(major); err == nil {
+			t.Fatalf("expected PostgreSQL %d to be unsupported", major)
 		}
 	}
 }

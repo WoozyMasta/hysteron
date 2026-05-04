@@ -1,4 +1,5 @@
 // Copyright 2017 Sorint.lab
+// Copyright 2026 WoozyMasta
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -105,6 +106,38 @@ func TestParseSynchronousStandbyNames(t *testing.T) {
 				t.Errorf("%d: wrong output: got:\n%s\nwant:\n%s", i, out, tt.out)
 			}
 		}
+	}
+}
+
+func TestValidatePostgresVersion(t *testing.T) {
+	tests := []struct {
+		name             string
+		major            int
+		allowUnsupported bool
+		wantErr          bool
+	}{
+		{name: "supported", major: 18},
+		{name: "unsupported denied", major: 13, wantErr: true},
+		{name: "unsupported allowed", major: 13, allowUnsupported: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &PostgresKeeper{
+				cfg: &config{allowUnsupportedPG: tt.allowUnsupported},
+				pgBinaryVersion: func() (int, int, error) {
+					return tt.major, 0, nil
+				},
+			}
+
+			err := p.validatePostgresVersion()
+			if tt.wantErr && err == nil {
+				t.Fatal("expected error")
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
 	}
 }
 

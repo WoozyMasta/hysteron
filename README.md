@@ -64,10 +64,13 @@ Anyway it's quite easy to reset a cluster from scratch keeping the current maste
 
 ## Requirements
 
-* PostgreSQL 15, 14, 13, 12, 11, 10, 9.6
+* PostgreSQL 18, 17, 16, 15, 14 by default. PostgreSQL 12 and newer are
+  best-effort compatibility targets when explicitly allowed and verified.
+
 * etcd v3 or Kubernetes, based on the store backend you're going to use.
 
-* OS: currently stolon is tested on GNU/Linux (with reports of people using it also on Solaris, *BSD and Darwin)
+* OS: currently stolon is tested on GNU/Linux, with reports of people using it
+  also on Solaris, *BSD and Darwin.
 
 ## build
 

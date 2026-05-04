@@ -125,6 +125,7 @@ type config struct {
 	canBeMaster             bool
 	canBeSynchronousReplica bool
 	disableDataDirLocking   bool
+	allowUnsupportedPG      bool
 }
 
 var cfg config
@@ -153,6 +154,7 @@ func init() {
 	CmdKeeper.PersistentFlags().BoolVar(&cfg.canBeMaster, "can-be-master", true, "prevent keeper from being elected as master")
 	CmdKeeper.PersistentFlags().BoolVar(&cfg.canBeSynchronousReplica, "can-be-synchronous-replica", true, "prevent keeper from being chosen as synchronous replica")
 	CmdKeeper.PersistentFlags().BoolVar(&cfg.disableDataDirLocking, "disable-data-dir-locking", false, "disable locking on data dir. Warning! It'll cause data corruptions if two keepers are concurrently running with the same data dir.")
+	CmdKeeper.PersistentFlags().BoolVar(&cfg.allowUnsupportedPG, "allow-unsupported-postgres-version", false, "allow running with PostgreSQL versions outside the default supported major versions. This is best-effort and may break recovery, replication slots, configuration rendering, or file layout handling.")
 
 	if err := CmdKeeper.PersistentFlags().MarkDeprecated("id", "please use --uid"); err != nil {
 		log.Fatal(err)
@@ -675,6 +677,26 @@ func (p *PostgresKeeper) updatePGState(pctx context.Context) {
 	p.lastPGState = pgState
 }
 
+func (p *PostgresKeeper) validatePostgresVersion() error {
+	major, minor, err := p.binaryVersion()
+	if err != nil {
+		return fmt.Errorf("failed to get postgres binary version: %w", err)
+	}
+	if err := pg.ValidateSupportedMajorVersion(major); err != nil {
+		if p.cfg.allowUnsupportedPG {
+			log.Warnw(
+				"running with unsupported PostgreSQL version",
+				"version", fmt.Sprintf("%d.%d", major, minor),
+				"supportedMajorVersions", pg.SupportedMajorVersionsString(),
+			)
+			return nil
+		}
+		return fmt.Errorf("%w; use --allow-unsupported-postgres-version to bypass this check at your own risk", err)
+	}
+	log.Infow("PostgreSQL version supported", "version", fmt.Sprintf("%d.%d", major, minor))
+	return nil
+}
+
 // GetInSyncStandbys returns Stolon standby UIDs currently reported as synchronous.
 func (p *PostgresKeeper) GetInSyncStandbys() ([]string, error) {
 	inSyncStandbysFullName, err := p.pgm.GetSyncStandbys()
@@ -823,6 +845,11 @@ func (p *PostgresKeeper) Start(ctx context.Context) {
 	pgm := pg.NewManager(p.pgBinPath, p.dataDir, p.getLocalConnParams(), p.getLocalReplConnParams(), p.pgSUAuthMethod, p.pgSUUsername, p.pgSUPassword, p.pgReplAuthMethod, p.pgReplUsername, p.pgReplPassword, p.requestTimeout)
 	p.pgm = pgm
 	p.pgBinaryVersion = pgm.BinaryVersion
+
+	if err = p.validatePostgresVersion(); err != nil {
+		p.end <- err
+		return
+	}
 
 	_ = p.pgm.StopIfStarted(true)
 
@@ -2114,7 +2141,9 @@ func keeper(c *cobra.Command, _ []string) {
 	}
 	go p.Start(ctx)
 
-	<-end
+	if err := <-end; err != nil {
+		log.Errorw("keeper stopped with error", zap.Error(err))
+	}
 
 	if !cfg.disableDataDirLocking {
 		if err := lockFile.Close(); err != nil {

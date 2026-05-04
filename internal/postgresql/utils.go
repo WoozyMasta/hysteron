@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -38,6 +39,8 @@ const (
 )
 
 var (
+	supportedMajorVersions = []int{14, 15, 16, 17, 18}
+
 	// ValidReplSlotName validates PostgreSQL replication slot names.
 	ValidReplSlotName           = regexp.MustCompile("^[a-z0-9_]+$")
 	timelineHistoryLineRegexp   = regexp.MustCompile(`(\S+)\s+(\S+)\s+(.*)$`)
@@ -575,6 +578,33 @@ func ParseVersion(v string) (int, int, error) {
 	}
 
 	return maj, minor, nil
+}
+
+// IsSupportedMajorVersion reports whether major has default support.
+func IsSupportedMajorVersion(major int) bool {
+	return slices.Contains(supportedMajorVersions, major)
+}
+
+// SupportedMajorVersions returns PostgreSQL major versions with default support.
+func SupportedMajorVersions() []int {
+	return slices.Clone(supportedMajorVersions)
+}
+
+// ValidateSupportedMajorVersion checks whether major has default support.
+func ValidateSupportedMajorVersion(major int) error {
+	if IsSupportedMajorVersion(major) {
+		return nil
+	}
+	return fmt.Errorf("unsupported PostgreSQL major version %d; supported major versions are %s", major, SupportedMajorVersionsString())
+}
+
+// SupportedMajorVersionsString returns the supported major versions for messages.
+func SupportedMajorVersionsString() string {
+	versions := make([]string, 0, len(supportedMajorVersions))
+	for _, version := range supportedMajorVersions {
+		versions = append(versions, strconv.Itoa(version))
+	}
+	return strings.Join(versions, ", ")
 }
 
 // IsWalFileName reports whether name matches a WAL segment filename.

@@ -61,6 +61,8 @@ The format is based on [Keep a Changelog][], and this project adheres to
   direct `github.com/gofrs/uuid` dependency.
 * Add an explicit Docker Compose integration-test runner for PostgreSQL major
   version smoke checks.
+* Add a strict PostgreSQL major-version support check with an explicit
+  `--allow-unsupported-postgres-version` keeper override.
 * Check or explicitly discard remaining command, PostgreSQL, and store cleanup
   errors so `errcheck` is clean.
 * Clean up initial style lint findings for whitespace, unconvert, gocritic,

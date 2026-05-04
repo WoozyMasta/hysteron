@@ -654,7 +654,7 @@ func (p *PostgresKeeper) GetInSyncStandbys() ([]string, error) {
 	return inSyncStandbys, nil
 }
 
-func (p *PostgresKeeper) GetPGState(pctx context.Context) (*cluster.PostgresState, error) {
+func (p *PostgresKeeper) GetPGState(_ context.Context) (*cluster.PostgresState, error) {
 	p.getPGStateMutex.Lock()
 	defer p.getPGStateMutex.Unlock()
 	// Just get one pgstate at a time to avoid exausting available connections
@@ -1864,7 +1864,7 @@ func Execute() {
 	}
 }
 
-func keeper(c *cobra.Command, args []string) {
+func keeper(c *cobra.Command, _ []string) {
 	var (
 		err           error
 		listenAddFlag = "pg-advertise-address"

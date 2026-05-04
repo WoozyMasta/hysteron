@@ -37,7 +37,7 @@ func init() {
 	CmdStolonCtl.AddCommand(cmdPromote)
 }
 
-func promote(cmd *cobra.Command, args []string) {
+func promote(_ *cobra.Command, args []string) {
 	if len(args) > 0 {
 		die("too many arguments")
 	}

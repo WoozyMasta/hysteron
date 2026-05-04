@@ -1969,7 +1969,7 @@ func Execute() {
 	}
 }
 
-func sentinel(c *cobra.Command, args []string) {
+func sentinel(c *cobra.Command, _ []string) {
 	switch cfg.LogLevel {
 	case "error":
 		slog.SetLevel(zap.ErrorLevel)

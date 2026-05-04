@@ -66,7 +66,7 @@ func patchClusterSpec(cs *cluster.ClusterSpec, p []byte) (*cluster.ClusterSpec, 
 	return newcs, nil
 }
 
-func update(cmd *cobra.Command, args []string) {
+func update(_ *cobra.Command, args []string) {
 	if len(args) > 1 {
 		die("too many arguments")
 	}

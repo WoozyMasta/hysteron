@@ -30,6 +30,7 @@ import (
 	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 	"k8s.io/client-go/kubernetes"
+	// Register optional Kubernetes auth plugins.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 )
 
@@ -133,9 +134,8 @@ func SetMetrics(cfg *CommonConfig, component string) {
 func IsColorLoggerEnable(cmd *cobra.Command, cfg *CommonConfig) bool {
 	if cmd.PersistentFlags().Changed("log-color") {
 		return cfg.LogColor
-	} else {
-		return isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())
 	}
+	return isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())
 }
 
 func NewKVStore(cfg *CommonConfig) (store.KVStore, error) {

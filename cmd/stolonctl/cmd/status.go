@@ -78,7 +78,7 @@ type ClusterStatus struct {
 	MasterDBUID     string `json:"master_db_uid"`
 }
 
-func status(cmd *cobra.Command, args []string) {
+func status(_ *cobra.Command, _ []string) {
 	status, generateErr := generateStatus()
 	switch statusOpts.Format {
 	case "json":

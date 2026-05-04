@@ -64,6 +64,10 @@ The format is based on [Keep a Changelog][], and this project adheres to
   production code.
 * Apply safe Go modernization for pointer defaults and build tags while leaving
   cluster-data JSON tag changes for a dedicated migration pass.
+* Document the intentional `stolonctl spec` JSON wrapper duplication used to
+  preserve default and non-default output shapes.
+* Clean up the first low-risk revive findings for unused parameters, blank
+  imports, and early-return control flow.
 
 ## v0.17.0
 

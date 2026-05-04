@@ -34,6 +34,7 @@ import (
 	"github.com/sorintlab/stolon/internal/common"
 	slog "github.com/sorintlab/stolon/internal/log"
 
+	// Register the postgres database/sql driver.
 	_ "github.com/lib/pq"
 	"github.com/mitchellh/copystructure"
 	"go.uber.org/zap"
@@ -734,17 +735,16 @@ func (p *Manager) GetRole() (common.Role, error) {
 			return common.RoleMaster, nil
 		}
 		return common.RoleStandby, nil
-	} else {
-		// if recovery.conf file exists then consider it as a standby
-		_, err := os.Stat(filepath.Join(p.dataDir, postgresRecoveryConf))
-		if err != nil && !os.IsNotExist(err) {
-			return "", fmt.Errorf("error determining if %q file exists: %v", postgresRecoveryConf, err)
-		}
-		if os.IsNotExist(err) {
-			return common.RoleMaster, nil
-		}
-		return common.RoleStandby, nil
 	}
+	// if recovery.conf file exists then consider it as a standby
+	_, err = os.Stat(filepath.Join(p.dataDir, postgresRecoveryConf))
+	if err != nil && !os.IsNotExist(err) {
+		return "", fmt.Errorf("error determining if %q file exists: %v", postgresRecoveryConf, err)
+	}
+	if os.IsNotExist(err) {
+		return common.RoleMaster, nil
+	}
+	return common.RoleStandby, nil
 }
 
 func (p *Manager) writeConfs(useTmpPostgresConf bool) error {
@@ -850,7 +850,7 @@ func (p *Manager) writeStandbySignal() error {
 	log.Infof("writing standby signal file")
 
 	return common.WriteFileAtomicFunc(filepath.Join(p.dataDir, postgresStandbySignal), 0600,
-		func(f io.Writer) error {
+		func(_ io.Writer) error {
 			return nil
 		})
 }
@@ -864,7 +864,7 @@ func (p *Manager) writeRecoverySignal() error {
 	log.Infof("writing recovery signal file")
 
 	return common.WriteFileAtomicFunc(filepath.Join(p.dataDir, postgresRecoverySignal), 0600,
-		func(f io.Writer) error {
+		func(_ io.Writer) error {
 			return nil
 		})
 }

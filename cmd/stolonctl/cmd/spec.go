@@ -41,7 +41,9 @@ func init() {
 	CmdStolonCtl.AddCommand(cmdSpec)
 }
 
-type ClusterSpecNoDefaults struct {
+// These wrappers intentionally differ only by omitempty tags to preserve the
+// user-visible `stolonctl spec` and `stolonctl spec --defaults` JSON output.
+type ClusterSpecNoDefaults struct { //nolint:dupl
 	SleepInterval                    *cluster.Duration         `json:"sleepInterval,omitempty"`
 	RequestTimeout                   *cluster.Duration         `json:"requestTimeout,omitempty"`
 	ConvergenceTimeout               *cluster.Duration         `json:"convergenceTimeout,omitempty"`
@@ -74,7 +76,7 @@ type ClusterSpecNoDefaults struct {
 	AutomaticPgRestart               *bool                     `json:"automaticPgRestart,omitempty"`
 }
 
-type ClusterSpecDefaults struct {
+type ClusterSpecDefaults struct { //nolint:dupl
 	SleepInterval                    *cluster.Duration         `json:"sleepInterval"`
 	RequestTimeout                   *cluster.Duration         `json:"requestTimeout"`
 	ConvergenceTimeout               *cluster.Duration         `json:"convergenceTimeout"`
@@ -107,7 +109,7 @@ type ClusterSpecDefaults struct {
 	AutomaticPgRestart               *bool                     `json:"automaticPgRestart"`
 }
 
-func spec(cmd *cobra.Command, args []string) {
+func spec(_ *cobra.Command, _ []string) {
 	e, err := cmdcommon.NewStore(&cfg.CommonConfig)
 	if err != nil {
 		die("%v", err)

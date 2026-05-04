@@ -70,7 +70,7 @@ func init() {
 	CmdStolonCtl.AddCommand(cmdClusterData)
 }
 
-func readClusterdata(cmd *cobra.Command, args []string) {
+func readClusterdata(_ *cobra.Command, _ []string) {
 	e, err := cmdcommon.NewStore(&cfg.CommonConfig)
 	if err != nil {
 		die("%v", err)
@@ -104,9 +104,8 @@ func isSafeToWriteClusterData(store store.Store) error {
 	} else if cd != nil {
 		if !writeClusterdataOpts.forceYes {
 			return errors.New("WARNING: cluster data already available use --yes to override")
-		} else {
-			stdout("WARNING: The current cluster data will be removed")
 		}
+		stdout("WARNING: The current cluster data will be removed")
 	}
 	return nil
 }

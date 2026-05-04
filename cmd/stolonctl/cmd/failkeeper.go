@@ -32,7 +32,7 @@ func init() {
 	CmdStolonCtl.AddCommand(failKeeperCmd)
 }
 
-func failKeeper(cmd *cobra.Command, args []string) {
+func failKeeper(_ *cobra.Command, args []string) {
 	if len(args) > 1 {
 		die("too many arguments")
 	}

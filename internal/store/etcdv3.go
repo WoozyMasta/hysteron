@@ -17,6 +17,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -210,7 +211,9 @@ func (e *etcdv3Election) Leader() (string, error) {
 	if err != nil {
 		return "", fromEtcV3Error(err)
 	}
-	defer s.Close()
+	defer func() {
+		err = errors.Join(err, s.Close())
+	}()
 
 	etcdElection := concurrency.NewElection(s, e.path)
 
@@ -222,7 +225,7 @@ func (e *etcdv3Election) Leader() (string, error) {
 	}
 	leader := string(resp.Kvs[0].Value)
 
-	return leader, nil
+	return leader, err
 }
 
 func (e *etcdv3Election) campaign() {

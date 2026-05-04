@@ -18,6 +18,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -86,12 +87,22 @@ func Execute() {
 
 func stderr(format string, a ...interface{}) {
 	out := fmt.Sprintf(format, a...)
-	fmt.Fprintln(os.Stderr, strings.TrimSuffix(out, "\n"))
+	if _, err := fmt.Fprintln(os.Stderr, strings.TrimSuffix(out, "\n")); err != nil {
+		log.Fatal(err)
+	}
 }
 
 func stdout(format string, a ...interface{}) {
 	out := fmt.Sprintf(format, a...)
-	fmt.Fprintln(os.Stdout, strings.TrimSuffix(out, "\n"))
+	if _, err := fmt.Fprintln(os.Stdout, strings.TrimSuffix(out, "\n")); err != nil {
+		die("write stdout: %v", err)
+	}
+}
+
+func writeOutput(w io.Writer, format string, a ...interface{}) {
+	if _, err := fmt.Fprintf(w, format, a...); err != nil {
+		die("write output: %v", err)
+	}
 }
 
 func die(format string, a ...interface{}) {
@@ -119,7 +130,7 @@ func getClusterData(e store.Store) (*cluster.ClusterData, *store.KVPair, error) 
 func askConfirmation(message string) (bool, error) {
 	in := bufio.NewReader(os.Stdin)
 	for {
-		fmt.Fprint(os.Stdout, message)
+		writeOutput(os.Stdout, "%s", message)
 		input, err := in.ReadString('\n')
 		if err != nil {
 			return false, fmt.Errorf("error reading input: %v", err)

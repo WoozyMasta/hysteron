@@ -208,8 +208,8 @@ func (p *Manager) Init(initConfig *InitConfig) error {
 	if err != nil {
 		return err
 	}
-	defer os.Remove(pwfile.Name())
-	defer pwfile.Close()
+	defer ignoreRemove(pwfile.Name())
+	defer ignoreClose(pwfile)
 
 	if _, err = pwfile.WriteString(p.suPassword); err != nil {
 		return err
@@ -647,7 +647,7 @@ func (p *Manager) PGDataVersion() (int, int, error) {
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to read PG_VERSION: %v", err)
 	}
-	defer fh.Close()
+	defer ignoreClose(fh)
 
 	scanner := bufio.NewScanner(fh)
 	scanner.Split(bufio.ScanLines)
@@ -910,8 +910,8 @@ func (p *Manager) SyncFromFollowedPGRewind(followedConnParams ConnParams, passwo
 	if err != nil {
 		return err
 	}
-	defer os.Remove(pgpass.Name())
-	defer pgpass.Close()
+	defer ignoreRemove(pgpass.Name())
+	defer ignoreClose(pgpass)
 
 	host := followedConnParams.Get("host")
 	port := followedConnParams.Get("port")
@@ -949,8 +949,8 @@ func (p *Manager) SyncFromFollowed(followedConnParams ConnParams, replSlot strin
 	if err != nil {
 		return err
 	}
-	defer os.Remove(pgpass.Name())
-	defer pgpass.Close()
+	defer ignoreRemove(pgpass.Name())
+	defer ignoreClose(pgpass)
 
 	host := fcp.Get("host")
 	port := fcp.Get("port")
@@ -1106,7 +1106,14 @@ func (p *Manager) IsRestartRequired(changedParams []string) (bool, error) {
 
 	if maj == 9 && min < 5 {
 		return isRestartRequiredUsingPgSettingsContext(ctx, p.localConnParams, changedParams)
-	} else {
-		return isRestartRequiredUsingPendingRestart(ctx, p.localConnParams)
 	}
+	return isRestartRequiredUsingPendingRestart(ctx, p.localConnParams)
+}
+
+func ignoreClose(c io.Closer) {
+	_ = c.Close()
+}
+
+func ignoreRemove(name string) {
+	_ = os.Remove(name)
 }

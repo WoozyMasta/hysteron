@@ -55,6 +55,8 @@ The format is based on [Keep a Changelog][], and this project adheres to
   timeouts, checked sentinel arithmetic, and CLI output flush errors.
 * Exclude process-level integration tests from Windows builds because their
   `gexpect` pseudo-terminal dependency is Unix-only.
+* Check or explicitly discard remaining command, PostgreSQL, and store cleanup
+  errors so `errcheck` is clean.
 
 ## v0.17.0
 

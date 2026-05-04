@@ -53,7 +53,7 @@ func ping(ctx context.Context, connParams ConnParams) error {
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer ignoreClose(db)
 
 	_, err = dbExec(ctx, db, "select 1")
 	if err != nil {
@@ -67,7 +67,7 @@ func setPassword(ctx context.Context, connParams ConnParams, username, password 
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer ignoreClose(db)
 
 	tx, err := db.Begin()
 	if err != nil {
@@ -93,7 +93,7 @@ func createRole(ctx context.Context, connParams ConnParams, roles []string, user
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer ignoreClose(db)
 
 	tx, err := db.Begin()
 	if err != nil {
@@ -119,7 +119,7 @@ func createPasswordlessRole(ctx context.Context, connParams ConnParams, roles []
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer ignoreClose(db)
 
 	_, err = dbExec(ctx, db, fmt.Sprintf(`create role "%s" with login replication;`, username))
 	return err
@@ -130,7 +130,7 @@ func alterRole(ctx context.Context, connParams ConnParams, roles []string, usern
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer ignoreClose(db)
 
 	tx, err := db.Begin()
 	if err != nil {
@@ -156,7 +156,7 @@ func alterPasswordlessRole(ctx context.Context, connParams ConnParams, roles []s
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer ignoreClose(db)
 
 	_, err = dbExec(ctx, db, fmt.Sprintf(`alter role "%s" with login replication;`, username))
 	return err
@@ -176,7 +176,7 @@ func getReplicationSlots(ctx context.Context, connParams ConnParams, maj int) ([
 	if err != nil {
 		return nil, err
 	}
-	defer db.Close()
+	defer ignoreClose(db)
 
 	replSlots := []string{}
 
@@ -184,7 +184,7 @@ func getReplicationSlots(ctx context.Context, connParams ConnParams, maj int) ([
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer ignoreClose(rows)
 	for rows.Next() {
 		var slotName string
 		if err := rows.Scan(&slotName); err != nil {
@@ -204,7 +204,7 @@ func createReplicationSlot(ctx context.Context, connParams ConnParams, name stri
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer ignoreClose(db)
 
 	_, err = dbExec(ctx, db, fmt.Sprintf("select pg_create_physical_replication_slot('%s')", name))
 	return err
@@ -215,7 +215,7 @@ func dropReplicationSlot(ctx context.Context, connParams ConnParams, name string
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer ignoreClose(db)
 
 	_, err = dbExec(ctx, db, fmt.Sprintf("select pg_drop_replication_slot('%s')", name))
 	return err
@@ -226,13 +226,13 @@ func getSyncStandbys(ctx context.Context, connParams ConnParams) ([]string, erro
 	if err != nil {
 		return nil, err
 	}
-	defer db.Close()
+	defer ignoreClose(db)
 
 	rows, err := query(ctx, db, "select application_name, sync_state from pg_stat_replication")
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer ignoreClose(rows)
 
 	syncStandbys := []string{}
 	for rows.Next() {
@@ -276,13 +276,13 @@ func GetSystemData(ctx context.Context, replConnParams ConnParams) (*SystemData,
 	if err != nil {
 		return nil, err
 	}
-	defer db.Close()
+	defer ignoreClose(db)
 
 	rows, err := query(ctx, db, "IDENTIFY_SYSTEM")
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer ignoreClose(rows)
 	var systemData *SystemData
 	if rows.Next() {
 		var sd SystemData
@@ -340,13 +340,13 @@ func getTimelinesHistory(ctx context.Context, timeline uint64, replConnParams Co
 	if err != nil {
 		return nil, err
 	}
-	defer db.Close()
+	defer ignoreClose(db)
 
 	rows, err := query(ctx, db, fmt.Sprintf("TIMELINE_HISTORY %d", timeline))
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer ignoreClose(rows)
 	var tlsh []*TimelineHistory
 	if rows.Next() {
 		var timelineFile string
@@ -411,7 +411,7 @@ func getConfigFilePGParameters(ctx context.Context, connParams ConnParams) (comm
 	if err != nil {
 		return nil, err
 	}
-	defer db.Close()
+	defer ignoreClose(db)
 
 	// We prefer pg_file_settings since pg_settings returns archive_command = '(disabled)' when archive_mode is off so we'll lose its value
 	// Check if pg_file_settings exists (pg >= 9.5)
@@ -429,7 +429,7 @@ func getConfigFilePGParameters(ctx context.Context, connParams ConnParams) (comm
 		if err != nil {
 			return nil, err
 		}
-		defer rows.Close()
+		defer ignoreClose(rows)
 		for rows.Next() {
 			var name, setting string
 			if err = rows.Scan(&name, &setting); err != nil {
@@ -448,7 +448,7 @@ func getConfigFilePGParameters(ctx context.Context, connParams ConnParams) (comm
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer ignoreClose(rows)
 	for rows.Next() {
 		var name, setting, source string
 		if err = rows.Scan(&name, &setting, &source); err != nil {
@@ -469,7 +469,7 @@ func hasPGFileSettings(ctx context.Context, db *sql.DB) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	defer rows.Close()
+	defer ignoreClose(rows)
 
 	for rows.Next() {
 		return true, nil
@@ -486,13 +486,13 @@ func isRestartRequiredUsingPendingRestart(ctx context.Context, connParams ConnPa
 	if err != nil {
 		return isRestartRequired, err
 	}
-	defer db.Close()
+	defer ignoreClose(db)
 
 	rows, err := query(ctx, db, "select count(*) > 0 from pg_settings where pending_restart;")
 	if err != nil {
 		return isRestartRequired, err
 	}
-	defer rows.Close()
+	defer ignoreClose(rows)
 	if rows.Next() {
 		if err := rows.Scan(&isRestartRequired); err != nil {
 			return isRestartRequired, err
@@ -511,20 +511,20 @@ func isRestartRequiredUsingPgSettingsContext(ctx context.Context, connParams Con
 	if err != nil {
 		return isRestartRequired, err
 	}
-	defer db.Close()
+	defer ignoreClose(db)
 
 	stmt, err := db.Prepare("select count(*) > 0 from pg_settings where context = 'postmaster' and name = ANY($1)")
 
 	if err != nil {
 		return false, err
 	}
-	defer stmt.Close()
+	defer ignoreClose(stmt)
 
 	rows, err := stmt.Query(pq.Array(changedParams))
 	if err != nil {
 		return isRestartRequired, err
 	}
-	defer rows.Close()
+	defer ignoreClose(rows)
 	if rows.Next() {
 		if err := rows.Scan(&isRestartRequired); err != nil {
 			return isRestartRequired, err

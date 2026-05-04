@@ -150,7 +150,11 @@ func runWriteClusterdata(_ *cobra.Command, _ []string) {
 		if err != nil {
 			die("cannot read file: %v", err)
 		}
-		defer file.Close()
+		defer func() {
+			if err := file.Close(); err != nil {
+				die("close cluster data file: %v", err)
+			}
+		}()
 		reader = file
 	}
 	s, err := cmdcommon.NewStore(&cfg.CommonConfig)

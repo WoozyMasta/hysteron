@@ -1,4 +1,5 @@
 // Copyright 2015 Sorint.lab
+// Copyright 2026 WoozyMasta
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -191,6 +192,9 @@ func getReplicationSlots(ctx context.Context, connParams ConnParams, maj int) ([
 		}
 		replSlots = append(replSlots, slotName)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 
 	return replSlots, nil
 }
@@ -241,6 +245,9 @@ func getSyncStandbys(ctx context.Context, connParams ConnParams) ([]string, erro
 			syncStandbys = append(syncStandbys, applicationName)
 		}
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 
 	return syncStandbys, nil
 }
@@ -276,6 +283,7 @@ func GetSystemData(ctx context.Context, replConnParams ConnParams) (*SystemData,
 		return nil, err
 	}
 	defer rows.Close()
+	var systemData *SystemData
 	if rows.Next() {
 		var sd SystemData
 		var xLogPosLsn string
@@ -287,9 +295,15 @@ func GetSystemData(ctx context.Context, replConnParams ConnParams) (*SystemData,
 		if err != nil {
 			return nil, err
 		}
-		return &sd, nil
+		systemData = &sd
 	}
-	return nil, fmt.Errorf("query returned 0 rows")
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if systemData == nil {
+		return nil, fmt.Errorf("query returned 0 rows")
+	}
+	return systemData, nil
 }
 
 func parseTimelinesHistory(contents string) ([]*TimelineHistory, error) {
@@ -333,19 +347,25 @@ func getTimelinesHistory(ctx context.Context, timeline uint64, replConnParams Co
 		return nil, err
 	}
 	defer rows.Close()
+	var tlsh []*TimelineHistory
 	if rows.Next() {
 		var timelineFile string
 		var contents string
 		if err := rows.Scan(&timelineFile, &contents); err != nil {
 			return nil, err
 		}
-		tlsh, err := parseTimelinesHistory(contents)
+		tlsh, err = parseTimelinesHistory(contents)
 		if err != nil {
 			return nil, err
 		}
-		return tlsh, nil
 	}
-	return nil, fmt.Errorf("query returned 0 rows")
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if tlsh == nil {
+		return nil, fmt.Errorf("query returned 0 rows")
+	}
+	return tlsh, nil
 }
 
 func IsValidReplSlotName(name string) bool {
@@ -395,26 +415,17 @@ func getConfigFilePGParameters(ctx context.Context, connParams ConnParams) (comm
 
 	// We prefer pg_file_settings since pg_settings returns archive_command = '(disabled)' when archive_mode is off so we'll lose its value
 	// Check if pg_file_settings exists (pg >= 9.5)
-	rows, err := query(ctx, db, "select 1 from information_schema.tables where table_schema = 'pg_catalog' and table_name = 'pg_file_settings'")
+	usePGFileSettings, err := hasPGFileSettings(ctx, db)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	c := 0
-	for rows.Next() {
-		c++
-	}
-	use_pg_file_settings := false
-	if c > 0 {
-		use_pg_file_settings = true
-	}
 
-	if use_pg_file_settings {
+	if usePGFileSettings {
 		// NOTE If some pg_parameters that cannot be changed without a restart
 		// are removed from the postgresql.conf file the view will contain some
 		// rows with null name and setting and the error field set to the cause.
 		// So we have to filter out these or the Scan will fail.
-		rows, err = query(ctx, db, "select name, setting from pg_file_settings where name IS NOT NULL and setting IS NOT NULL")
+		rows, err := query(ctx, db, "select name, setting from pg_file_settings where name IS NOT NULL and setting IS NOT NULL")
 		if err != nil {
 			return nil, err
 		}
@@ -426,11 +437,14 @@ func getConfigFilePGParameters(ctx context.Context, connParams ConnParams) (comm
 			}
 			pgParameters[name] = setting
 		}
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
 		return pgParameters, nil
 	}
 
 	// Fallback to pg_settings
-	rows, err = query(ctx, db, "select name, setting, source from pg_settings")
+	rows, err := query(ctx, db, "select name, setting, source from pg_settings")
 	if err != nil {
 		return nil, err
 	}
@@ -444,7 +458,26 @@ func getConfigFilePGParameters(ctx context.Context, connParams ConnParams) (comm
 			pgParameters[name] = setting
 		}
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return pgParameters, nil
+}
+
+func hasPGFileSettings(ctx context.Context, db *sql.DB) (bool, error) {
+	rows, err := query(ctx, db, "select 1 from information_schema.tables where table_schema = 'pg_catalog' and table_name = 'pg_file_settings'")
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		return true, nil
+	}
+	if err := rows.Err(); err != nil {
+		return false, err
+	}
+	return false, nil
 }
 
 func isRestartRequiredUsingPendingRestart(ctx context.Context, connParams ConnParams) (bool, error) {
@@ -465,6 +498,9 @@ func isRestartRequiredUsingPendingRestart(ctx context.Context, connParams ConnPa
 			return isRestartRequired, err
 		}
 	}
+	if err := rows.Err(); err != nil {
+		return isRestartRequired, err
+	}
 
 	return isRestartRequired, nil
 }
@@ -482,6 +518,7 @@ func isRestartRequiredUsingPgSettingsContext(ctx context.Context, connParams Con
 	if err != nil {
 		return false, err
 	}
+	defer stmt.Close()
 
 	rows, err := stmt.Query(pq.Array(changedParams))
 	if err != nil {
@@ -492,6 +529,9 @@ func isRestartRequiredUsingPgSettingsContext(ctx context.Context, connParams Con
 		if err := rows.Scan(&isRestartRequired); err != nil {
 			return isRestartRequired, err
 		}
+	}
+	if err := rows.Err(); err != nil {
+		return isRestartRequired, err
 	}
 
 	return isRestartRequired, nil

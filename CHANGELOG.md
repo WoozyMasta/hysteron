@@ -47,6 +47,8 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Update Kubernetes client libraries to `v0.36.0`, raise the Go module
   baseline to Go 1.26, and move Kubernetes sentinel leader election from
   ConfigMap locks to `coordination.k8s.io/Lease` locks.
+* Check PostgreSQL query row iteration errors and close prepared statements in
+  helper code.
 
 ## v0.17.0
 

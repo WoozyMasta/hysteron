@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"os"
@@ -446,8 +445,12 @@ func (s *Sentinel) isDifferentTimelineBranch(followedDB *cluster.DB, db *cluster
 // isLagBelowMax checks if the db reported lag is below MaxStandbyLag from the
 // master reported lag
 func (s *Sentinel) isLagBelowMax(cd *cluster.ClusterData, curMasterDB, db *cluster.DB) bool {
-	log.Debugf("curMasterDB.Status.XLogPos: %d, db.Status.XLogPos: %d, lag: %d", curMasterDB.Status.XLogPos, db.Status.XLogPos, int64(curMasterDB.Status.XLogPos-db.Status.XLogPos))
-	if int64(curMasterDB.Status.XLogPos-db.Status.XLogPos) > int64(*cd.Cluster.DefSpec().MaxStandbyLag) {
+	var lag uint64
+	if curMasterDB.Status.XLogPos > db.Status.XLogPos {
+		lag = curMasterDB.Status.XLogPos - db.Status.XLogPos
+	}
+	log.Debugf("curMasterDB.Status.XLogPos: %d, db.Status.XLogPos: %d, lag: %d", curMasterDB.Status.XLogPos, db.Status.XLogPos, lag)
+	if lag > uint64(*cd.Cluster.DefSpec().MaxStandbyLag) {
 		log.Infow("ignoring keeper since its behind that maximum xlog position", "db", db.UID, "dbXLogPos", db.Status.XLogPos, "masterXLogPos", curMasterDB.Status.XLogPos)
 		return false
 	}
@@ -987,7 +990,7 @@ func (s *Sentinel) updateCluster(cd *cluster.ClusterData, pis cluster.ProxiesInf
 		masterOK := true
 		curMasterDB := cd.DBs[curMasterDBUID]
 		if curMasterDB == nil {
-			return nil, fmt.Errorf("db for keeper %q not available. This shouldn't happen!", curMasterDBUID)
+			return nil, fmt.Errorf("db for keeper %q not available, this shouldn't happen", curMasterDBUID)
 		}
 		log.Debugf("db dump: %s", spew.Sdump(curMasterDB))
 
@@ -1443,7 +1446,8 @@ func (s *Sentinel) updateCluster(cd *cluster.ClusterData, pis cluster.ProxiesInf
 
 				// Remove dbs in excess if we have a good number >= MaxStandbysPerSender
 				// We don't remove failed db until the number of good db is >= MaxStandbysPerSender since they can come back
-				if uint16(goodStandbysCount) >= *clusterSpec.MaxStandbysPerSender {
+				maxStandbysPerSender := int(*clusterSpec.MaxStandbysPerSender)
+				if goodStandbysCount >= maxStandbysPerSender {
 					toRemove := []*cluster.DB{}
 					// Remove all non good standbys
 					for _, db := range newcd.DBs {
@@ -1460,7 +1464,7 @@ func (s *Sentinel) updateCluster(cd *cluster.ClusterData, pis cluster.ProxiesInf
 						}
 					}
 					// Remove good standbys in excess
-					nr := int(uint16(goodStandbysCount) - *clusterSpec.MaxStandbysPerSender)
+					nr := goodStandbysCount - maxStandbysPerSender
 					i := 0
 					for _, db := range goodStandbys {
 						if i >= nr {
@@ -1482,7 +1486,7 @@ func (s *Sentinel) updateCluster(cd *cluster.ClusterData, pis cluster.ProxiesInf
 					// Add new dbs to substitute failed dbs, if there're available keepers.
 
 					// nc can be negative if MaxStandbysPerSender has been lowered
-					nc := int(*clusterSpec.MaxStandbysPerSender - uint16(notFailedStandbysCount))
+					nc := maxStandbysPerSender - notFailedStandbysCount
 					// Add missing DBs until MaxStandbysPerSender
 					freeKeepers := s.freeKeepers(newcd)
 					nf := len(freeKeepers)
@@ -1563,7 +1567,7 @@ func (s *Sentinel) updateCluster(cd *cluster.ClusterData, pis cluster.ProxiesInf
 
 	// check that we haven't changed the current cd or there's a bug somewhere
 	if !reflect.DeepEqual(origcd, cd) {
-		return nil, fmt.Errorf("cd was changed in updateCluster, this shouldn't happen!")
+		return nil, fmt.Errorf("cd was changed in updateCluster, this shouldn't happen")
 	}
 	return newcd, nil
 }
@@ -1666,7 +1670,7 @@ func (s *Sentinel) dbConvergenceState(db *cluster.DB, timeout time.Duration) Con
 	if timeout != 0 {
 		d, ok := s.dbConvergenceInfos[db.UID]
 		if !ok {
-			panic(fmt.Errorf("no db convergence info for db %q, this shouldn't happen!", db.UID))
+			panic(fmt.Errorf("no db convergence info for db %q, this shouldn't happen", db.UID))
 		}
 		if timer.Since(d.Timer) > timeout {
 			return ConvergenceFailed
@@ -1761,7 +1765,7 @@ type Sentinel struct {
 func NewSentinel(uid string, cfg *config, end chan bool) (*Sentinel, error) {
 	var initialClusterSpec *cluster.ClusterSpec
 	if cfg.initialClusterSpecFile != "" {
-		configData, err := ioutil.ReadFile(cfg.initialClusterSpecFile)
+		configData, err := os.ReadFile(cfg.initialClusterSpecFile)
 		if err != nil {
 			return nil, fmt.Errorf("cannot read provided initial cluster config file: %v", err)
 		}
@@ -2006,9 +2010,15 @@ func sentinel(c *cobra.Command, args []string) {
 	go sigHandler(sigs, cancel)
 
 	if cfg.MetricsListenAddress != "" {
-		http.Handle("/metrics", promhttp.Handler())
+		metricsMux := http.NewServeMux()
+		metricsMux.Handle("/metrics", promhttp.Handler())
+		metricsServer := http.Server{
+			Addr:              cfg.MetricsListenAddress,
+			Handler:           metricsMux,
+			ReadHeaderTimeout: 5 * time.Second,
+		}
 		go func() {
-			err := http.ListenAndServe(cfg.MetricsListenAddress, nil)
+			err := metricsServer.ListenAndServe()
 			if err != nil {
 				log.Errorw("metrics http server error", zap.Error(err))
 				cancel()

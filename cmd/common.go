@@ -116,7 +116,7 @@ func CheckCommonConfig(cfg *CommonConfig) error {
 			return fmt.Errorf("wrong kubernetes resource kind: %q", cfg.KubeResourceKind)
 		}
 	default:
-		return fmt.Errorf("Unknown store backend: %q", cfg.StoreBackend)
+		return fmt.Errorf("unknown store backend: %q", cfg.StoreBackend)
 	}
 
 	return nil

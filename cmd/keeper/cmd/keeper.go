@@ -19,7 +19,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
@@ -191,7 +190,7 @@ func readPasswordFromFile(filepath string) (string, error) {
 		log.Warnw("password file permissions are too open. This file should only be readable to the user executing stolon! Continuing...", "file", filepath, "mode", fmt.Sprintf("%#o", fi.Mode()))
 	}
 
-	pwBytes, err := ioutil.ReadFile(filepath)
+	pwBytes, err := os.ReadFile(filepath)
 	if err != nil {
 		return "", fmt.Errorf("unable to read password from file %s: %v", filepath, err)
 	}
@@ -668,7 +667,7 @@ func (p *PostgresKeeper) updatePGState(pctx context.Context) {
 // If needed, to better handle all the cases with also a better validation of
 // standby names we could use something like the parser used by postgres
 func parseSynchronousStandbyNames(s string) ([]string, error) {
-	var spacesSplit []string = strings.Split(s, " ")
+	spacesSplit := strings.Split(s, " ")
 	var entries []string
 	if len(spacesSplit) < 2 {
 		// We're parsing format: standby_name [, ...]
@@ -1769,7 +1768,7 @@ func (p *PostgresKeeper) keeperLocalStateFilePath() string {
 }
 
 func (p *PostgresKeeper) loadKeeperLocalState() error {
-	sj, err := ioutil.ReadFile(p.keeperLocalStateFilePath())
+	sj, err := os.ReadFile(p.keeperLocalStateFilePath())
 	if err != nil {
 		return err
 	}
@@ -1794,7 +1793,7 @@ func (p *PostgresKeeper) dbLocalStateFilePath() string {
 }
 
 func (p *PostgresKeeper) loadDBLocalState() error {
-	sj, err := ioutil.ReadFile(p.dbLocalStateFilePath())
+	sj, err := os.ReadFile(p.dbLocalStateFilePath())
 	if err != nil {
 		return err
 	}
@@ -2086,7 +2085,7 @@ func keeper(c *cobra.Command, args []string) {
 	var lockFile *os.File
 	if !cfg.disableDataDirLocking {
 		lockFileName := filepath.Join(cfg.dataDir, "lock")
-		lockFile, err = os.OpenFile(lockFileName, os.O_RDWR|os.O_CREATE, 0644)
+		lockFile, err = os.OpenFile(lockFileName, os.O_RDWR|os.O_CREATE, 0600)
 		if err != nil {
 			log.Fatalf("cannot take exclusive lock on data dir %q: %v", lockFileName, err)
 		}
@@ -2111,9 +2110,15 @@ func keeper(c *cobra.Command, args []string) {
 	go sigHandler(sigs, cancel)
 
 	if cfg.MetricsListenAddress != "" {
-		http.Handle("/metrics", promhttp.Handler())
+		metricsMux := http.NewServeMux()
+		metricsMux.Handle("/metrics", promhttp.Handler())
+		metricsServer := http.Server{
+			Addr:              cfg.MetricsListenAddress,
+			Handler:           metricsMux,
+			ReadHeaderTimeout: 5 * time.Second,
+		}
 		go func() {
-			err = http.ListenAndServe(cfg.MetricsListenAddress, nil)
+			err = metricsServer.ListenAndServe()
 			if err != nil {
 				log.Errorw("metrics http server error", zap.Error(err))
 				cancel()
@@ -2130,6 +2135,8 @@ func keeper(c *cobra.Command, args []string) {
 	<-end
 
 	if !cfg.disableDataDirLocking {
-		lockFile.Close()
+		if err := lockFile.Close(); err != nil {
+			log.Errorw("failed to close data dir lock file", zap.Error(err))
+		}
 	}
 }

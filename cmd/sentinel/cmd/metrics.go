@@ -63,7 +63,7 @@ func (c sentinelCollector) Describe(ch chan<- *prometheus.Desc) {
 
 func (c sentinelCollector) Collect(ch chan<- prometheus.Metric) {
 	var isLeaderValue float64
-	isLeader, leaderCount := c.Sentinel.leaderInfo()
+	isLeader, leaderCount := c.leaderInfo()
 	if isLeader {
 		isLeaderValue = 1
 	}

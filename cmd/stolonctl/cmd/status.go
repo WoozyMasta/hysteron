@@ -124,7 +124,9 @@ func renderText(status Status, generateErr error) {
 		fmt.Fprintf(tabOut, "ID\tLEADER\n")
 		for _, s := range status.Sentinels {
 			fmt.Fprintf(tabOut, "%s\t%t\n", s.UID, s.Leader)
-			tabOut.Flush()
+			if err := tabOut.Flush(); err != nil {
+				die("flush status output: %v", err)
+			}
 		}
 	}
 
@@ -137,7 +139,9 @@ func renderText(status Status, generateErr error) {
 		fmt.Fprintf(tabOut, "ID\n")
 		for _, p := range status.Proxies {
 			fmt.Fprintf(tabOut, "%s\n", p.UID)
-			tabOut.Flush()
+			if err := tabOut.Flush(); err != nil {
+				die("flush status output: %v", err)
+			}
 		}
 	}
 
@@ -151,7 +155,9 @@ func renderText(status Status, generateErr error) {
 		fmt.Fprintf(tabOut, "UID\tHEALTHY\tPG LISTENADDRESS\tPG HEALTHY\tPG WANTEDGENERATION\tPG CURRENTGENERATION\n")
 		for _, k := range status.Keepers {
 			fmt.Fprintf(tabOut, "%s\t%t\t%s\t%t\t%d\t%d\t\n", k.UID, k.Healthy, k.ListenAddress, k.PgHealthy, k.PgWantedGeneration, k.PgCurrentGeneration)
-			tabOut.Flush()
+			if err := tabOut.Flush(); err != nil {
+				die("flush status output: %v", err)
+			}
 		}
 	}
 

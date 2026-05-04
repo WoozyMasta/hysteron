@@ -51,6 +51,8 @@ The format is based on [Keep a Changelog][], and this project adheres to
   helper code.
 * Clean up correctness lint issues in common helpers, PostgreSQL file handling,
   and store revision conversions.
+* Clean up command package correctness lint issues, including metrics server
+  timeouts, checked sentinel arithmetic, and CLI output flush errors.
 
 ## v0.17.0
 

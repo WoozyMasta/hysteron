@@ -8,12 +8,17 @@ VULNCHECK   ?= govulncheck
 CRI         ?= docker
 BENCH_COUNT ?= 6
 BENCH_REF   ?= bench_baseline.txt
+PG_MAJOR    ?= 18
 
 CGO_ENABLED ?= 0
 GOFLAGS     ?= -buildvcs=auto -trimpath
 LDFLAGS     ?= -s -w
 GOWORK      ?= off
 GOFTAGS     ?= forceposix
+INTEGRATION_TAGS          ?= integration
+INTEGRATION_TIMEOUT       ?= 20m
+INTEGRATION_STORE_BACKEND ?= etcdv3
+ETCD_BIN                  ?= etcd
 
 BINARIES   := stolon-keeper stolon-sentinel stolon-proxy stolonctl
 OUTPUT_DIR := build
@@ -42,7 +47,7 @@ LDFLAGS_X := \
 
 .PHONY: all build release clean check ci verify tidy tidy-check download fmt \
 	fmt-check vet lint lint-fix align align-fix test test-race test-short bench \
-	bench-fast bench-reset integration vulncheck tools tools-ci tool-golangci-lint \
+	bench-fast bench-reset integration integration-compose vulncheck tools tools-ci tool-golangci-lint \
 	tool-betteralign tool-benchstat tool-vulncheck container-build
 
 all: build
@@ -166,15 +171,18 @@ bench-reset:
 	rm -f "$(BENCH_REF)"
 
 integration: build
-	if [ -z "$${STOLON_TEST_STORE_BACKEND}" ]; then \
-		echo "STOLON_TEST_STORE_BACKEND is undefined"; \
-		exit 1; \
-	fi; \
+	STOLON_TEST_STORE_BACKEND="$(INTEGRATION_STORE_BACKEND)" \
+	ETCD_BIN="$(ETCD_BIN)" \
 	STKEEPER_BIN="$(OUTPUT_DIR)/stolon-keeper$(NATIVE_EXTENSION)" \
 	STSENTINEL_BIN="$(OUTPUT_DIR)/stolon-sentinel$(NATIVE_EXTENSION)" \
 	STPROXY_BIN="$(OUTPUT_DIR)/stolon-proxy$(NATIVE_EXTENSION)" \
 	STCTL_BIN="$(OUTPUT_DIR)/stolonctl$(NATIVE_EXTENSION)" \
-	$(GO) test -timeout 20m -v -count 1 ./tests/integration
+	$(GO) test -tags "$(INTEGRATION_TAGS)" -timeout "$(INTEGRATION_TIMEOUT)" \
+		-v -count 1 ./tests/integration
+
+integration-compose:
+	PG_MAJOR="$(PG_MAJOR)" $(CRI) compose -f tests/integration/compose.yml \
+		run --rm integration
 
 tools: tool-golangci-lint tool-betteralign tool-benchstat tool-govulncheck
 tools-ci: tool-golangci-lint tool-betteralign tool-govulncheck

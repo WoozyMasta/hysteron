@@ -59,6 +59,8 @@ The format is based on [Keep a Changelog][], and this project adheres to
   tag and isolate Unix freeze/resume signals behind platform helpers.
 * Use `github.com/google/uuid` for project UUID generation and remove the
   direct `github.com/gofrs/uuid` dependency.
+* Add an explicit Docker Compose integration-test runner for PostgreSQL major
+  version smoke checks.
 * Check or explicitly discard remaining command, PostgreSQL, and store cleanup
   errors so `errcheck` is clean.
 * Clean up initial style lint findings for whitespace, unconvert, gocritic,

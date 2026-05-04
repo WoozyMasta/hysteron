@@ -925,12 +925,7 @@ type TestStore struct {
 func NewTestStore(t *testing.T, dir string, a ...string) (*TestStore, error) {
 	storeBackend := store.Backend(os.Getenv("STOLON_TEST_STORE_BACKEND"))
 	switch storeBackend {
-	case "consul":
-		return NewTestConsul(t, dir, a...)
-	case "etcd":
-		storeBackend = "etcdv2"
-		fallthrough
-	case "etcdv2", "etcdv3":
+	case "etcdv3":
 		return NewTestEtcd(t, dir, storeBackend, a...)
 	}
 	return nil, fmt.Errorf("wrong store backend")
@@ -992,90 +987,6 @@ func NewTestEtcd(t *testing.T, dir string, backend store.Backend, a ...string) (
 		storeBackend:  backend,
 	}
 	return tstore, nil
-}
-
-func NewTestConsul(t *testing.T, dir string, a ...string) (*TestStore, error) {
-	u := uuid.Must(uuid.NewV4())
-	uid := fmt.Sprintf("%x", u[:4])
-
-	dataDir := filepath.Join(dir, fmt.Sprintf("consul%s", uid))
-
-	listenAddress, portHTTP, err := getFreePort(true, false)
-	if err != nil {
-		return nil, err
-	}
-	_, portSerfLan, err := getFreePort(true, true)
-	if err != nil {
-		return nil, err
-	}
-	_, portSerfWan, err := getFreePort(true, true)
-	if err != nil {
-		return nil, err
-	}
-	_, portServer, err := getFreePort(true, false)
-	if err != nil {
-		return nil, err
-	}
-
-	f, err := os.Create(filepath.Join(dir, fmt.Sprintf("consul%s.json", uid)))
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
-	if _, err := f.WriteString(fmt.Sprintf(`{
-		"ports": {
-			"dns": -1,
-			"http": %s,
-			"serf_lan": %s,
-			"serf_wan": %s,
-			"server": %s
-		}
-	}`, portHTTP, portSerfLan, portSerfWan, portServer)); err != nil {
-		return nil, err
-	}
-
-	args := []string{}
-	args = append(args, "agent")
-	args = append(args, "-server")
-	args = append(args, fmt.Sprintf("-config-file=%s", f.Name()))
-	args = append(args, fmt.Sprintf("-data-dir=%s", dataDir))
-	args = append(args, fmt.Sprintf("-bind=%s", listenAddress))
-	args = append(args, fmt.Sprintf("-advertise=%s", listenAddress))
-	args = append(args, "-bootstrap-expect=1")
-	args = append(args, a...)
-
-	storeEndpoints := fmt.Sprintf("%s:%s", listenAddress, portHTTP)
-
-	storeConfig := store.Config{
-		Backend:   store.CONSUL,
-		Endpoints: storeEndpoints,
-		Timeout:   defaultStoreTimeout,
-	}
-	kvstore, err := store.NewKVStore(storeConfig)
-	if err != nil {
-		return nil, fmt.Errorf("cannot create store: %v", err)
-	}
-
-	bin := os.Getenv("CONSUL_BIN")
-	if bin == "" {
-		return nil, fmt.Errorf("missing CONSUL_BIN env")
-	}
-	ts := &TestStore{
-		t: t,
-		Process: Process{
-			t:    t,
-			uid:  uid,
-			name: "consul",
-			bin:  bin,
-			args: args,
-		},
-		listenAddress: listenAddress,
-		port:          portHTTP,
-		store:         kvstore,
-		storeBackend:  store.CONSUL,
-	}
-	return ts, nil
 }
 
 func (ts *TestStore) WaitUp(timeout time.Duration) error {

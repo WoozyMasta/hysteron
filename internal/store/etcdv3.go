@@ -18,9 +18,9 @@ import (
 	"context"
 	"time"
 
-	etcdclientv3 "github.com/coreos/etcd/clientv3"
-	"github.com/coreos/etcd/clientv3/concurrency"
-	"github.com/coreos/etcd/etcdserver/api/v3rpc/rpctypes"
+	"go.etcd.io/etcd/api/v3/v3rpc/rpctypes"
+	etcdclientv3 "go.etcd.io/etcd/client/v3"
+	"go.etcd.io/etcd/client/v3/concurrency"
 )
 
 func fromEtcV3Error(err error) error {
@@ -54,7 +54,7 @@ func (s *etcdV3Store) Put(pctx context.Context, key string, value []byte, option
 	ctx, cancel := context.WithTimeout(pctx, s.requestTimeout)
 	_, err := s.c.Put(ctx, key, string(value), etcdv3Options...)
 	cancel()
-	return fromLibKVStoreErr(err)
+	return fromEtcV3Error(err)
 }
 
 func (s *etcdV3Store) Get(pctx context.Context, key string) (*KVPair, error) {

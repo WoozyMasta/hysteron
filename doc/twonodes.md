@@ -4,8 +4,10 @@ If you're going to run stolon on an IaaS or any kind of two nodes (baremetal, VM
 
 The related store should live outside the instances hosting the stolon cluster for multiple reasons:
 
-* Stores like etcd/consul uses the raft consensus protocol that requires at least 3 nodes to provides high availability (it can survive to the death of (N/2)-1 members)
-* Disk I/O of postgres must not impact the etcd/consul I/O
+* Stores like etcd use the raft consensus protocol that requires at least 3
+  nodes to provide high availability (it can survive to the death of (N/2)-1
+  members)
+* Disk I/O of postgres must not impact the store I/O
 * You can run multiple stolon clusters using the same store
 
 # Two nodes with load balancer

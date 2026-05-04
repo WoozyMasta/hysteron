@@ -24,6 +24,7 @@ import (
 	"github.com/sorintlab/stolon/cmd"
 	"github.com/sorintlab/stolon/internal/cluster"
 	"github.com/sorintlab/stolon/internal/flagutil"
+	slog "github.com/sorintlab/stolon/internal/log"
 	"github.com/sorintlab/stolon/internal/store"
 
 	"github.com/spf13/cobra"
@@ -53,6 +54,7 @@ type config struct {
 }
 
 var cfg config
+var log = slog.S()
 
 func init() {
 	cfg.IsStolonCtl = true

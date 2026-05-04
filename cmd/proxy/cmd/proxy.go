@@ -328,8 +328,8 @@ func (c *ClusterChecker) Start() error {
 
 	// TODO(sgotti) TimeoutCecker is needed to forcefully close connection also
 	// if the Check method is blocked somewhere.
-	// The idomatic/cleaner solution will be to use a context instead of this
-	// TimeoutChecker but we have to change the libkv stores to support contexts.
+	// The idiomatic/cleaner solution will be to use a context instead of this
+	// TimeoutChecker, but that requires broader store and checker plumbing.
 	go c.TimeoutChecker(checkOkCh)
 
 	for {

@@ -42,7 +42,8 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Internalize and modernize the TCP proxy previously provided by
   `github.com/sorintlab/pollon` as `internal/tcpproxy`, removing the old
   `pollon` and `tcpkeepalive` dependencies.
-* Update etcd 3.3 dependencies in a controlled storage dependency batch.
+* Drop the obsolete etcd v2 and Consul backends, remove `stolonctl register`,
+  and migrate the etcd v3 backend to `go.etcd.io/etcd/client/v3` `v3.6.11`.
 
 ## v0.17.0
 

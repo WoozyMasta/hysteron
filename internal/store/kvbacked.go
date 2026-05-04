@@ -25,20 +25,15 @@ import (
 	"strings"
 	"time"
 
-	etcdclientv3 "github.com/coreos/etcd/clientv3"
-	"github.com/docker/leadership"
-	"github.com/docker/libkv"
-	libkvstore "github.com/docker/libkv/store"
 	"github.com/sorintlab/stolon/internal/cluster"
 	"github.com/sorintlab/stolon/internal/common"
+	etcdclientv3 "go.etcd.io/etcd/client/v3"
 )
 
 // Backend represents a KV Store Backend
 type Backend string
 
 const (
-	CONSUL Backend = "consul"
-	ETCDV2 Backend = "etcdv2"
 	ETCDV3 Backend = "etcdv3"
 )
 
@@ -50,13 +45,10 @@ const (
 )
 
 const (
-	DefaultEtcdEndpoints   = "http://127.0.0.1:2379"
-	DefaultConsulEndpoints = "http://127.0.0.1:8500"
+	DefaultEtcdEndpoints = "http://127.0.0.1:2379"
 )
 
 const (
-	//TODO(sgotti) fix this in libkv?
-	// consul min ttl is 10s and libkv divides this by 2
 	MinTTL = 20 * time.Second
 )
 
@@ -105,33 +97,16 @@ type KVStore interface {
 }
 
 func NewKVStore(cfg Config) (KVStore, error) {
-	var kvBackend libkvstore.Backend
-	switch cfg.Backend {
-	case CONSUL:
-		kvBackend = libkvstore.CONSUL
-	case ETCDV2:
-		kvBackend = libkvstore.ETCD
-	case ETCDV3:
-	default:
+	if cfg.Backend != ETCDV3 {
 		return nil, fmt.Errorf("Unknown store backend: %q", cfg.Backend)
 	}
 
 	endpointsStr := cfg.Endpoints
 	if endpointsStr == "" {
-		switch cfg.Backend {
-		case CONSUL:
-			endpointsStr = DefaultConsulEndpoints
-		case ETCDV2, ETCDV3:
-			endpointsStr = DefaultEtcdEndpoints
-		}
+		endpointsStr = DefaultEtcdEndpoints
 	}
 	endpoints := strings.Split(endpointsStr, ",")
 
-	// 1) since libkv wants endpoints as a list of IP and not URLs but we
-	// want to also support them then parse and strip them
-	// 2) since libkv will enable TLS for all endpoints when config.TLS
-	// isn't nil we have to check that all the endpoints have the same
-	// scheme
 	addrs := []string{}
 	var scheme string
 	for _, e := range endpoints {
@@ -169,35 +144,19 @@ func NewKVStore(cfg Config) (KVStore, error) {
 		}
 	}
 
-	switch cfg.Backend {
-	case CONSUL, ETCDV2:
-		config := &libkvstore.Config{
-			TLS:               tlsConfig,
-			ConnectionTimeout: cfg.Timeout,
-		}
-
-		store, err := libkv.NewStore(kvBackend, addrs, config)
-		if err != nil {
-			return nil, err
-		}
-		return &libKVStore{store: store}, nil
-	case ETCDV3:
-		config := etcdclientv3.Config{
-			Endpoints:            addrs,
-			TLS:                  tlsConfig,
-			DialTimeout:          20 * time.Second,
-			DialKeepAliveTime:    1 * time.Second,
-			DialKeepAliveTimeout: cfg.Timeout,
-		}
-
-		c, err := etcdclientv3.New(config)
-		if err != nil {
-			return nil, err
-		}
-		return &etcdV3Store{c: c, requestTimeout: cfg.Timeout}, nil
-	default:
-		return nil, fmt.Errorf("Unknown store backend: %q", cfg.Backend)
+	config := etcdclientv3.Config{
+		Endpoints:            addrs,
+		TLS:                  tlsConfig,
+		DialTimeout:          20 * time.Second,
+		DialKeepAliveTime:    1 * time.Second,
+		DialKeepAliveTimeout: cfg.Timeout,
 	}
+
+	c, err := etcdclientv3.New(config)
+	if err != nil {
+		return nil, err
+	}
+	return &etcdV3Store{c: c, requestTimeout: cfg.Timeout}, nil
 }
 
 type KVBackedStore struct {
@@ -218,8 +177,7 @@ func (s *KVBackedStore) AtomicPutClusterData(ctx context.Context, cd *cluster.Cl
 		return nil, err
 	}
 	path := filepath.Join(s.clusterPath, clusterDataFile)
-	// Skip prev Value since LastIndex is enough for a CAS and it gives
-	// problem with etcd v2 api with big prev values.
+	// Skip prev Value since LastIndex is enough for a CAS.
 	var prev *KVPair
 	if previous != nil {
 		prev = &KVPair{
@@ -348,12 +306,8 @@ func (s *KVBackedStore) GetProxiesInfo(ctx context.Context) (cluster.ProxiesInfo
 	return psi, nil
 }
 
-func NewKVBackedElection(kvStore KVStore, path, candidateUID string, timeout time.Duration) Election {
+func NewKVBackedElection(kvStore KVStore, path, candidateUID string, timeout time.Duration) (Election, error) {
 	switch kvStore := kvStore.(type) {
-	case *libKVStore:
-		s := kvStore
-		candidate := leadership.NewCandidate(s.store, path, candidateUID, MinTTL)
-		return &libkvElection{store: s, path: path, candidate: candidate}
 	case *etcdV3Store:
 		etcdV3Store := kvStore
 		return &etcdv3Election{
@@ -362,8 +316,8 @@ func NewKVBackedElection(kvStore KVStore, path, candidateUID string, timeout tim
 			candidateUID:   candidateUID,
 			ttl:            MinTTL,
 			requestTimeout: timeout,
-		}
+		}, nil
 	default:
-		panic("unknown kvstore")
+		return nil, fmt.Errorf("unknown kvstore type %T", kvStore)
 	}
 }

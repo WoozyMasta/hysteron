@@ -2,21 +2,20 @@
 <!-- Created with Inkscape (http://www.inkscape.org/) -->
 
 <svg
-   xmlns:dc="http://purl.org/dc/elements/1.1/"
-   xmlns:cc="http://creativecommons.org/ns#"
-   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-   xmlns:svg="http://www.w3.org/2000/svg"
-   xmlns="http://www.w3.org/2000/svg"
-   xmlns:xlink="http://www.w3.org/1999/xlink"
-   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
-   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
    width="246.76529mm"
    height="247.11057mm"
    viewBox="0 0 246.76529 247.11057"
    version="1.1"
    id="svg9843"
-   inkscape:version="0.92.2 2405546, 2018-03-11"
-   sodipodi:docname="twonodes_keepalived.svg">
+   inkscape:version="1.3.2 (091e20e, 2023-11-25, custom)"
+   sodipodi:docname="twonodes_keepalived.svg"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:dc="http://purl.org/dc/elements/1.1/">
   <defs
      id="defs9837">
     <marker
@@ -103,8 +102,8 @@
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
      inkscape:zoom="0.7"
-     inkscape:cx="58.252009"
-     inkscape:cy="444.19223"
+     inkscape:cx="58.571429"
+     inkscape:cy="443.57143"
      inkscape:document-units="mm"
      inkscape:current-layer="layer1"
      showgrid="false"
@@ -112,11 +111,14 @@
      fit-margin-left="0"
      fit-margin-right="0"
      fit-margin-bottom="0"
-     inkscape:window-width="3840"
-     inkscape:window-height="2089"
-     inkscape:window-x="0"
-     inkscape:window-y="34"
-     inkscape:window-maximized="1" />
+     inkscape:window-width="2560"
+     inkscape:window-height="1387"
+     inkscape:window-x="2552"
+     inkscape:window-y="22"
+     inkscape:window-maximized="1"
+     inkscape:showpageshadow="2"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1" />
   <metadata
      id="metadata9840">
     <rdf:RDF>
@@ -125,7 +127,7 @@
         <dc:format>image/svg+xml</dc:format>
         <dc:type
            rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
-        <dc:title></dc:title>
+        <dc:title />
       </cc:Work>
     </rdf:RDF>
   </metadata>
@@ -181,10 +183,10 @@
        font-size="29.356px"
        letter-spacing="0px"
        word-spacing="0px"
-       style="font-size:8.28483963px;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;stroke-width:0.28221965px"
+       style="font-size:8.28484px;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;stroke-width:0.28222px"
        xml:space="preserve"
        id="text4908-6-1"><tspan
-         style="font-family:sans-serif;stroke-width:0.28221965px"
+         style="font-family:sans-serif;stroke-width:0.28222px"
          x="-758.76276"
          y="-165.88341"
          id="tspan4906-0-1">keeper</tspan></text>
@@ -224,7 +226,8 @@
            height="221.28761"
            x="-683.24567"
            y="1107.2457" /></flowRegion><flowPara
-         id="flowPara5463-8">Instance A</flowPara></flowRoot>    <g
+         id="flowPara5463-8">Instance A</flowPara></flowRoot>
+    <g
        id="g8310"
        transform="matrix(0.28221964,0,0,0.28221964,-129.52864,-302.88085)">
       <rect
@@ -241,10 +244,10 @@
          font-size="40px"
          letter-spacing="0px"
          word-spacing="0px"
-         style="font-size:29.3560009px;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;stroke-width:0.73390001px"
+         style="font-size:29.356px;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;stroke-width:0.7339px"
          xml:space="preserve"
          id="text4784-8-2-2-4-3-0"><tspan
-           style="font-family:sans-serif;stroke-width:0.73390001px"
+           style="font-family:sans-serif;stroke-width:0.7339px"
            x="-2251.1003"
            y="279.70428"
            id="tspan4782-7-9-0-3-6-9">keepalived</tspan></text>
@@ -296,10 +299,10 @@
        font-size="29.356px"
        letter-spacing="0px"
        word-spacing="0px"
-       style="font-size:8.28483963px;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;stroke-width:0.28221965px"
+       style="font-size:8.28484px;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;stroke-width:0.28222px"
        xml:space="preserve"
        id="text4908-6-1-7"><tspan
-         style="font-family:sans-serif;stroke-width:0.28221965px"
+         style="font-family:sans-serif;stroke-width:0.28222px"
          x="-602.93793"
          y="-166.01781"
          id="tspan4906-0-1-6">keeper</tspan></text>
@@ -345,10 +348,10 @@
          font-size="40px"
          letter-spacing="0px"
          word-spacing="0px"
-         style="font-size:29.3560009px;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;stroke-width:0.73390001px"
+         style="font-size:29.356px;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;stroke-width:0.7339px"
          xml:space="preserve"
          id="text4784-8-2-2-4-3-0-7"><tspan
-           style="font-family:sans-serif;stroke-width:0.73390001px"
+           style="font-family:sans-serif;stroke-width:0.7339px"
            x="-2251.1003"
            y="279.70428"
            id="tspan4782-7-9-0-3-6-9-2">keepalived</tspan></text>
@@ -367,10 +370,10 @@
        font-size="29.356px"
        letter-spacing="0px"
        word-spacing="0px"
-       style="font-size:8.28483963px;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;stroke-width:0.28221965px"
+       style="font-size:8.28484px;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;stroke-width:0.28222px"
        xml:space="preserve"
        id="text4792-4"><tspan
-         style="font-family:sans-serif;stroke-width:0.28221965px"
+         style="font-family:sans-serif;stroke-width:0.28222px"
          x="-725.03595"
          y="-303.94443"
          id="tspan4790-0">client</tspan></text>
@@ -388,7 +391,7 @@
        font-size="29.356px"
        letter-spacing="0px"
        word-spacing="0px"
-       style="font-size:8.28483963px;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;stroke-width:0.207121px"
+       style="font-size:8.28484px;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;stroke-width:0.207121px"
        xml:space="preserve"
        id="text4914-5"><tspan
          style="font-family:sans-serif;stroke-width:0.207121px"
@@ -409,7 +412,7 @@
        font-size="29.356px"
        letter-spacing="0px"
        word-spacing="0px"
-       style="font-size:8.28483963px;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;stroke-width:0.207121px"
+       style="font-size:8.28484px;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;stroke-width:0.207121px"
        xml:space="preserve"
        id="text4920-1"><tspan
          style="font-family:sans-serif;stroke-width:0.207121px"
@@ -417,7 +420,7 @@
          y="-301.58481"
          id="tspan4918-2">client</tspan></text>
     <path
-       style="display:inline;fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:0.26458332;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:1.58750001, 1.58750001;stroke-dashoffset:0;stroke-opacity:1;marker-start:url(#marker8549);marker-end:url(#marker8553)"
+       style="display:inline;fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:0.264583;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:1.5875, 1.5875;stroke-dashoffset:0;stroke-opacity:1;marker-start:url(#marker8549);marker-end:url(#marker8553)"
        d="m -618.03296,-226.78131 -93.6722,0.0811"
        id="path8419"
        inkscape:connector-type="polyline"
@@ -435,7 +438,7 @@
     <text
        id="text4784-8-2-2-4-3-0-1-7"
        xml:space="preserve"
-       style="font-size:8.28483963px;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;stroke-width:0.207121px"
+       style="font-size:8.28484px;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;stroke-width:0.207121px"
        word-spacing="0px"
        letter-spacing="0px"
        font-size="40px"
@@ -446,7 +449,7 @@
          x="-749.19891"
          style="font-family:sans-serif;stroke-width:0.207121px">VIP</tspan></text>
     <path
-       style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;marker-end:url(#marker8490)"
+       style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:0.264583px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;marker-end:url(#marker8490)"
        d="m -717.5072,-298.02672 -22.14232,52.05454"
        id="path8486"
        inkscape:connector-type="polyline"
@@ -454,7 +457,7 @@
        inkscape:connection-start="#rect4788-6"
        inkscape:connection-end="#rect4780-5-4-2-8-4-6-0-0" />
     <path
-       style="display:inline;fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;marker-end:url(#marker8490-6)"
+       style="display:inline;fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:0.264583px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;marker-end:url(#marker8490-6)"
        d="M -630.99637,-295.6671 -732.068,-244.82848"
        id="path8486-9"
        inkscape:connector-type="polyline"
@@ -462,7 +465,7 @@
        inkscape:connection-start="#rect4916-0"
        inkscape:connection-end="#rect4780-5-4-2-8-4-6-0-0" />
     <path
-       style="display:inline;fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;marker-end:url(#marker8490-5)"
+       style="display:inline;fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:0.264583px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;marker-end:url(#marker8490-5)"
        d="m -672.06006,-304.87282 -63.47569,58.90064"
        id="path8486-5"
        inkscape:connector-type="polyline"
@@ -480,7 +483,8 @@
            height="221.28761"
            x="-683.24567"
            y="1107.2457" /></flowRegion><flowPara
-         id="flowPara5463-8-0">Instance B</flowPara></flowRoot>    <rect
+         id="flowPara5463-8-0">Instance B</flowPara></flowRoot>
+    <rect
        style="fill:#f2f2f2;stroke:#000000;stroke-width:0.68912399"
        x="-713.95251"
        y="-98.131073"
@@ -489,7 +493,7 @@
        ry="3.6764436"
        id="rect4802-30" />
     <g
-       transform="matrix(0.06816733,0,0,0.06816733,-721.31142,-113.87751)"
+       transform="matrix(0.06816733,0,0,0.06816733,-709.59416,-113.49953)"
        id="g4812-8">
       <g
          style="fill:#419eda"
@@ -508,25 +512,17 @@
            id="path4808-7" />
       </g>
     </g>
-    <image
-       style="image-rendering:optimizeSpeed"
-       x="-690.89014"
-       y="-94.963135"
-       width="15.935249"
-       height="15.776078"
-       preserveAspectRatio="none"
-       xlink:href="data:image/png;base64,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 9AOZTXr9xX8COmQuEWW0bSAAAAAASUVORK5CYII= "
-       id="image4814-1" />
     <flowRoot
        xml:space="preserve"
        id="flowRoot10944"
        style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:32px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       transform="matrix(0.26458333,0,0,0.26458333,-233.71743,-356.0308)"><flowRegion
+       transform="matrix(0.26458333,0,0,0.26458333,-236.36327,-351.11711)"><flowRegion
          id="flowRegion10946"><rect
            id="rect10948"
-           width="223.86057"
-           height="113.07243"
+           width="182.43202"
+           height="64.501022"
            x="-1645.261"
            y="978.49445" /></flowRegion><flowPara
-         id="flowPara10950">etcd/consul store</flowPara></flowRoot>  </g>
+         id="flowPara10950">etcd store</flowPara></flowRoot>
+  </g>
 </svg>

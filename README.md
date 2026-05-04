@@ -17,7 +17,8 @@ For an introduction to stolon you can also take a look at [this post](https://sg
 * Leverages PostgreSQL streaming replication.
 * Resilient to any kind of partitioning. While trying to keep the maximum availability, it prefers consistency over availability.
 * [kubernetes integration](examples/kubernetes/README.md) letting you achieve postgreSQL high availability.
-* Uses a cluster store like [etcd](https://etcd.io), [consul](https://www.consul.io) or kubernetes API server as an high available data store and for leader election
+* Uses [etcd v3](https://etcd.io) or the Kubernetes API server as a highly
+  available data store and for leader election.
 * Asynchronous (default) and [synchronous](doc/syncrepl.md) replication.
 * Full cluster setup in minutes.
 * Easy [cluster administration](doc/stolonctl.md)
@@ -64,7 +65,7 @@ Anyway it's quite easy to reset a cluster from scratch keeping the current maste
 ## Requirements
 
 * PostgreSQL 15, 14, 13, 12, 11, 10, 9.6
-* etcd2 >= v2.0, etcd3 >= v3.0, consul >= v0.6 or kubernetes >= 1.8 (based on the store you're going to use)
+* etcd v3 or Kubernetes, based on the store backend you're going to use.
 
 * OS: currently stolon is tested on GNU/Linux (with reports of people using it also on Solaris, *BSD and Darwin)
 

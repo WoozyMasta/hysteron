@@ -21,7 +21,8 @@ If your application want to query the hot standbys, currently you can read the s
 ## Why is shared storage and fencing not necessary with stolon?
 
 stolon eliminates the requirement of a shared storage since it uses postgres streaming replication and can avoid the need of fencing (killing the node, removing access to the shared storage etc...) due to its architecture:
-* It uses etcd/consul as the first step to determine which components are healthy.
+* It uses etcd v3 or Kubernetes as the first step to determine which
+  components are healthy.
 * The stolon-proxy is a sort of fencer since it'll close connections to old masters and direct new connections to the current master.
 
 ## How does stolon differ from pure kubernetes high availability?
@@ -48,7 +49,7 @@ With pacemaker, using the provided postgresql resource agent, you can achieve in
 
 The stolon pros are the same of the above question and it'll let you avoid the need of node fencing and provides an easier cluster management and scaling.
 
-## What happens if etcd/consul is partitioned?
+## What happens if etcd or Kubernetes is partitioned?
 
 See [Stolon Architecture and Requirements](architecture.md)
 
@@ -74,7 +75,7 @@ This is needed for consistency. If we have 3 standbys and we use FIRST 2 (a, b, 
 
 Consul (or etcd) is used only as a key-value storage.
 
-## Lets say I have multiple stolon clusters. Do I need a separate stores (etcd or consul) for each stolon cluster?
+## Lets say I have multiple stolon clusters. Do I need separate stores for each stolon cluster?
 
 stolon will create its keys using the cluster name as part of the key hierarchy. So multiple stolon clusters can share the same store.
 

@@ -34,7 +34,9 @@ The provided example uses `sorintlab/stolon:master-pg10`
 This example has some predefined values that you'd like to change:
 
 * The cluster name is `stolon-cluster`. It's set in the component `--cluster-name` option. The labels and the `--cluster-name` option must be in sync.
-* It uses the etcdv3 backend. You can also choose other backends (like zookeeper) setting the `ST${COMPONENT}_STORE_*` environment variables (see the [commands invocation documentation](/doc/commands_invocation.md)).
+* It uses the etcdv3 backend. You can also use Kubernetes by setting the
+  `ST${COMPONENT}_STORE_*` environment variables (see the
+  [commands invocation documentation](/doc/commands_invocation.md)).
 
 ### Initialize the swarm
 
@@ -76,9 +78,9 @@ You can check everything is fine using this command:
 ```
 docker service ls
 ID                  NAME                MODE                REPLICAS            IMAGE                         PORTS
-pbjr4k9285iy        etcd_etcd-00        replicated          1/1                 quay.io/coreos/etcd:v3.2.10   *:2379->2379/tcp
-7bc4d0e0qf2y        etcd_etcd-01        replicated          1/1                 quay.io/coreos/etcd:v3.2.10
-2dcqqmi5li0v        etcd_etcd-02        replicated          1/1                 quay.io/coreos/etcd:v3.2.10
+pbjr4k9285iy        etcd_etcd-00        replicated          1/1                 gcr.io/etcd-development/etcd:v3.6.11   *:2379->2379/tcp
+7bc4d0e0qf2y        etcd_etcd-01        replicated          1/1                 gcr.io/etcd-development/etcd:v3.6.11
+2dcqqmi5li0v        etcd_etcd-02        replicated          1/1                 gcr.io/etcd-development/etcd:v3.6.11
 ```
 
 ### Initialize the cluster
@@ -121,9 +123,9 @@ You can check everything is fine using this command:
 ```
 docker service ls
 ID                  NAME                MODE                REPLICAS            IMAGE                          PORTS
-pbjr4k9285iy        etcd_etcd-00        replicated          1/1                 quay.io/coreos/etcd:v3.2.17    *:2379->2379/tcp
-7bc4d0e0qf2y        etcd_etcd-01        replicated          1/1                 quay.io/coreos/etcd:v3.2.17
-2dcqqmi5li0v        etcd_etcd-02        replicated          1/1                 quay.io/coreos/etcd:v3.2.17
+pbjr4k9285iy        etcd_etcd-00        replicated          1/1                 gcr.io/etcd-development/etcd:v3.6.11    *:2379->2379/tcp
+7bc4d0e0qf2y        etcd_etcd-01        replicated          1/1                 gcr.io/etcd-development/etcd:v3.6.11
+2dcqqmi5li0v        etcd_etcd-02        replicated          1/1                 gcr.io/etcd-development/etcd:v3.6.11
 k2vh3ff0acpg        pg_keeper1          replicated          1/1                 sorintlab/master-pg10:latest
 jbm195xsalwu        pg_keeper2          replicated          1/1                 sorintlab/master-pg10:latest
 sf79wnygtcmu        pg_proxy            replicated          2/2                 sorintlab/master-pg10:latest   *:5432->5432/tcp

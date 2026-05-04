@@ -68,23 +68,40 @@ type PGManager interface {
 
 // Manager manages one local PostgreSQL instance lifecycle.
 type Manager struct {
-	pgBinPath          string
-	dataDir            string
-	parameters         common.Parameters
-	recoveryOptions    *RecoveryOptions
-	hba                []string
-	curParameters      common.Parameters
+	// Desired PostgreSQL parameters.
+	parameters common.Parameters
+	// Desired recovery options.
+	recoveryOptions *RecoveryOptions
+	// Last applied PostgreSQL parameters.
+	curParameters common.Parameters
+	// Last applied recovery options.
 	curRecoveryOptions *RecoveryOptions
-	curHba             []string
-	localConnParams    ConnParams
-	replConnParams     ConnParams
-	suAuthMethod       string
-	suUsername         string
-	suPassword         string
-	replAuthMethod     string
-	replUsername       string
-	replPassword       string
-	requestTimeout     time.Duration
+	// Local administrative connection parameters.
+	localConnParams ConnParams
+	// Replication connection parameters.
+	replConnParams ConnParams
+	// PostgreSQL binaries directory path.
+	pgBinPath string
+	// Managed PostgreSQL data directory path.
+	dataDir string
+	// Superuser auth method.
+	suAuthMethod string
+	// Superuser username.
+	suUsername string
+	// Superuser password.
+	suPassword string
+	// Replication user auth method.
+	replAuthMethod string
+	// Replication username.
+	replUsername string
+	// Replication password.
+	replPassword string
+	// Desired pg_hba entries.
+	hba []string
+	// Last applied pg_hba entries.
+	curHba []string
+	// Request timeout for PostgreSQL operations.
+	requestTimeout time.Duration
 }
 
 // RecoveryMode defines PostgreSQL startup recovery mode.
@@ -101,8 +118,8 @@ const (
 
 // RecoveryOptions configures recovery mode and recovery parameters.
 type RecoveryOptions struct {
-	RecoveryMode       RecoveryMode
 	RecoveryParameters common.Parameters
+	RecoveryMode       RecoveryMode
 }
 
 // NewRecoveryOptions builds empty recovery options.
@@ -131,9 +148,9 @@ type SystemData struct {
 
 // TimelineHistory is one timeline history record from PostgreSQL.
 type TimelineHistory struct {
+	Reason      string
 	TimelineID  uint64
 	SwitchPoint uint64
-	Reason      string
 }
 
 // InitConfig configures initdb options.

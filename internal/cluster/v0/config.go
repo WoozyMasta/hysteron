@@ -26,7 +26,6 @@ import (
 const (
 	// DefaultProxyCheckInterval is the default legacy proxy check interval.
 	DefaultProxyCheckInterval = 5 * time.Second
-
 	// DefaultRequestTimeout is the default legacy request timeout.
 	DefaultRequestTimeout = 10 * time.Second
 	// DefaultSleepInterval is the default legacy sleep interval.
@@ -45,18 +44,28 @@ const (
 
 // NilConfig is the legacy nullable cluster config.
 type NilConfig struct {
-	RequestTimeout          *Duration          `json:"request_timeout,omitempty"`
-	SleepInterval           *Duration          `json:"sleep_interval,omitempty"`
-	KeeperFailInterval      *Duration          `json:"keeper_fail_interval,omitempty"`
-	MaxStandbysPerSender    *uint              `json:"max_standbys_per_sender,omitempty"`
-	SynchronousReplication  *bool              `json:"synchronous_replication,omitempty"`
-	InitWithMultipleKeepers *bool              `json:"init_with_multiple_keepers,omitempty"`
-	UsePGRewind             *bool              `json:"use_pg_rewind,omitempty"`
-	PGParameters            *map[string]string `json:"pg_parameters,omitempty"`
+	// RequestTimeout is request timeout override.
+	RequestTimeout *Duration `json:"request_timeout,omitempty"`
+	// SleepInterval is main loop interval override.
+	SleepInterval *Duration `json:"sleep_interval,omitempty"`
+	// KeeperFailInterval is keeper failure threshold override.
+	KeeperFailInterval *Duration `json:"keeper_fail_interval,omitempty"`
+	// MaxStandbysPerSender is max standbys per sender override.
+	MaxStandbysPerSender *uint `json:"max_standbys_per_sender,omitempty"`
+	// SynchronousReplication toggles synchronous replication.
+	SynchronousReplication *bool `json:"synchronous_replication,omitempty"`
+	// InitWithMultipleKeepers enables random initial master with multiple keepers.
+	InitWithMultipleKeepers *bool `json:"init_with_multiple_keepers,omitempty"`
+	// UsePGRewind toggles pg_rewind usage.
+	UsePGRewind *bool `json:"use_pg_rewind,omitempty"`
+	// PGParameters overrides postgres parameters.
+	PGParameters *map[string]string `json:"pg_parameters,omitempty"`
 }
 
 // Config is the legacy cluster config with defaults applied.
 type Config struct {
+	// Map of postgres parameters
+	PGParameters map[string]string
 	// Time after which any request (keepers checks from sentinel etc...) will fail.
 	RequestTimeout time.Duration
 	// Interval to wait before next check (for every component: keeper, sentinel, proxy).
@@ -72,8 +81,6 @@ type Config struct {
 	InitWithMultipleKeepers bool
 	// Whether to use pg_rewind
 	UsePGRewind bool
-	// Map of postgres parameters
-	PGParameters map[string]string
 }
 
 // StringP returns a pointer to s.

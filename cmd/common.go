@@ -38,25 +38,42 @@ import (
 
 // CommonConfig contains shared command-line and store configuration.
 type CommonConfig struct {
-	IsStolonCtl bool
-
-	StoreBackend         string
-	StoreEndpoints       string
-	StorePrefix          string
-	StoreCertFile        string
-	StoreKeyFile         string
-	StoreCAFile          string
-	StoreSkipTLSVerify   bool
-	ClusterName          string
+	// StoreBackend selects the store backend type.
+	StoreBackend string
+	// StoreEndpoints is a comma-separated list of store endpoints.
+	StoreEndpoints string
+	// StorePrefix is the root key prefix used by Stolon in the store.
+	StorePrefix string
+	// StoreCertFile is the client TLS certificate file path.
+	StoreCertFile string
+	// StoreKeyFile is the client TLS private key file path.
+	StoreKeyFile string
+	// StoreCAFile is the CA bundle used to verify store server certificates.
+	StoreCAFile string
+	// ClusterName is the target cluster name.
+	ClusterName string
+	// MetricsListenAddress is the local bind address for Prometheus metrics.
 	MetricsListenAddress string
-	LogColor             bool
-	LogLevel             string
-	Debug                bool
-	KubeResourceKind     string
-	KubeConfig           string
-	KubeContext          string
-	KubeNamespace        string
-	StoreTimeout         time.Duration
+	// LogLevel selects command log verbosity.
+	LogLevel string
+	// KubeResourceKind selects Kubernetes resource kind for cluster data.
+	KubeResourceKind string
+	// KubeConfig overrides kubeconfig file path.
+	KubeConfig string
+	// KubeContext selects kubeconfig context name.
+	KubeContext string
+	// KubeNamespace selects Kubernetes namespace.
+	KubeNamespace string
+	// StoreTimeout is request timeout for store and election operations.
+	StoreTimeout time.Duration
+	// IsStolonCtl reports whether this config is used by stolonctl.
+	IsStolonCtl bool
+	// StoreSkipTLSVerify disables TLS verification for store connections.
+	StoreSkipTLSVerify bool
+	// LogColor enables colored log output.
+	LogColor bool
+	// Debug preserves legacy debug toggle behavior.
+	Debug bool
 }
 
 // AddCommonFlags registers flags shared by Stolon commands.

@@ -43,20 +43,23 @@ func (k KeepersInfo) DeepCopy() KeepersInfo {
 
 // KeeperInfo is the state published by one keeper.
 type KeeperInfo struct {
+	// PostgresState is the currently observed PostgreSQL state.
+	PostgresState *PostgresState `json:"postgresState,omitempty"`
+	// CanBeMaster advertises whether this keeper can become master.
+	CanBeMaster *bool `json:"canBeMaster,omitempty"`
+	// CanBeSynchronousReplica advertises sync-standby eligibility.
+	CanBeSynchronousReplica *bool `json:"canBeSynchronousReplica,omitempty"`
 	// An unique id for this info, used to know when this the keeper info
 	// has been updated
 	InfoUID string `json:"infoUID,omitempty"`
-
-	UID        string `json:"uid,omitempty"`
+	// UID is the keeper UID.
+	UID string `json:"uid,omitempty"`
+	// ClusterUID is the cluster UID this keeper belongs to.
 	ClusterUID string `json:"clusterUID,omitempty"`
-	BootUUID   string `json:"bootUUID,omitempty"`
-
+	// BootUUID identifies the current keeper process boot.
+	BootUUID string `json:"bootUUID,omitempty"`
+	// PostgresBinaryVersion is the PostgreSQL binary version detected by keeper.
 	PostgresBinaryVersion PostgresBinaryVersion `json:"postgresBinaryVersion,omitzero"`
-
-	PostgresState *PostgresState `json:"postgresState,omitempty"`
-
-	CanBeMaster             *bool `json:"canBeMaster,omitempty"`
-	CanBeSynchronousReplica *bool `json:"canBeSynchronousReplica,omitempty"`
 }
 
 // DeepCopy returns an independent copy of keeper info.
@@ -79,9 +82,12 @@ type PostgresTimelinesHistory []*PostgresTimelineHistory
 
 // PostgresTimelineHistory is one PostgreSQL timeline history entry.
 type PostgresTimelineHistory struct {
-	TimelineID  uint64 `json:"timelineID,omitempty"`
+	// Reason is the timeline switch reason.
+	Reason string `json:"reason,omitempty"`
+	// TimelineID is the new timeline identifier.
+	TimelineID uint64 `json:"timelineID,omitempty"`
+	// SwitchPoint is the LSN where the switch happened.
 	SwitchPoint uint64 `json:"switchPoint,omitempty"`
-	Reason      string `json:"reason,omitempty"`
 }
 
 // GetTimelineHistory returns the entry for id, if present.
@@ -96,22 +102,30 @@ func (tlsh PostgresTimelinesHistory) GetTimelineHistory(id uint64) *PostgresTime
 
 // PostgresState is the PostgreSQL state observed by a keeper.
 type PostgresState struct {
-	UID        string `json:"uid,omitempty"`
-	Generation int64  `json:"generation,omitempty"`
-
+	// PGParameters are current PostgreSQL runtime parameters.
+	PGParameters common.Parameters `json:"pgParameters,omitempty"`
+	// UID is the DB UID.
+	UID string `json:"uid,omitempty"`
+	// ListenAddress is PostgreSQL listen address.
 	ListenAddress string `json:"listenAddress,omitempty"`
-	Port          string `json:"port,omitempty"`
-
-	Healthy bool `json:"healthy,omitempty"`
-
-	SystemID         string                   `json:"systemID,omitempty"`
-	TimelineID       uint64                   `json:"timelineID,omitempty"`
-	XLogPos          uint64                   `json:"xLogPos,omitempty"`
+	// Port is PostgreSQL listen port.
+	Port string `json:"port,omitempty"`
+	// SystemID is PostgreSQL system identifier.
+	SystemID string `json:"systemID,omitempty"`
+	// OlderWalFile is the oldest required WAL segment filename.
+	OlderWalFile string `json:"olderWalFile,omitempty"`
+	// TimelinesHistory is known timeline history entries.
 	TimelinesHistory PostgresTimelinesHistory `json:"timelinesHistory,omitempty"`
-
-	PGParameters        common.Parameters `json:"pgParameters,omitempty"`
-	SynchronousStandbys []string          `json:"synchronousStandbys"`
-	OlderWalFile        string            `json:"olderWalFile,omitempty"`
+	// SynchronousStandbys are standbys currently configured as synchronous.
+	SynchronousStandbys []string `json:"synchronousStandbys"`
+	// Generation is desired/assigned DB generation.
+	Generation int64 `json:"generation,omitempty"`
+	// TimelineID is current timeline identifier.
+	TimelineID uint64 `json:"timelineID,omitempty"`
+	// XLogPos is current WAL position.
+	XLogPos uint64 `json:"xLogPos,omitempty"`
+	// Healthy reports PostgreSQL health.
+	Healthy bool `json:"healthy,omitempty"`
 }
 
 // DeepCopy returns an independent copy of PostgreSQL state.
@@ -147,13 +161,16 @@ type ProxyInfo struct {
 	// has been updated
 	InfoUID string `json:"infoUID,omitempty"`
 
-	UID        string
+	// UID is the proxy UID.
+	UID string
+	// Generation is the proxy generation.
 	Generation int64
 
 	// ProxyTimeout is the current proxyTimeout used by the proxy
 	// at the time of publishing its state.
 	// It's used by the sentinel to know for how much time the
 	// proxy should be considered active.
+	// ProxyTimeout is timeout used by sentinel to consider the proxy active.
 	ProxyTimeout time.Duration
 }
 

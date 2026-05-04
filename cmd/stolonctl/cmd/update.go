@@ -36,8 +36,8 @@ var cmdUpdate = &cobra.Command{
 }
 
 type updateOptions struct {
-	patch bool
 	file  string
+	patch bool
 }
 
 var updateOpts updateOptions

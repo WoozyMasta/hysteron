@@ -61,20 +61,31 @@ var URLSchemeRegexp = regexp.MustCompile(`^([a-zA-Z][a-zA-Z0-9+-.]*)://`)
 
 // Config configures a KV backend connection.
 type Config struct {
-	Backend       Backend
-	Endpoints     string
-	Timeout       time.Duration
-	BasePath      string
-	CertFile      string
-	KeyFile       string
-	CAFile        string
+	// Backend selects the store backend implementation.
+	Backend Backend
+	// Endpoints is a comma-separated backend endpoint list.
+	Endpoints string
+	// BasePath is the root path used for cluster data keys.
+	BasePath string
+	// CertFile is the client TLS certificate path.
+	CertFile string
+	// KeyFile is the client TLS key path.
+	KeyFile string
+	// CAFile is the certificate authority bundle path.
+	CAFile string
+	// Timeout is the request timeout for backend operations.
+	Timeout time.Duration
+	// SkipTLSVerify disables TLS certificate verification.
 	SkipTLSVerify bool
 }
 
 // KVPair represents {Key, Value, Lastindex} tuple
 type KVPair struct {
-	Key       string
-	Value     []byte
+	// Key is the backend key path.
+	Key string
+	// Value is the raw value payload.
+	Value []byte
+	// LastIndex is the backend modification index/revision.
 	LastIndex uint64
 }
 
@@ -170,8 +181,8 @@ func NewKVStore(cfg Config) (KVStore, error) {
 
 // KVBackedStore implements Store over a KVStore.
 type KVBackedStore struct {
-	clusterPath string
 	store       KVStore
+	clusterPath string
 }
 
 // NewKVBackedStore creates a Store backed by a KVStore.

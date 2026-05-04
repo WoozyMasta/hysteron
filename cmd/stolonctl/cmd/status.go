@@ -37,6 +37,7 @@ var cmdStatus = &cobra.Command{
 
 // StatusOptions contains stolonctl status options.
 type StatusOptions struct {
+	// Format selects output format ("text" or "json").
 	Format string
 }
 
@@ -49,39 +50,56 @@ func init() {
 
 // Status is the stolonctl status output model.
 type Status struct {
+	// Cluster is the cluster-level summary.
+	Cluster ClusterStatus `json:"cluster"`
+	// Sentinels is the list of active sentinels.
 	Sentinels []SentinelStatus `json:"sentinels"`
-	Proxies   []ProxyStatus    `json:"proxies"`
-	Keepers   []KeeperStatus   `json:"keepers"`
-	Cluster   ClusterStatus    `json:"cluster"`
+	// Proxies is the list of active proxies.
+	Proxies []ProxyStatus `json:"proxies"`
+	// Keepers is the list of keepers with PostgreSQL status details.
+	Keepers []KeeperStatus `json:"keepers"`
 }
 
 // SentinelStatus is the status output for one sentinel.
 type SentinelStatus struct {
-	UID    string `json:"uid"`
-	Leader bool   `json:"leader"`
+	// UID is the sentinel unique identifier.
+	UID string `json:"uid"`
+	// Leader reports whether this sentinel currently holds leadership.
+	Leader bool `json:"leader"`
 }
 
 // ProxyStatus is the status output for one proxy.
 type ProxyStatus struct {
-	UID        string `json:"uid"`
-	Generation int64  `json:"generation"`
+	// UID is the proxy unique identifier.
+	UID string `json:"uid"`
+	// Generation is the proxy generation currently reported by the proxy.
+	Generation int64 `json:"generation"`
 }
 
 // KeeperStatus is the status output for one keeper.
 type KeeperStatus struct {
-	UID                 string `json:"uid"`
-	ListenAddress       string `json:"listen_address"`
-	Healthy             bool   `json:"healthy"`
-	PgHealthy           bool   `json:"pg_healthy"`
-	PgWantedGeneration  int64  `json:"pg_wanted_generation"`
-	PgCurrentGeneration int64  `json:"pg_current_generation"`
+	// UID is the keeper unique identifier.
+	UID string `json:"uid"`
+	// ListenAddress is the PostgreSQL listen address advertised by the assigned DB.
+	ListenAddress string `json:"listen_address"`
+	// Healthy reports keeper health.
+	Healthy bool `json:"healthy"`
+	// PgHealthy reports PostgreSQL instance health.
+	PgHealthy bool `json:"pg_healthy"`
+	// PgWantedGeneration is the desired DB generation.
+	PgWantedGeneration int64 `json:"pg_wanted_generation"`
+	// PgCurrentGeneration is the current DB generation reported by PostgreSQL.
+	PgCurrentGeneration int64 `json:"pg_current_generation"`
 }
 
 // ClusterStatus is the status output for the cluster summary.
 type ClusterStatus struct {
-	Available       bool   `json:"available"`
+	// MasterKeeperUID is the keeper UID owning the master DB.
 	MasterKeeperUID string `json:"master_keeper_uid"`
-	MasterDBUID     string `json:"master_db_uid"`
+	// MasterDBUID is the master DB UID.
+	MasterDBUID string `json:"master_db_uid"`
+	// Available reports whether cluster data is available.
+	Available bool `json:"available"`
 }
 
 func status(_ *cobra.Command, _ []string) {

@@ -49,16 +49,16 @@ var CmdProxy = &cobra.Command{
 }
 
 type config struct {
-	cmd.CommonConfig
-
 	listenAddress string
 	port          string
-	stopListening bool
-	debug         bool
+
+	cmd.CommonConfig
 
 	keepAliveIdle     int
 	keepAliveCount    int
 	keepAliveInterval int
+	stopListening     bool
+	debug             bool
 }
 
 var cfg config
@@ -81,21 +81,28 @@ func init() {
 
 // ClusterChecker keeps the local TCP proxy aligned with cluster data.
 type ClusterChecker struct {
-	uid           string
-	listenAddress string
-	port          string
-
-	stopListening bool
-
-	tcpProxy      *tcpproxy.Proxy
-	e             store.Store
+	// External cluster store client.
+	e store.Store
+	// Active TCP proxy instance (nil when stopped).
+	tcpProxy *tcpproxy.Proxy
+	// Asynchronous TCP proxy termination/error channel.
 	endTCPProxyCh chan error
-
-	tcpProxyMutex sync.Mutex
-
+	// Proxy instance UID.
+	uid string
+	// Local listen address.
+	listenAddress string
+	// Local listen port.
+	port string
+	// Interval between periodic proxy checks.
 	proxyCheckInterval time.Duration
-	proxyTimeout       time.Duration
-	configMutex        sync.Mutex
+	// TTL/liveness timeout advertised for this proxy.
+	proxyTimeout time.Duration
+	// Guards tcpProxy lifecycle and destination updates.
+	tcpProxyMutex sync.Mutex
+	// Guards mutable runtime configuration updates.
+	configMutex sync.Mutex
+	// Stop listener when critical store errors happen.
+	stopListening bool
 }
 
 // NewClusterChecker creates a ClusterChecker from proxy configuration.

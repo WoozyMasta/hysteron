@@ -21,12 +21,18 @@ type KeepersInfo map[string]*KeeperInfo
 
 // KeeperInfo is the legacy state published by one keeper.
 type KeeperInfo struct {
-	ID                 string
+	// ID is the keeper identifier.
+	ID string
+	// ListenAddress is the keeper API/listener address.
+	ListenAddress string
+	// Port is the keeper API/listener port.
+	Port string
+	// PGListenAddress is PostgreSQL listen address.
+	PGListenAddress string
+	// PGPort is PostgreSQL listen port.
+	PGPort string
+	// ClusterViewVersion is the cluster view version observed by this keeper.
 	ClusterViewVersion int
-	ListenAddress      string
-	Port               string
-	PGListenAddress    string
-	PGPort             string
 }
 
 // Copy returns an independent copy of keeper info.
@@ -53,9 +59,12 @@ func (tlsh PostgresTimelinesHistory) Copy() PostgresTimelinesHistory {
 
 // PostgresTimelineHistory is one legacy PostgreSQL timeline history entry.
 type PostgresTimelineHistory struct {
-	TimelineID  uint64
+	// Reason is the timeline switch reason.
+	Reason string
+	// TimelineID is the new timeline identifier.
+	TimelineID uint64
+	// SwitchPoint is the LSN where the switch happened.
 	SwitchPoint uint64
-	Reason      string
 }
 
 // GetTimelineHistory returns the entry for id, if present.
@@ -70,12 +79,18 @@ func (tlsh PostgresTimelinesHistory) GetTimelineHistory(id uint64) *PostgresTime
 
 // PostgresState is the legacy PostgreSQL state observed by a keeper.
 type PostgresState struct {
-	Initialized      bool
-	Role             common.Role
-	SystemID         string
-	TimelineID       uint64
-	XLogPos          uint64
+	// Role is the PostgreSQL role (master/standby).
+	Role common.Role
+	// SystemID is PostgreSQL system identifier.
+	SystemID string
+	// TimelinesHistory is known timeline history entries.
 	TimelinesHistory PostgresTimelinesHistory
+	// TimelineID is current timeline identifier.
+	TimelineID uint64
+	// XLogPos is current WAL position.
+	XLogPos uint64
+	// Initialized reports whether PostgreSQL has been initialized.
+	Initialized bool
 }
 
 // Copy returns an independent copy of PostgreSQL state.
@@ -120,8 +135,12 @@ func (p ProxiesInfo) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
 // ProxyInfo is the legacy state published by one proxy.
 type ProxyInfo struct {
-	ID                 string
-	ListenAddress      string
-	Port               string
+	// ID is the proxy identifier.
+	ID string
+	// ListenAddress is proxy listen address.
+	ListenAddress string
+	// Port is proxy listen port.
+	Port string
+	// ClusterViewVersion is the cluster view version observed by this proxy.
 	ClusterViewVersion int
 }

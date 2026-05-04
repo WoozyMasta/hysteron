@@ -66,20 +66,24 @@ const (
 
 // KeeperLocalState is the keeper state persisted on local disk.
 type KeeperLocalState struct {
-	UID        string
+	// UID is persistent keeper UID.
+	UID string
+	// ClusterUID is current cluster binding for this keeper.
 	ClusterUID string
 }
 
 // DBLocalState is the local database state persisted by the keeper.
 type DBLocalState struct {
-	UID        string
+	// InitPGParameters contains the postgres parameter after the
+	// initialization
+	InitPGParameters common.Parameters
+	// UID is persistent DB UID assigned to this keeper.
+	UID string
+	// Generation is desired DB generation persisted locally.
 	Generation int64
 	// Initializing registers when the db is initializing. Needed to detect
 	// when the initialization has failed.
 	Initializing bool
-	// InitPGParameters contains the postgres parameter after the
-	// initialization
-	InitPGParameters common.Parameters
 }
 
 // DeepCopy returns an independent copy of the local database state.
@@ -99,11 +103,8 @@ func (s *DBLocalState) DeepCopy() *DBLocalState {
 }
 
 type config struct {
-	cmd.CommonConfig
-
 	uid                string
 	dataDir            string
-	debug              bool
 	pgListenAddress    string
 	pgAdvertiseAddress string
 	pgPort             string
@@ -118,6 +119,9 @@ type config struct {
 	pgSUPassword       string
 	pgSUPasswordFile   string
 
+	cmd.CommonConfig
+
+	debug                   bool
 	canBeMaster             bool
 	canBeSynchronousReplica bool
 	disableDataDirLocking   bool
@@ -473,44 +477,71 @@ func (p *PostgresKeeper) createRecoveryOptions(recoveryMode pg.RecoveryMode, sta
 
 // PostgresKeeper reconciles local PostgreSQL state with cluster data.
 type PostgresKeeper struct {
+	// External cluster store client.
+	e store.Store
+	// Parsed keeper command configuration.
 	cfg *config
-
-	bootUUID string
-
-	dataDir            string
-	pgListenAddress    string
-	pgAdvertiseAddress string
-	pgPort             string
-	pgAdvertisePort    string
-	pgBinPath          string
-	pgReplAuthMethod   string
-	pgReplUsername     string
-	pgReplPassword     string
-	pgSUAuthMethod     string
-	pgSUUsername       string
-	pgSUPassword       string
-
-	sleepInterval  time.Duration
-	requestTimeout time.Duration
-
-	e   store.Store
+	// PostgreSQL process manager.
 	pgm *pg.Manager
+	// Fatal background errors channel.
 	end chan error
-
+	// Injectable PostgreSQL binary version reader (tests may override).
 	pgBinaryVersion func() (int, int, error)
 
-	localStateMutex  sync.Mutex
+	// Persisted keeper identity/cluster binding state.
 	keeperLocalState *KeeperLocalState
-	dbLocalState     *DBLocalState
+	// Persisted local database assignment state.
+	dbLocalState *DBLocalState
+	// Last PostgreSQL state published to cluster data.
+	lastPGState *cluster.PostgresState
 
-	pgStateMutex    sync.Mutex
-	getPGStateMutex sync.Mutex
-	lastPGState     *cluster.PostgresState
-
-	waitSyncStandbysSynced bool
-
-	canBeMaster             *bool
+	// Advertised capability: eligible for master role.
+	canBeMaster *bool
+	// Advertised capability: eligible for synchronous replica role.
 	canBeSynchronousReplica *bool
+
+	// Keeper process boot identifier.
+	bootUUID string
+	// Absolute keeper data directory path.
+	dataDir string
+
+	// PostgreSQL listen address.
+	pgListenAddress string
+	// Address advertised to other components.
+	pgAdvertiseAddress string
+	// PostgreSQL listen port.
+	pgPort string
+	// Port advertised to other components.
+	pgAdvertisePort string
+	// PostgreSQL binaries directory path.
+	pgBinPath string
+	// Replication user auth method.
+	pgReplAuthMethod string
+	// Replication user name.
+	pgReplUsername string
+	// Replication user password.
+	pgReplPassword string
+	// Superuser auth method.
+	pgSUAuthMethod string
+	// Superuser name.
+	pgSUUsername string
+	// Superuser password.
+	pgSUPassword string
+
+	// Main reconciliation loop sleep interval.
+	sleepInterval time.Duration
+	// Timeout for store and PostgreSQL requests.
+	requestTimeout time.Duration
+
+	// Guards keeperLocalState/dbLocalState access.
+	localStateMutex sync.Mutex
+	// Guards lastPGState and pgm state transitions.
+	pgStateMutex sync.Mutex
+	// Serializes expensive PG state collection.
+	getPGStateMutex sync.Mutex
+
+	// Enables waiting for synchronous standbys before promotion flow completion.
+	waitSyncStandbysSynced bool
 }
 
 // NewPostgresKeeper creates a PostgreSQL keeper from command configuration.

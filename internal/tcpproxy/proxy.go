@@ -53,24 +53,32 @@ func SetLogger(l Logger) {
 
 // Options configures a Proxy.
 type Options struct {
-	KeepAlive         bool
-	KeepAliveIdle     time.Duration
-	KeepAliveCount    int
+	// KeepAlive enables TCP keepalive on accepted client connections.
+	KeepAlive bool
+	// KeepAliveIdle sets idle duration before the first keepalive probe.
+	KeepAliveIdle time.Duration
+	// KeepAliveCount sets the number of probes before considering the peer dead.
+	KeepAliveCount int
+	// KeepAliveInterval sets interval between keepalive probes.
 	KeepAliveInterval time.Duration
 }
 
 // Proxy forwards TCP connections from a listener to the current destination.
 type Proxy struct {
+	// listener accepts inbound client connections.
 	listener *net.TCPListener
-
-	mu         sync.Mutex
-	destAddr   *net.TCPAddr
+	// destAddr is current destination address.
+	destAddr *net.TCPAddr
+	// closeConns broadcasts connection-drain events when destination changes.
 	closeConns chan struct{}
-
-	stopOnce sync.Once
-	stopCh   chan struct{}
-
+	// stopCh signals proxy shutdown.
+	stopCh chan struct{}
+	// options stores keepalive configuration.
 	options Options
+	// stopOnce ensures Stop is idempotent.
+	stopOnce sync.Once
+	// mu guards destination and closeConns swaps.
+	mu sync.Mutex
 }
 
 // New creates a TCP proxy around listener.

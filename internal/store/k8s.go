@@ -56,10 +56,15 @@ const (
 
 // KubeStore stores cluster state in Kubernetes objects.
 type KubeStore struct {
-	client       kubernetes.Interface
-	podName      string
-	namespace    string
-	clusterName  string
+	// client is the Kubernetes API client.
+	client kubernetes.Interface
+	// podName is the current component pod name.
+	podName string
+	// namespace is Kubernetes namespace for all store objects.
+	namespace string
+	// clusterName is Stolon cluster name.
+	clusterName string
+	// resourceName is the configmap name used for cluster data.
 	resourceName string
 }
 
@@ -364,20 +369,26 @@ func (s *KubeStore) GetProxiesInfo(ctx context.Context) (cluster.ProxiesInfo, er
 
 // KubeElection implements sentinel leader election via Kubernetes Lease locks.
 type KubeElection struct {
-	client       kubernetes.Interface
-	podName      string
-	namespace    string
-	resourceName string
-
-	running bool
-
-	electedCh chan bool
-	errCh     chan error
-
-	ctx    context.Context
-	cancel context.CancelFunc
-
+	// client is the Kubernetes API client.
+	client kubernetes.Interface
+	// ctx is election run context.
+	ctx context.Context
+	// rl is the Lease resource lock.
 	rl resourcelock.Interface
+	// electedCh reports leadership acquisition/loss events.
+	electedCh chan bool
+	// errCh reports election errors.
+	errCh chan error
+	// cancel stops the election run context.
+	cancel context.CancelFunc
+	// podName is the local sentinel pod name.
+	podName string
+	// namespace is Kubernetes namespace containing the lease.
+	namespace string
+	// resourceName is lease object name.
+	resourceName string
+	// running reports whether campaign loop is running.
+	running bool
 }
 
 // NewKubeElection creates a Kubernetes-backed election.

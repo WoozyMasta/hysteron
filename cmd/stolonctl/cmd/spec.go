@@ -45,6 +45,8 @@ func init() {
 //
 // It intentionally differs from ClusterSpecDefaults only by omitempty tags to
 // preserve the user-visible `stolonctl spec` JSON output.
+//
+// Field semantics match internal/cluster.ClusterSpec one-to-one.
 type ClusterSpecNoDefaults struct { //nolint:dupl
 	SleepInterval                    *cluster.Duration         `json:"sleepInterval,omitempty"`
 	RequestTimeout                   *cluster.Duration         `json:"requestTimeout,omitempty"`
@@ -63,7 +65,6 @@ type ClusterSpecNoDefaults struct { //nolint:dupl
 	MinSynchronousStandbys           *uint16                   `json:"minSynchronousStandbys,omitempty"`
 	MaxSynchronousStandbys           *uint16                   `json:"maxSynchronousStandbys,omitempty"`
 	AdditionalWalSenders             *uint16                   `json:"additionalWalSenders,omitempty"`
-	AdditionalMasterReplicationSlots []string                  `json:"additionalMasterReplicationSlots,omitempty"`
 	UsePgrewind                      *bool                     `json:"usePgrewind,omitempty"`
 	InitMode                         *cluster.ClusterInitMode  `json:"initMode,omitempty"`
 	MergePgParameters                *bool                     `json:"mergePgParameters,omitempty"`
@@ -74,11 +75,14 @@ type ClusterSpecNoDefaults struct { //nolint:dupl
 	StandbyConfig                    *cluster.StandbyConfig    `json:"standbyConfig,omitempty"`
 	DefaultSUReplAccessMode          *cluster.SUReplAccessMode `json:"defaultSUReplAccessMode,omitempty"`
 	PGParameters                     cluster.PGParameters      `json:"pgParameters,omitempty"`
-	PGHBA                            []string                  `json:"pgHBA,omitempty"`
 	AutomaticPgRestart               *bool                     `json:"automaticPgRestart,omitempty"`
+	AdditionalMasterReplicationSlots []string                  `json:"additionalMasterReplicationSlots,omitempty"`
+	PGHBA                            []string                  `json:"pgHBA,omitempty"`
 }
 
 // ClusterSpecDefaults serializes the cluster spec with default values.
+//
+// Field semantics match internal/cluster.ClusterSpec one-to-one.
 type ClusterSpecDefaults struct { //nolint:dupl
 	SleepInterval                    *cluster.Duration         `json:"sleepInterval"`
 	RequestTimeout                   *cluster.Duration         `json:"requestTimeout"`
@@ -97,7 +101,6 @@ type ClusterSpecDefaults struct { //nolint:dupl
 	MinSynchronousStandbys           *uint16                   `json:"minSynchronousStandbys"`
 	MaxSynchronousStandbys           *uint16                   `json:"maxSynchronousStandbys"`
 	AdditionalWalSenders             *uint16                   `json:"additionalWalSenders"`
-	AdditionalMasterReplicationSlots []string                  `json:"additionalMasterReplicationSlots"`
 	UsePgrewind                      *bool                     `json:"usePgrewind"`
 	InitMode                         *cluster.ClusterInitMode  `json:"initMode"`
 	MergePgParameters                *bool                     `json:"mergePgParameters"`
@@ -108,8 +111,9 @@ type ClusterSpecDefaults struct { //nolint:dupl
 	StandbyConfig                    *cluster.StandbyConfig    `json:"standbyConfig"`
 	DefaultSUReplAccessMode          *cluster.SUReplAccessMode `json:"defaultSUReplAccessMode"`
 	PGParameters                     cluster.PGParameters      `json:"pgParameters"`
-	PGHBA                            []string                  `json:"pgHBA"`
 	AutomaticPgRestart               *bool                     `json:"automaticPgRestart"`
+	AdditionalMasterReplicationSlots []string                  `json:"additionalMasterReplicationSlots"`
+	PGHBA                            []string                  `json:"pgHBA"`
 }
 
 func spec(_ *cobra.Command, _ []string) {

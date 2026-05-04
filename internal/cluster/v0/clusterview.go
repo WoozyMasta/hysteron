@@ -69,15 +69,24 @@ func (kss KeepersState) NewFromKeeperInfo(ki *KeeperInfo) error {
 
 // KeeperState is the legacy keeper state stored in cluster data.
 type KeeperState struct {
-	ID                 string
-	ErrorStartTime     time.Time
-	Healthy            bool
+	// ErrorStartTime is first time the keeper entered error state.
+	ErrorStartTime time.Time
+	// PGState is observed PostgreSQL state for this keeper.
+	PGState *PostgresState
+	// ID is the keeper identifier.
+	ID string
+	// ListenAddress is keeper API/listener address.
+	ListenAddress string
+	// Port is keeper API/listener port.
+	Port string
+	// PGListenAddress is PostgreSQL listen address.
+	PGListenAddress string
+	// PGPort is PostgreSQL listen port.
+	PGPort string
+	// ClusterViewVersion is last cluster view version acknowledged by keeper.
 	ClusterViewVersion int
-	ListenAddress      string
-	Port               string
-	PGListenAddress    string
-	PGPort             string
-	PGState            *PostgresState
+	// Healthy reports keeper health status.
+	Healthy bool
 }
 
 // Copy returns an independent copy of keeper state.
@@ -188,12 +197,18 @@ func (pc *ProxyConf) Copy() *ProxyConf {
 
 // ClusterView stores the legacy computed cluster view.
 type ClusterView struct {
-	Version     int
-	Master      string
+	// ChangeTime is cluster view last change time.
+	ChangeTime time.Time
+	// KeepersRole maps keepers to their role/follow target.
 	KeepersRole KeepersRole
-	ProxyConf   *ProxyConf
-	Config      *NilConfig
-	ChangeTime  time.Time
+	// ProxyConf is proxy destination configuration.
+	ProxyConf *ProxyConf
+	// Config is cluster configuration snapshot.
+	Config *NilConfig
+	// Master is current master keeper ID.
+	Master string
+	// Version is monotonically increasing cluster view version.
+	Version int
 }
 
 // NewClusterView return an initialized clusterView with Version: 0, zero
@@ -244,12 +259,11 @@ func (cv *ClusterView) GetFollowersIDs(id string) []string {
 
 // ClusterData contains keeper state and cluster view that must stay in sync.
 type ClusterData struct {
+	KeepersState KeepersState
+	ClusterView  *ClusterView
 	// ClusterData format version. Used to detect incompatible
 	// version and do upgrade. Needs to be bumped when a non
 	// backward compatible change is done to the other struct
 	// members.
 	FormatVersion uint64
-
-	KeepersState KeepersState
-	ClusterView  *ClusterView
 }

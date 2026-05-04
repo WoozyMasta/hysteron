@@ -124,17 +124,21 @@ const (
 
 // FollowConfig configures the source followed by a standby db.
 type FollowConfig struct {
+	// Standby settings when Type is "external"
+	StandbySettings *StandbySettings `json:"standbySettings,omitempty"`
+	// ArchiveRecoverySettings defines restore behavior when following external source.
+	ArchiveRecoverySettings *ArchiveRecoverySettings `json:"archiveRecoverySettings,omitempty"`
+	// Type selects whether source is internal or external.
 	Type FollowType `json:"type,omitempty"`
 	// Keeper ID to follow when Type is "internal"
 	DBUID string `json:"dbuid,omitempty"`
-	// Standby settings when Type is "external"
-	StandbySettings         *StandbySettings         `json:"standbySettings,omitempty"`
-	ArchiveRecoverySettings *ArchiveRecoverySettings `json:"archiveRecoverySettings,omitempty"`
 }
 
 // PostgresBinaryVersion contains the PostgreSQL major and minor version.
 type PostgresBinaryVersion struct {
+	// Maj is PostgreSQL major version.
 	Maj int
+	// Min is PostgreSQL minor version.
 	Min int
 }
 
@@ -198,29 +202,37 @@ const (
 
 // NewConfig configures fresh database initialization.
 type NewConfig struct {
-	Locale        string `json:"locale,omitempty"`
-	Encoding      string `json:"encoding,omitempty"`
-	DataChecksums bool   `json:"dataChecksums,omitempty"`
+	// Locale is initdb locale.
+	Locale string `json:"locale,omitempty"`
+	// Encoding is initdb encoding.
+	Encoding string `json:"encoding,omitempty"`
+	// DataChecksums enables initdb data checksums.
+	DataChecksums bool `json:"dataChecksums,omitempty"`
 }
 
 // PITRConfig configures point-in-time recovery initialization.
 type PITRConfig struct {
+	// ArchiveRecoverySettings configures archive-based recovery.
+	ArchiveRecoverySettings *ArchiveRecoverySettings `json:"archiveRecoverySettings,omitempty"`
+	// RecoveryTargetSettings configures stop target during recovery.
+	RecoveryTargetSettings *RecoveryTargetSettings `json:"recoveryTargetSettings,omitempty"`
 	// DataRestoreCommand defines the command to execute for restoring the db
 	// cluster data). %d is replaced with the full path to the db cluster
 	// datadir. Use %% to embed an actual % character.
-	DataRestoreCommand      string                   `json:"dataRestoreCommand,omitempty"`
-	ArchiveRecoverySettings *ArchiveRecoverySettings `json:"archiveRecoverySettings,omitempty"`
-	RecoveryTargetSettings  *RecoveryTargetSettings  `json:"recoveryTargetSettings,omitempty"`
+	DataRestoreCommand string `json:"dataRestoreCommand,omitempty"`
 }
 
 // ExistingConfig configures initialization from an existing keeper.
 type ExistingConfig struct {
+	// KeeperUID identifies keeper holding existing initialized data.
 	KeeperUID string `json:"keeperUID,omitempty"`
 }
 
 // StandbyConfig configures the cluster when its role is standby.
 type StandbyConfig struct {
-	StandbySettings         *StandbySettings         `json:"standbySettings,omitempty"`
+	// StandbySettings defines primary connection settings.
+	StandbySettings *StandbySettings `json:"standbySettings,omitempty"`
+	// ArchiveRecoverySettings defines restore behavior for standby role.
 	ArchiveRecoverySettings *ArchiveRecoverySettings `json:"archiveRecoverySettings,omitempty"`
 }
 
@@ -232,18 +244,27 @@ type ArchiveRecoverySettings struct {
 
 // RecoveryTargetSettings defines the recovery target settings in the recovery.conf file (https://www.postgresql.org/docs/9.6/static/recovery-target-settings.html )
 type RecoveryTargetSettings struct {
-	RecoveryTarget         string `json:"recoveryTarget,omitempty"`
-	RecoveryTargetLsn      string `json:"recoveryTargetLsn,omitempty"`
-	RecoveryTargetName     string `json:"recoveryTargetName,omitempty"`
-	RecoveryTargetTime     string `json:"recoveryTargetTime,omitempty"`
-	RecoveryTargetXid      string `json:"recoveryTargetXid,omitempty"`
+	// RecoveryTarget is generic recovery target selector.
+	RecoveryTarget string `json:"recoveryTarget,omitempty"`
+	// RecoveryTargetLsn is target LSN.
+	RecoveryTargetLsn string `json:"recoveryTargetLsn,omitempty"`
+	// RecoveryTargetName is target restore point name.
+	RecoveryTargetName string `json:"recoveryTargetName,omitempty"`
+	// RecoveryTargetTime is target timestamp.
+	RecoveryTargetTime string `json:"recoveryTargetTime,omitempty"`
+	// RecoveryTargetXid is target transaction ID.
+	RecoveryTargetXid string `json:"recoveryTargetXid,omitempty"`
+	// RecoveryTargetTimeline is target timeline selector.
 	RecoveryTargetTimeline string `json:"recoveryTargetTimeline,omitempty"`
 }
 
 // StandbySettings defines the standby settings in the recovery.conf file (https://www.postgresql.org/docs/9.6/static/standby-settings.html )
 type StandbySettings struct {
-	PrimaryConninfo       string `json:"primaryConninfo,omitempty"`
-	PrimarySlotName       string `json:"primarySlotName,omitempty"`
+	// PrimaryConninfo is primary connection string.
+	PrimaryConninfo string `json:"primaryConninfo,omitempty"`
+	// PrimarySlotName is replication slot name on upstream.
+	PrimarySlotName string `json:"primarySlotName,omitempty"`
+	// RecoveryMinApplyDelay delays replay for standby.
 	RecoveryMinApplyDelay string `json:"recoveryMinApplyDelay,omitempty"`
 }
 
@@ -311,11 +332,6 @@ type ClusterSpec struct { //nolint:revive
 	// AdditionalWalSenders defines the number of additional wal_senders in
 	// addition to the ones internally defined by stolon
 	AdditionalWalSenders *uint16 `json:"additionalWalSenders"`
-	// AdditionalMasterReplicationSlots defines additional replication slots to
-	// be created on the master postgres instance. Replication slots not defined
-	// here will be dropped from the master instance (i.e. manually created
-	// replication slots will be removed).
-	AdditionalMasterReplicationSlots []string `json:"additionalMasterReplicationSlots"`
 	// Whether to use pg_rewind
 	UsePgrewind *bool `json:"usePgrewind,omitempty"`
 	// InitMode defines the cluster initialization mode. Current modes are: new, existing, pitr
@@ -340,30 +356,34 @@ type ClusterSpec struct { //nolint:revive
 	DefaultSUReplAccessMode *SUReplAccessMode `json:"defaultSUReplAccessMode,omitempty"`
 	// Map of postgres parameters
 	PGParameters PGParameters `json:"pgParameters,omitempty"`
+	// Enable automatic pg restart when pg parameters that requires restart changes
+	AutomaticPgRestart *bool `json:"automaticPgRestart"`
+	// AdditionalMasterReplicationSlots defines additional replication slots to
+	// be created on the master postgres instance. Replication slots not defined
+	// here will be dropped from the master instance (i.e. manually created
+	// replication slots will be removed).
+	AdditionalMasterReplicationSlots []string `json:"additionalMasterReplicationSlots"`
 	// Additional pg_hba.conf entries
 	// we don't set omitempty since we want to distinguish between null or empty slice
 	PGHBA []string `json:"pgHBA"`
-	// Enable automatic pg restart when pg parameters that requires restart changes
-	AutomaticPgRestart *bool `json:"automaticPgRestart"`
 }
 
 // ClusterStatus is the observed cluster status.
 type ClusterStatus struct { //nolint:revive
-	CurrentGeneration int64        `json:"currentGeneration,omitempty"`
-	Phase             ClusterPhase `json:"phase,omitempty"`
+	// Phase is current cluster lifecycle phase.
+	Phase ClusterPhase `json:"phase,omitempty"`
 	// Master DB UID
-	Master string `json:"master,omitempty"`
+	Master            string `json:"master,omitempty"`
+	CurrentGeneration int64  `json:"currentGeneration,omitempty"`
 }
 
 // Cluster is the top-level cluster object in cluster data.
 type Cluster struct {
-	UID        string    `json:"uid,omitempty"`
-	Generation int64     `json:"generation,omitempty"`
-	ChangeTime time.Time `json:"changeTime,omitzero"`
-
-	Spec *ClusterSpec `json:"spec,omitempty"`
-
-	Status ClusterStatus `json:"status,omitzero"`
+	ChangeTime time.Time     `json:"changeTime,omitzero"`
+	Spec       *ClusterSpec  `json:"spec,omitempty"`
+	UID        string        `json:"uid,omitempty"`
+	Status     ClusterStatus `json:"status,omitzero"`
+	Generation int64         `json:"generation,omitempty"`
 }
 
 // DeepCopy returns an independent copy of the cluster.
@@ -631,29 +651,30 @@ type KeeperSpec struct{}
 
 // KeeperStatus is the observed keeper status.
 type KeeperStatus struct {
-	Healthy         bool      `json:"healthy,omitempty"`
+	// LastHealthyTime is last time the keeper was considered healthy.
 	LastHealthyTime time.Time `json:"lastHealthyTime,omitzero"`
-
-	BootUUID string `json:"bootUUID,omitempty"`
-
-	PostgresBinaryVersion PostgresBinaryVersion `json:"postgresBinaryVersion,omitzero"`
-
-	ForceFail bool `json:"forceFail,omitempty"`
-
-	CanBeMaster             *bool `json:"canBeMaster,omitempty"`
+	// CanBeMaster advertises whether this keeper can become master.
+	CanBeMaster *bool `json:"canBeMaster,omitempty"`
+	// CanBeSynchronousReplica advertises sync-standby eligibility.
 	CanBeSynchronousReplica *bool `json:"canBeSynchronousReplica,omitempty"`
+	// BootUUID identifies current keeper process boot.
+	BootUUID string `json:"bootUUID,omitempty"`
+	// PostgresBinaryVersion is PostgreSQL binary version detected by keeper.
+	PostgresBinaryVersion PostgresBinaryVersion `json:"postgresBinaryVersion,omitzero"`
+	// Healthy reports keeper health.
+	Healthy bool `json:"healthy,omitempty"`
+	// ForceFail requests sentinel to consider this keeper failed.
+	ForceFail bool `json:"forceFail,omitempty"`
 }
 
 // Keeper is a keeper object in cluster data.
 type Keeper struct {
+	ChangeTime time.Time   `json:"changeTime,omitzero"`
+	Spec       *KeeperSpec `json:"spec,omitempty"`
 	// Keeper ID
-	UID        string    `json:"uid,omitempty"`
-	Generation int64     `json:"generation,omitempty"`
-	ChangeTime time.Time `json:"changeTime,omitzero"`
-
-	Spec *KeeperSpec `json:"spec,omitempty"`
-
-	Status KeeperStatus `json:"status,omitzero"`
+	UID        string       `json:"uid,omitempty"`
+	Status     KeeperStatus `json:"status,omitzero"`
+	Generation int64        `json:"generation,omitempty"`
 }
 
 // NewKeeperFromKeeperInfo creates a keeper object from keeper info.
@@ -683,63 +704,68 @@ func (kss Keepers) SortedKeys() []string {
 
 // DBSpec is the desired database configuration.
 type DBSpec struct {
-	// The KeeperUID this db is assigned to
-	KeeperUID string `json:"keeperUID,omitempty"`
-	// Time after which any request (keepers checks from sentinel etc...) will fail.
-	RequestTimeout Duration `json:"requestTimeout,omitzero"`
-	// See ClusterSpec MaxStandbys description
-	MaxStandbys uint16 `json:"maxStandbys,omitempty"`
-	// Use Synchronous replication between master and its standbys
-	SynchronousReplication bool `json:"synchronousReplication,omitempty"`
-	// Whether to use pg_rewind
-	UsePgrewind bool `json:"usePgrewind,omitempty"`
-	// AdditionalWalSenders defines the number of additional wal_senders in
-	// addition to the ones internally defined by stolon
-	AdditionalWalSenders uint16 `json:"additionalWalSenders"`
-	// AdditionalReplicationSlots is a list of additional replication slots.
-	// Replication slots not defined here will be dropped from the instance
-	// (i.e. manually created replication slots will be removed).
-	AdditionalReplicationSlots []string `json:"additionalReplicationSlots"`
-	// InitMode defines the db initialization mode. Current modes are: none, new
-	InitMode DBInitMode `json:"initMode,omitempty"`
 	// Init configuration used when InitMode is "new"
 	NewConfig *NewConfig `json:"newConfig,omitempty"`
 	// Point in time recovery init configuration used when InitMode is "pitr"
 	PITRConfig *PITRConfig `json:"pitrConfig,omitempty"`
 	// Map of postgres parameters
 	PGParameters PGParameters `json:"pgParameters,omitempty"`
+	// FollowConfig when Role is "standby"
+	FollowConfig *FollowConfig `json:"followConfig,omitempty"`
+	// The KeeperUID this db is assigned to
+	KeeperUID string `json:"keeperUID,omitempty"`
+	// InitMode defines the db initialization mode. Current modes are: none, new
+	InitMode DBInitMode `json:"initMode,omitempty"`
+	// DB Role (master or standby)
+	Role common.Role `json:"role,omitempty"`
+	// AdditionalReplicationSlots is a list of additional replication slots.
+	// Replication slots not defined here will be dropped from the instance
+	// (i.e. manually created replication slots will be removed).
+	AdditionalReplicationSlots []string `json:"additionalReplicationSlots"`
 	// Additional pg_hba.conf entries
 	// We don't set omitempty since we want to distinguish between null or empty slice
 	PGHBA []string `json:"pgHBA"`
-	// DB Role (master or standby)
-	Role common.Role `json:"role,omitempty"`
-	// FollowConfig when Role is "standby"
-	FollowConfig *FollowConfig `json:"followConfig,omitempty"`
 	// Followers DB UIDs
 	Followers []string `json:"followers"`
-	// Whether to include previous postgresql.conf
-	IncludeConfig bool `json:"includePreviousConfig,omitempty"`
 	// SynchronousStandbys are the standbys to be configured as synchronous
 	SynchronousStandbys []string `json:"synchronousStandbys"`
 	// External SynchronousStandbys are external standbys names to be configured as synchronous
 	ExternalSynchronousStandbys []string `json:"externalSynchronousStandbys"`
+	// Time after which any request (keepers checks from sentinel etc...) will fail.
+	RequestTimeout Duration `json:"requestTimeout,omitzero"`
+	// See ClusterSpec MaxStandbys description
+	MaxStandbys uint16 `json:"maxStandbys,omitempty"`
+	// AdditionalWalSenders defines the number of additional wal_senders in
+	// addition to the ones internally defined by stolon
+	AdditionalWalSenders uint16 `json:"additionalWalSenders"`
+	// Use Synchronous replication between master and its standbys
+	SynchronousReplication bool `json:"synchronousReplication,omitempty"`
+	// Whether to use pg_rewind
+	UsePgrewind bool `json:"usePgrewind,omitempty"`
+	// Whether to include previous postgresql.conf
+	IncludeConfig bool `json:"includePreviousConfig,omitempty"`
 }
 
 // DBStatus is the observed database status.
 type DBStatus struct {
-	Healthy bool `json:"healthy,omitempty"`
-
-	CurrentGeneration int64 `json:"currentGeneration,omitempty"`
-
-	ListenAddress string `json:"listenAddress,omitempty"`
-	Port          string `json:"port,omitempty"`
-
-	SystemID         string                   `json:"systemdID,omitempty"`
-	TimelineID       uint64                   `json:"timelineID,omitempty"`
-	XLogPos          uint64                   `json:"xLogPos,omitempty"`
-	TimelinesHistory PostgresTimelinesHistory `json:"timelinesHistory,omitempty"`
-
+	// PGParameters are PostgreSQL parameters currently reported by the instance.
 	PGParameters PGParameters `json:"pgParameters,omitempty"`
+
+	// ListenAddress is PostgreSQL listen address.
+	ListenAddress string `json:"listenAddress,omitempty"`
+	// Port is PostgreSQL listen port.
+	Port string `json:"port,omitempty"`
+
+	// SystemID is PostgreSQL system identifier.
+	SystemID string `json:"systemdID,omitempty"`
+
+	// NOTE(sgotti) we currently don't report the external synchronous standbys.
+	// If/when needed lets add a new ExternalSynchronousStandbys field
+
+	// OlderWalFile is the oldest required WAL segment filename.
+	OlderWalFile string `json:"olderWalFile,omitempty"`
+	// TimelinesHistory is timeline history known by the instance.
+	TimelinesHistory PostgresTimelinesHistory `json:"timelinesHistory,omitempty"`
 
 	// DBUIDs of the internal standbys currently reported as in sync by the instance
 	CurSynchronousStandbys []string `json:"-"`
@@ -750,26 +776,31 @@ type DBStatus struct {
 	// so the instance will wait for acknowledge from them.
 	SynchronousStandbys []string `json:"synchronousStandbys"`
 
-	// NOTE(sgotti) we currently don't report the external synchronous standbys.
-	// If/when needed lets add a new ExternalSynchronousStandbys field
+	// CurrentGeneration is DB generation currently reported by PostgreSQL.
+	CurrentGeneration int64 `json:"currentGeneration,omitempty"`
 
-	OlderWalFile string `json:"olderWalFile,omitempty"`
+	// TimelineID is current timeline identifier.
+	TimelineID uint64 `json:"timelineID,omitempty"`
+	// XLogPos is current WAL position.
+	XLogPos uint64 `json:"xLogPos,omitempty"`
+	// Healthy reports PostgreSQL health.
+	Healthy bool `json:"healthy,omitempty"`
 }
 
 // DB is a database object in cluster data.
 type DB struct {
-	UID        string    `json:"uid,omitempty"`
-	Generation int64     `json:"generation,omitempty"`
 	ChangeTime time.Time `json:"changeTime,omitzero"`
-
-	Spec *DBSpec `json:"spec,omitempty"`
-
-	Status DBStatus `json:"status,omitzero"`
+	Spec       *DBSpec   `json:"spec,omitempty"`
+	UID        string    `json:"uid,omitempty"`
+	Status     DBStatus  `json:"status,omitzero"`
+	Generation int64     `json:"generation,omitempty"`
 }
 
 // ProxySpec is the desired proxy configuration.
 type ProxySpec struct {
-	MasterDBUID    string   `json:"masterDbUid,omitempty"`
+	// MasterDBUID is DB UID currently selected as writable destination.
+	MasterDBUID string `json:"masterDbUid,omitempty"`
+	// EnabledProxies limits proxy UIDs allowed to serve traffic.
 	EnabledProxies []string `json:"enabledProxies,omitempty"`
 }
 
@@ -779,13 +810,19 @@ type ProxyStatus struct {
 
 // Proxy is a proxy object in cluster data.
 type Proxy struct {
-	UID        string    `json:"uid,omitempty"`
-	Generation int64     `json:"generation,omitempty"`
+	// Status is current observed proxy status.
+	Status ProxyStatus `json:"status,omitzero"`
+	// ChangeTime is proxy object last change time.
 	ChangeTime time.Time `json:"changeTime,omitzero"`
 
+	// UID is proxy UID.
+	UID string `json:"uid,omitempty"`
+
+	// Spec is desired proxy configuration.
 	Spec ProxySpec `json:"spec,omitzero"`
 
-	Status ProxyStatus `json:"status,omitzero"`
+	// Generation is proxy object generation.
+	Generation int64 `json:"generation,omitempty"`
 }
 
 // Duration is needed to be able to marshal/unmarshal json strings with time
@@ -820,16 +857,21 @@ type DBs map[string]*DB
 //
 // For simplicity all component changes are kept atomic through a unique key.
 type ClusterData struct { //nolint:revive
+	// ChangeTime is cluster-data last change time.
+	ChangeTime time.Time `json:"changeTime"`
+	// Cluster is cluster-wide desired and observed state.
+	Cluster *Cluster `json:"cluster"`
+	// Keepers maps keeper UID to keeper state.
+	Keepers Keepers `json:"keepers"`
+	// DBs maps DB UID to database state.
+	DBs DBs `json:"dbs"`
+	// Proxy is the proxy desired/observed state.
+	Proxy *Proxy `json:"proxy"`
 	// ClusterData format version. Used to detect incompatible
 	// version and do upgrade. Needs to be bumped when a non
 	// backward compatible change is done to the other struct
 	// members.
-	FormatVersion uint64    `json:"formatVersion"`
-	ChangeTime    time.Time `json:"changeTime"`
-	Cluster       *Cluster  `json:"cluster"`
-	Keepers       Keepers   `json:"keepers"`
-	DBs           DBs       `json:"dbs"`
-	Proxy         *Proxy    `json:"proxy"`
+	FormatVersion uint64 `json:"formatVersion"`
 }
 
 // NewClusterData creates an initial cluster-data document.

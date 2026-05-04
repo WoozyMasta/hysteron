@@ -61,9 +61,9 @@ var CmdSentinel = &cobra.Command{
 }
 
 type config struct {
-	cmd.CommonConfig
 	initialClusterSpecFile string
-	debug                  bool
+	cmd.CommonConfig
+	debug bool
 }
 
 var cfg config
@@ -1688,9 +1688,12 @@ func (s *Sentinel) dbConvergenceState(db *cluster.DB, timeout time.Duration) Con
 
 // KeeperInfoHistory tracks the latest keeper info observed by the sentinel.
 type KeeperInfoHistory struct {
+	// KeeperInfo is last keeper info snapshot.
 	KeeperInfo *cluster.KeeperInfo
-	Seen       bool
-	Timer      int64
+	// Seen reports whether keeper was seen in current loop.
+	Seen bool
+	// Timer is monotonic timestamp used for failure tracking.
+	Timer int64
 }
 
 // KeeperInfoHistories maps keeper UID to keeper info history.
@@ -1713,14 +1716,18 @@ func (k KeeperInfoHistories) DeepCopy() KeeperInfoHistories {
 
 // DBConvergenceInfo tracks convergence timing for a database generation.
 type DBConvergenceInfo struct {
+	// Generation is DB generation being tracked.
 	Generation int64
-	Timer      int64
+	// Timer is monotonic timestamp when convergence tracking started.
+	Timer int64
 }
 
 // ProxyInfoHistory tracks the latest proxy info observed by the sentinel.
 type ProxyInfoHistory struct {
+	// ProxyInfo is last proxy info snapshot.
 	ProxyInfo *cluster.ProxyInfo
-	Timer     int64
+	// Timer is monotonic timestamp for proxy liveness tracking.
+	Timer int64
 }
 
 // ProxyInfoHistories maps proxy UID to proxy info history.
@@ -1743,38 +1750,57 @@ func (p ProxyInfoHistories) DeepCopy() ProxyInfoHistories {
 
 // Sentinel computes and writes cluster state from observed keepers and proxies.
 type Sentinel struct {
-	uid string
-	cfg *config
-	e   store.Store
-
+	// External cluster store client.
+	e store.Store
+	// Leader election backend.
 	election store.Election
-	end      chan bool
+	// Parsed sentinel command configuration.
+	cfg *config
+	// Completion channel for sentinel run loop.
+	end chan bool
 
-	lastLeadershipCount uint
-
-	updateMutex sync.Mutex
-	leader      bool
-	// Used to determine if we lost and regained the leadership
-	leadershipCount uint
-	leaderMutex     sync.Mutex
-
+	// Optional bootstrap spec used for first cluster initialization.
 	initialClusterSpec *cluster.ClusterSpec
 
-	sleepInterval  time.Duration
-	requestTimeout time.Duration
-
-	// Make UIDFn settable to ease testing with reproducible UIDs
+	// Injectable UID generator for deterministic tests.
 	UIDFn func() string
-	// Make RandFn settable to ease testing with reproducible "random" numbers
+	// Injectable random chooser for deterministic tests.
 	RandFn func(int) int
 
-	keeperErrorTimers      map[string]int64
-	dbErrorTimers          map[string]int64
+	// Keeper unhealthy timers keyed by keeper UID.
+	keeperErrorTimers map[string]int64
+	// DB unhealthy timers keyed by DB UID.
+	dbErrorTimers map[string]int64
+	// Timers for DBs not advancing WAL position.
 	dbNotIncreasingXLogPos map[string]int64
-	dbConvergenceInfos     map[string]*DBConvergenceInfo
+	// Cached convergence tracking keyed by DB UID.
+	dbConvergenceInfos map[string]*DBConvergenceInfo
 
+	// History of keeper heartbeats and state transitions.
 	keeperInfoHistories KeeperInfoHistories
-	proxyInfoHistories  ProxyInfoHistories
+	// History of proxy heartbeats and state transitions.
+	proxyInfoHistories ProxyInfoHistories
+	// Sentinel instance UID.
+	uid string
+
+	// Previously observed leadership epoch counter.
+	lastLeadershipCount uint
+
+	// Current leadership epoch counter.
+	leadershipCount uint
+
+	// Main reconciliation loop sleep interval.
+	sleepInterval time.Duration
+	// Timeout for store and component requests.
+	requestTimeout time.Duration
+
+	// Guards cluster update/reconciliation execution.
+	updateMutex sync.Mutex
+	// Guards leader state and leadership counters.
+	leaderMutex sync.Mutex
+
+	// Current local leadership flag.
+	leader bool
 }
 
 // NewSentinel creates a sentinel from command configuration.

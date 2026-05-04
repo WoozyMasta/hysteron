@@ -168,20 +168,16 @@ func (s *etcdV3Store) Close() error {
 }
 
 type etcdv3Election struct {
-	c            *etcdclientv3.Client
-	path         string
-	candidateUID string
-	ttl          time.Duration
-
+	ctx            context.Context
+	c              *etcdclientv3.Client
+	electedCh      chan bool
+	errCh          chan error
+	cancel         context.CancelFunc
+	path           string
+	candidateUID   string
+	ttl            time.Duration
 	requestTimeout time.Duration
-
-	running bool
-
-	electedCh chan bool
-	errCh     chan error
-
-	ctx    context.Context
-	cancel context.CancelFunc
+	running        bool
 }
 
 func (e *etcdv3Election) RunForElection() (<-chan bool, <-chan error) {

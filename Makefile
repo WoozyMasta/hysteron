@@ -9,6 +9,8 @@ CRI         ?= docker
 BENCH_COUNT ?= 6
 BENCH_REF   ?= bench_baseline.txt
 PG_MAJOR    ?= 18
+PG_MATRIX   ?= 18 17 16 15 14
+PG_MATRIX_CI ?= 18 14
 
 CGO_ENABLED ?= 0
 GOFLAGS     ?= -buildvcs=auto -trimpath
@@ -47,7 +49,7 @@ LDFLAGS_X := \
 
 .PHONY: all build release clean check ci verify tidy tidy-check download fmt \
 	fmt-check vet lint lint-fix align align-fix test test-race test-short bench \
-	bench-fast bench-reset integration integration-compose vulncheck tools tools-ci tool-golangci-lint \
+	bench-fast bench-reset integration integration-compose integration-matrix integration-matrix-ci vulncheck tools tools-ci tool-golangci-lint \
 	tool-betteralign tool-benchstat tool-vulncheck container-build
 
 all: build
@@ -183,6 +185,20 @@ integration: build
 integration-compose:
 	PG_MAJOR="$(PG_MAJOR)" $(CRI) compose -f tests/integration/compose.yml \
 		run --rm integration
+
+integration-matrix:
+	@for pg in $(PG_MATRIX); do \
+		echo ">> running integration compose matrix for PostgreSQL $$pg"; \
+		PG_MAJOR="$$pg" $(CRI) compose -f tests/integration/compose.yml \
+			run --rm integration || exit $$?; \
+	done
+
+integration-matrix-ci:
+	@for pg in $(PG_MATRIX_CI); do \
+		echo ">> running reduced integration compose matrix for PostgreSQL $$pg"; \
+		PG_MAJOR="$$pg" $(CRI) compose -f tests/integration/compose.yml \
+			run --rm integration || exit $$?; \
+	done
 
 tools: tool-golangci-lint tool-betteralign tool-benchstat tool-govulncheck
 tools-ci: tool-golangci-lint tool-betteralign tool-govulncheck

@@ -32,11 +32,32 @@ Use Docker Compose when local PostgreSQL binaries are missing or when checking
 multiple PostgreSQL majors:
 
 ```sh
-PG_MAJOR=18 make integration-compose
+make integration-matrix
+```
+
+The default matrix covers PostgreSQL `18 17 16 15 14`. Override it with
+`PG_MATRIX`:
+
+```sh
+PG_MATRIX="18 16 14" make integration-matrix
+```
+
+Run one specific major:
+
+```sh
 PG_MAJOR=17 make integration-compose
-PG_MAJOR=16 make integration-compose
-PG_MAJOR=15 make integration-compose
-PG_MAJOR=14 make integration-compose
+```
+
+For CI, use the reduced matrix command (default `18 14`):
+
+```sh
+make integration-matrix-ci
+```
+
+Override the CI subset with `PG_MATRIX_CI` when needed:
+
+```sh
+PG_MATRIX_CI="18" make integration-matrix-ci
 ```
 
 The compose runner builds a small test image from `golang:${GO_VERSION}-bookworm`,

@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -639,16 +638,22 @@ func (p *PostgresKeeper) updatePGState(pctx context.Context) {
 //
 // Since postgres 9.6 (https://www.postgresql.org/docs/9.6/static/runtime-config-replication.html)
 // `synchronous_standby_names` can be in one of two formats:
-//   num_sync ( standby_name [, ...] )
-//   standby_name [, ...]
+//
+//	num_sync ( standby_name [, ...] )
+//	standby_name [, ...]
+//
 // two examples for this:
-//   2 (node1,node2)
-//   node1,node2
+//
+//	2 (node1,node2)
+//	node1,node2
+//
 // TODO(sgotti) since postgres 10 (https://www.postgresql.org/docs/10/static/runtime-config-replication.html)
 // `synchronous_standby_names` can be in one of three formats:
-//   [FIRST] num_sync ( standby_name [, ...] )
-//   ANY num_sync ( standby_name [, ...] )
-//   standby_name [, ...]
+//
+//	[FIRST] num_sync ( standby_name [, ...] )
+//	ANY num_sync ( standby_name [, ...] )
+//	standby_name [, ...]
+//
 // since we are writing ourself the synchronous_standby_names we don't handle this case.
 // If needed, to better handle all the cases with also a better validation of
 // standby names we could use something like the parser used by postgres
@@ -2075,16 +2080,7 @@ func keeper(c *cobra.Command, args []string) {
 			log.Fatalf("cannot take exclusive lock on data dir %q: %v", lockFileName, err)
 		}
 
-		// Get a lock on our lock file.
-		ft := &syscall.Flock_t{
-			Type:   syscall.F_WRLCK,
-			Whence: int16(io.SeekStart),
-			Start:  0,
-			Len:    0, // Entire file.
-		}
-
-		err = syscall.FcntlFlock(lockFile.Fd(), syscall.F_SETLK, ft)
-		if err != nil {
+		if err := takeDataDirLock(lockFile); err != nil {
 			log.Fatalf("cannot take exclusive lock on data dir %q: %v", lockFileName, err)
 		}
 

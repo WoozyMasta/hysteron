@@ -42,6 +42,7 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Internalize and modernize the TCP proxy previously provided by
   `github.com/sorintlab/pollon` as `internal/tcpproxy`, removing the old
   `pollon` and `tcpkeepalive` dependencies.
+* Update etcd 3.3 dependencies in a controlled storage dependency batch.
 
 ## v0.17.0
 

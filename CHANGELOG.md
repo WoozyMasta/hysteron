@@ -53,6 +53,8 @@ The format is based on [Keep a Changelog][], and this project adheres to
   and store revision conversions.
 * Clean up command package correctness lint issues, including metrics server
   timeouts, checked sentinel arithmetic, and CLI output flush errors.
+* Exclude process-level integration tests from Windows builds because their
+  `gexpect` pseudo-terminal dependency is Unix-only.
 
 ## v0.17.0
 

@@ -63,6 +63,7 @@ func failKeeper(cmd *cobra.Command, args []string) {
 	keeperInfo := newCd.Keepers[keeperID]
 	if keeperInfo == nil {
 		die("keeper doesn't exist")
+		return
 	}
 
 	keeperInfo.Status.ForceFail = true

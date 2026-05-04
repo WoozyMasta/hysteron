@@ -15,8 +15,10 @@
 package cluster
 
 import (
+	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 )
 
 func TestValidateReplicationSlots(t *testing.T) {
@@ -110,5 +112,251 @@ func TestClusterData_FindDB(t *testing.T) {
 		if actual != tt.expectedDB {
 			t.Errorf("Expected %v, but got %v", tt.expectedDB, actual)
 		}
+	}
+}
+
+func TestClusterSpecWithDefaultsDoesNotMutateOriginal(t *testing.T) {
+	spec := &ClusterSpec{}
+
+	defaulted := spec.WithDefaults()
+
+	if spec.SleepInterval != nil {
+		t.Fatalf("WithDefaults mutated original SleepInterval: %v", spec.SleepInterval)
+	}
+	if defaulted.SleepInterval == nil || defaulted.SleepInterval.Duration != DefaultSleepInterval {
+		t.Fatalf("unexpected default SleepInterval: %v", defaulted.SleepInterval)
+	}
+	if defaulted.RequestTimeout == nil || defaulted.RequestTimeout.Duration != DefaultRequestTimeout {
+		t.Fatalf("unexpected default RequestTimeout: %v", defaulted.RequestTimeout)
+	}
+	if defaulted.InitMode != nil {
+		t.Fatalf("InitMode should not be defaulted: %v", *defaulted.InitMode)
+	}
+}
+
+func TestClusterSpecValidate(t *testing.T) {
+	newMode := ClusterInitModeNew
+	existingMode := ClusterInitModeExisting
+	pitrMode := ClusterInitModePITR
+	standbyRole := ClusterRoleStandby
+	strictAccess := SUReplAccessStrict
+	unknownAccess := SUReplAccessMode("unknown")
+	negativeDuration := &Duration{Duration: -time.Second}
+	oneSecond := &Duration{Duration: time.Second}
+	twoSeconds := &Duration{Duration: 2 * time.Second}
+	zero := uint16(0)
+	one := uint16(1)
+	two := uint16(2)
+
+	tests := []struct {
+		spec    *ClusterSpec
+		name    string
+		wantErr string
+	}{
+		{
+			name: "new cluster spec is valid",
+			spec: &ClusterSpec{InitMode: &newMode},
+		},
+		{
+			name:    "init mode is required",
+			spec:    &ClusterSpec{},
+			wantErr: "initMode undefined",
+		},
+		{
+			name:    "negative duration is rejected",
+			spec:    &ClusterSpec{InitMode: &newMode, SleepInterval: negativeDuration},
+			wantErr: "sleepInterval must be positive",
+		},
+		{
+			name: "proxy check interval must be lower than proxy timeout",
+			spec: &ClusterSpec{
+				InitMode:           &newMode,
+				ProxyCheckInterval: twoSeconds,
+				ProxyTimeout:       oneSecond,
+			},
+			wantErr: "proxyCheckInterval should be less than proxyTimeout",
+		},
+		{
+			name:    "max standbys must be positive",
+			spec:    &ClusterSpec{InitMode: &newMode, MaxStandbys: &zero},
+			wantErr: "maxStandbys must be at least 1",
+		},
+		{
+			name: "max synchronous standbys must cover min synchronous standbys",
+			spec: &ClusterSpec{
+				InitMode:               &newMode,
+				MinSynchronousStandbys: &two,
+				MaxSynchronousStandbys: &one,
+			},
+			wantErr: "maxSynchronousStandbys must be greater or equal to minSynchronousStandbys",
+		},
+		{
+			name:    "reserved replication slot is rejected",
+			spec:    &ClusterSpec{InitMode: &newMode, AdditionalMasterReplicationSlots: []string{"stolon_reserved"}},
+			wantErr: `replication slot name is reserved: "stolon_reserved"`,
+		},
+		{
+			name:    "pg hba entries cannot contain newline characters",
+			spec:    &ClusterSpec{InitMode: &newMode, PGHBA: []string{"host all all 127.0.0.1/32 trust\n"}},
+			wantErr: "pgHBA entries cannot contain newline characters",
+		},
+		{
+			name:    "new init cannot request standby role",
+			spec:    &ClusterSpec{InitMode: &newMode, Role: &standbyRole},
+			wantErr: `invalid cluster role standby when initMode is "new"`,
+		},
+		{
+			name:    "existing init requires existing config",
+			spec:    &ClusterSpec{InitMode: &existingMode},
+			wantErr: `existingConfig undefined. Required when initMode is "existing"`,
+		},
+		{
+			name:    "existing init requires keeper uid",
+			spec:    &ClusterSpec{InitMode: &existingMode, ExistingConfig: &ExistingConfig{}},
+			wantErr: "existingConfig.keeperUID undefined",
+		},
+		{
+			name:    "pitr init requires pitr config",
+			spec:    &ClusterSpec{InitMode: &pitrMode},
+			wantErr: `pitrConfig undefined. Required when initMode is "pitr"`,
+		},
+		{
+			name:    "pitr init requires restore command",
+			spec:    &ClusterSpec{InitMode: &pitrMode, PITRConfig: &PITRConfig{}},
+			wantErr: "pitrConfig.DataRestoreCommand undefined",
+		},
+		{
+			name:    "strict su repl access is valid",
+			spec:    &ClusterSpec{InitMode: &newMode, DefaultSUReplAccessMode: &strictAccess},
+			wantErr: "",
+		},
+		{
+			name:    "unknown su repl access is rejected",
+			spec:    &ClusterSpec{InitMode: &newMode, DefaultSUReplAccessMode: &unknownAccess},
+			wantErr: `unknown defaultSUReplAccessMode: "unknown"`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.spec.Validate()
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("expected error %q", tt.wantErr)
+			}
+			if err.Error() != tt.wantErr {
+				t.Fatalf("got error %q, wanted %q", err.Error(), tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestClusterUpdateSpecRejectsImmutableChanges(t *testing.T) {
+	newMode := ClusterInitModeNew
+	existingMode := ClusterInitModeExisting
+	masterRole := ClusterRoleMaster
+	standbyRole := ClusterRoleStandby
+
+	tests := []struct {
+		cluster *Cluster
+		newSpec *ClusterSpec
+		name    string
+		wantErr string
+	}{
+		{
+			name:    "rejects init mode change",
+			cluster: &Cluster{Spec: &ClusterSpec{InitMode: &newMode}},
+			newSpec: &ClusterSpec{
+				InitMode:       &existingMode,
+				ExistingConfig: &ExistingConfig{KeeperUID: "keeper1"},
+			},
+			wantErr: "cannot change cluster init mode",
+		},
+		{
+			name: "rejects master to standby role change",
+			cluster: &Cluster{
+				Spec: &ClusterSpec{
+					InitMode:       &existingMode,
+					Role:           &masterRole,
+					ExistingConfig: &ExistingConfig{KeeperUID: "keeper1"},
+				},
+			},
+			newSpec: &ClusterSpec{
+				InitMode:       &existingMode,
+				Role:           &standbyRole,
+				ExistingConfig: &ExistingConfig{KeeperUID: "keeper1"},
+				StandbyConfig:  &StandbyConfig{},
+			},
+			wantErr: "cannot update a cluster from master role to standby role",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.cluster.UpdateSpec(tt.newSpec)
+			if err == nil {
+				t.Fatalf("expected error %q", tt.wantErr)
+			}
+			if err.Error() != "invalid cluster spec: "+tt.wantErr && err.Error() != tt.wantErr {
+				t.Fatalf("got error %q, wanted %q", err.Error(), tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestDurationJSON(t *testing.T) {
+	d := Duration{Duration: 90 * time.Second}
+
+	data, err := json.Marshal(d)
+	if err != nil {
+		t.Fatalf("unexpected marshal error: %v", err)
+	}
+	if string(data) != `"1m30s"` {
+		t.Fatalf("got json %s, wanted %q", data, `"1m30s"`)
+	}
+
+	var decoded Duration
+	if err := json.Unmarshal([]byte(`"250ms"`), &decoded); err != nil {
+		t.Fatalf("unexpected unmarshal error: %v", err)
+	}
+	if decoded.Duration != 250*time.Millisecond {
+		t.Fatalf("got duration %s, wanted 250ms", decoded.Duration)
+	}
+
+	if err := json.Unmarshal([]byte(`"not-a-duration"`), &decoded); err == nil {
+		t.Fatal("expected invalid duration error")
+	}
+}
+
+func TestClusterDataDeepCopyIsIndependent(t *testing.T) {
+	mode := ClusterInitModeNew
+	cd := NewClusterData(NewCluster("cluster1", &ClusterSpec{InitMode: &mode}))
+	cd.Keepers["keeper1"] = &Keeper{UID: "keeper1"}
+	cd.DBs["db1"] = &DB{
+		UID:  "db1",
+		Spec: &DBSpec{KeeperUID: "keeper1"},
+		Status: DBStatus{
+			PGParameters: PGParameters{"max_connections": "100"},
+		},
+	}
+
+	copied := cd.DeepCopy()
+	copied.Cluster.UID = "cluster2"
+	copied.Keepers["keeper1"].UID = "keeper2"
+	copied.DBs["db1"].Status.PGParameters["max_connections"] = "200"
+
+	if cd.Cluster.UID != "cluster1" {
+		t.Fatalf("original cluster uid was mutated: %q", cd.Cluster.UID)
+	}
+	if cd.Keepers["keeper1"].UID != "keeper1" {
+		t.Fatalf("original keeper uid was mutated: %q", cd.Keepers["keeper1"].UID)
+	}
+	if cd.DBs["db1"].Status.PGParameters["max_connections"] != "100" {
+		t.Fatalf("original pg parameters were mutated: %#v", cd.DBs["db1"].Status.PGParameters)
 	}
 }

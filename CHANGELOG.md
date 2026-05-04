@@ -22,6 +22,10 @@ The format is based on [Keep a Changelog][], and this project adheres to
   and allow native Windows builds without CGO.
 * Replace the legacy Makefile with loop-based native
   and release builds for all Stolon binaries.
+* Add the first coverage baseline plus cluster contract
+  and PostgreSQL connection string regression tests.
+* Add initial cluster data and PostgreSQL helper benchmarks
+  plus benchmark baseline notes.
 
 ## v0.17.0
 
@@ -488,7 +492,7 @@ Thanks to all the contributors!
   [doc/stolonctl.md](doc/stolonctl.md).
 * The cluster config is now configurable using stolonctl
   ([#2](https://github.com/sorintlab/stolon/pull/2)). See
-  [doc/cluster_config.md](doc/cluster_config.md).
+  [doc/cluster_spec.md](doc/cluster_spec.md).
 * Users can directly put their preferred postgres configuration files inside
   a configuration directory ($dataDir/postgres/conf.d or provided with
   --pg-conf-dir) (see

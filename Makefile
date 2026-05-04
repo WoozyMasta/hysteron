@@ -1,43 +1,186 @@
-PROJDIR=$(dir $(realpath $(firstword $(MAKEFILE_LIST))))
+RELEASE_MATRIX := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64
 
-# change to project dir so we can express all as relative paths
-$(shell cd $(PROJDIR))
+GO          ?= go
+GOWORK      ?= off
+CGO_ENABLED ?= 0
+LINTER      ?= golangci-lint
+ALIGNER     ?= betteralign
+BENCHSTAT   ?= benchstat
+VULN        ?= govulncheck
+BENCH_COUNT ?= 6
+BENCH_REF   ?= bench_baseline.txt
 
-REPO_PATH=github.com/sorintlab/stolon
+BINARIES   := stolon-keeper stolon-sentinel stolon-proxy stolonctl
+OUTPUT_DIR := build
+TEST_PACKAGES ?= $(shell GOWORK=off $(GO) list ./... | grep -v '/tests/integration$$')
 
-VERSION ?= $(shell scripts/git-version.sh)
+NATIVE_GOOS      := $(shell GOWORK=off $(GO) env GOOS)
+NATIVE_GOARCH    := $(shell GOWORK=off $(GO) env GOARCH)
+NATIVE_EXTENSION := $(if $(filter $(NATIVE_GOOS),windows),.exe,)
 
-LD_FLAGS="-w -X $(REPO_PATH)/cmd.Version=$(VERSION)"
+RACE ?= 0
+ifeq ($(RACE),1)
+	EXTRA_BUILD_FLAGS := -race
+endif
 
-$(shell mkdir -p bin )
+MODULE  := $(shell GOWORK=off $(GO) list -m -f '{{.Path}}')
+VERSION ?= $(shell git describe --match 'v[0-9]*' --dirty='.m' --always --tags 2>/dev/null || echo v0.0.0)
 
+LDFLAGS_X := -X '$(MODULE)/cmd.Version=$(VERSION)'
 
-.PHONY: all
+.PHONY: all build release clean check ci verify tidy tidy-check download fmt \
+	fmt-check vet lint lint-fix align align-fix test test-race test-short bench \
+	bench-fast bench-reset integration vuln tools tools-ci tool-golangci-lint \
+	tool-betteralign tool-benchstat tool-vuln docker
+
 all: build
 
-.PHONY: build
-build: sentinel keeper proxy stolonctl
+check: verify tidy fmt vet lint-fix align-fix test
+ci: download tools-ci verify tidy-check fmt-check vet lint align test
 
-.PHONY: test
-test: build
-	./test
+clean:
+	rm -rf $(OUTPUT_DIR)
 
-.PHONY: sentinel keeper proxy stolonctl docker
+build: clean
+	@mkdir -p $(OUTPUT_DIR)
+	@for binary in $(BINARIES); do \
+		case "$$binary" in \
+			stolon-keeper) pkg="./cmd/keeper" ;; \
+			stolon-sentinel) pkg="./cmd/sentinel" ;; \
+			stolon-proxy) pkg="./cmd/proxy" ;; \
+			stolonctl) pkg="./cmd/stolonctl" ;; \
+			*) echo "unknown binary $$binary" >&2; exit 1 ;; \
+		esac; \
+		out="$(OUTPUT_DIR)/$$binary$(NATIVE_EXTENSION)"; \
+		echo ">> building $$out"; \
+		GOOS=$(NATIVE_GOOS) GOARCH=$(NATIVE_GOARCH) \
+		GOWORK=$(GOWORK) CGO_ENABLED=$(CGO_ENABLED) \
+		$(GO) build $(GOFLAGS) -ldflags="$(LDFLAGS) $(LDFLAGS_X)" \
+			-tags "$(GOFTAGS)" $(EXTRA_BUILD_FLAGS) -o "$$out" "$$pkg"; \
+	done
 
-keeper:
-	GO111MODULE=on go build -ldflags $(LD_FLAGS) -o $(PROJDIR)/bin/stolon-keeper $(REPO_PATH)/cmd/keeper
+release: clean
+	@mkdir -p $(OUTPUT_DIR)
+	@for target in $(RELEASE_MATRIX); do \
+		goos=$${target%%/*}; \
+		goarch=$${target##*/}; \
+		ext=$$( [ "$$goos" = "windows" ] && echo ".exe" || echo "" ); \
+		for binary in $(BINARIES); do \
+			case "$$binary" in \
+				stolon-keeper) pkg="./cmd/keeper" ;; \
+				stolon-sentinel) pkg="./cmd/sentinel" ;; \
+				stolon-proxy) pkg="./cmd/proxy" ;; \
+				stolonctl) pkg="./cmd/stolonctl" ;; \
+				*) echo "unknown binary $$binary" >&2; exit 1 ;; \
+			esac; \
+			out="$(OUTPUT_DIR)/$$binary-$${goos}-$${goarch}$$ext"; \
+			echo ">> building $$out"; \
+			GOOS=$$goos GOARCH=$$goarch \
+			GOWORK=$(GOWORK) CGO_ENABLED=$(CGO_ENABLED) \
+			$(GO) build $(GOFLAGS) -ldflags="$(LDFLAGS) $(LDFLAGS_X)" \
+				-tags "$(GOFTAGS)" -o "$$out" "$$pkg"; \
+		done; \
+	done
 
-sentinel:
-	CGO_ENABLED=0 GO111MODULE=on go build -ldflags $(LD_FLAGS) -o $(PROJDIR)/bin/stolon-sentinel $(REPO_PATH)/cmd/sentinel
+verify:
+	$(GO) mod verify
 
-proxy:
-	CGO_ENABLED=0 GO111MODULE=on go build -ldflags $(LD_FLAGS) -o $(PROJDIR)/bin/stolon-proxy $(REPO_PATH)/cmd/proxy
+tidy:
+	$(GO) mod tidy
 
-stolonctl:
-	CGO_ENABLED=0 GO111MODULE=on go build -ldflags $(LD_FLAGS) -o $(PROJDIR)/bin/stolonctl $(REPO_PATH)/cmd/stolonctl
+tidy-check:
+	@$(GO) mod tidy
+	@git diff --stat --exit-code -- go.mod go.sum || ( \
+		echo "go mod tidy: repository is not tidy"; \
+		exit 1; \
+	)
 
-.PHONY: docker
+download:
+	$(GO) mod download
+
+fmt:
+	gofmt -w .
+
+fmt-check:
+	@files=$$(gofmt -l .); \
+	if [ -n "$$files" ]; then \
+		echo "$$files" 1>&2; \
+		echo "gofmt: files need formatting" 1>&2; \
+		exit 1; \
+	fi
+
+vet:
+	$(GO) vet ./...
+
+lint:
+	$(LINTER) run ./...
+
+lint-fix:
+	$(LINTER) run --fix ./...
+
+align:
+	$(ALIGNER) ./...
+
+align-fix:
+	-$(ALIGNER) -apply ./...
+	$(ALIGNER) ./...
+
+test:
+	$(GO) test $(TEST_PACKAGES)
+
+test-race:
+	$(GO) test -race $(TEST_PACKAGES)
+
+test-short:
+	$(GO) test -short $(TEST_PACKAGES)
+
+bench:
+	@tmp=$$(mktemp); \
+	$(GO) test $(TEST_PACKAGES) -run=^$$ -bench 'Benchmark' -benchmem -count=$(BENCH_COUNT) | tee "$$tmp"; \
+	if [ -f "$(BENCH_REF)" ]; then \
+		$(BENCHSTAT) "$(BENCH_REF)" "$$tmp"; \
+	else \
+		cp "$$tmp" "$(BENCH_REF)" && echo "Baseline saved to $(BENCH_REF)"; \
+	fi; \
+	rm -f "$$tmp"
+
+bench-fast:
+	$(GO) test $(TEST_PACKAGES) -run=^$$ -bench 'Benchmark' -benchmem
+
+bench-reset:
+	rm -f "$(BENCH_REF)"
+
+integration: build
+	if [ -z "$${STOLON_TEST_STORE_BACKEND}" ]; then \
+		echo "STOLON_TEST_STORE_BACKEND is undefined"; \
+		exit 1; \
+	fi; \
+	STKEEPER_BIN="$(OUTPUT_DIR)/stolon-keeper$(NATIVE_EXTENSION)" \
+	STSENTINEL_BIN="$(OUTPUT_DIR)/stolon-sentinel$(NATIVE_EXTENSION)" \
+	STPROXY_BIN="$(OUTPUT_DIR)/stolon-proxy$(NATIVE_EXTENSION)" \
+	STCTL_BIN="$(OUTPUT_DIR)/stolonctl$(NATIVE_EXTENSION)" \
+	$(GO) test -timeout 20m -v -count 1 ./tests/integration
+
+vuln:
+	$(VULN) ./...
+
+tools: tool-golangci-lint tool-betteralign tool-benchstat tool-vuln
+tools-ci: tool-golangci-lint tool-betteralign tool-vuln
+
+tool-golangci-lint:
+	$(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+
+tool-betteralign:
+	$(GO) install github.com/dkorunic/betteralign/cmd/betteralign@latest
+
+tool-benchstat:
+	$(GO) install golang.org/x/perf/cmd/benchstat@latest
+
+tool-vuln:
+	$(GO) install golang.org/x/vuln/cmd/govulncheck@latest
+
 docker:
-	if [ -z $${PGVERSION} ]; then echo 'PGVERSION is undefined'; exit 1; fi; \
-	if [ -z $${TAG} ]; then echo 'TAG is undefined'; exit 1; fi; \
-	docker build --build-arg PGVERSION=${PGVERSION} -t ${TAG} -f examples/kubernetes/image/docker/Dockerfile .
+	if [ -z "$${PGVERSION}" ]; then echo 'PGVERSION is undefined'; exit 1; fi; \
+	if [ -z "$${TAG}" ]; then echo 'TAG is undefined'; exit 1; fi; \
+	docker build --build-arg PGVERSION=$${PGVERSION} -t $${TAG} \
+		-f examples/kubernetes/image/docker/Dockerfile .

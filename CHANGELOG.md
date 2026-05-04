@@ -24,8 +24,9 @@ The format is based on [Keep a Changelog][], and this project adheres to
   and release builds for all Stolon binaries.
 * Add the first coverage baseline plus cluster contract
   and PostgreSQL connection string regression tests.
-* Add initial sentinel, proxy, store, cluster data, and PostgreSQL helper
-  benchmarks plus benchmark baseline notes.
+* Add initial sentinel, proxy, store, keeper, cluster data, and PostgreSQL
+  helper benchmarks plus benchmark baseline notes.
+* Fix atomic file writes with absolute paths on Windows.
 
 ## v0.17.0
 

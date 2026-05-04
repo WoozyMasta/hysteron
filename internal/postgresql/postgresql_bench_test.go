@@ -14,7 +14,16 @@
 
 package postgresql
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/sorintlab/stolon/internal/common"
+	slog "github.com/sorintlab/stolon/internal/log"
+
+	"go.uber.org/zap"
+)
 
 var benchmarkConnParams = ConnParams{
 	"host":             "127.0.0.1",
@@ -24,6 +33,10 @@ var benchmarkConnParams = ConnParams{
 	"dbname":           "postgres",
 	"application_name": "stolon keeper",
 	"sslmode":          "disable",
+}
+
+func init() {
+	slog.SetLevel(zap.ErrorLevel)
 }
 
 func BenchmarkParseConnString(b *testing.B) {
@@ -107,5 +120,98 @@ func BenchmarkXlogPosToWalFileNameNoTimeline(b *testing.B) {
 		if name == "" {
 			b.Fatal("empty wal file name")
 		}
+	}
+}
+
+func BenchmarkManagerWriteConf(b *testing.B) {
+	manager := benchmarkManager(b)
+	manager.SetParameters(benchmarkPGParameters())
+	manager.SetRecoveryOptions(benchmarkRecoveryOptions())
+
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		if err := manager.writeConf(false, true); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkManagerWriteRecoveryConf(b *testing.B) {
+	manager := benchmarkManager(b)
+	manager.SetRecoveryOptions(benchmarkRecoveryOptions())
+
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		if err := manager.writeRecoveryConf(); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkManagerWriteSignalFiles(b *testing.B) {
+	manager := benchmarkManager(b)
+	manager.SetRecoveryOptions(benchmarkRecoveryOptions())
+
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		if err := manager.writeStandbySignal(); err != nil {
+			b.Fatal(err)
+		}
+		if err := manager.writeRecoverySignal(); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkManagerWritePgHba(b *testing.B) {
+	manager := benchmarkManager(b)
+	manager.SetHba([]string{
+		"local all all trust",
+		"host all all 127.0.0.1/32 md5",
+		"host replication repl 127.0.0.1/32 md5",
+		"host replication repl ::1/128 md5",
+	})
+
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		if err := manager.writePgHba(); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func benchmarkManager(b *testing.B) *Manager {
+	b.Helper()
+
+	dataDir := filepath.Join(b.TempDir(), "postgres")
+	if err := os.MkdirAll(dataDir, 0700); err != nil {
+		b.Fatal(err)
+	}
+	return NewManager("", filepath.Dir(dataDir), nil, nil, "trust", "postgres", "", "trust", "repl", "", 0)
+}
+
+func benchmarkPGParameters() common.Parameters {
+	return common.Parameters{
+		"listen_addresses":          "127.0.0.1",
+		"port":                      "5432",
+		"wal_level":                 "replica",
+		"hot_standby":               "on",
+		"max_connections":           "200",
+		"max_wal_senders":           "16",
+		"max_replication_slots":     "16",
+		"shared_buffers":            "256MB",
+		"synchronous_standby_names": "2 (stolon_db1,stolon_db2)",
+	}
+}
+
+func benchmarkRecoveryOptions() *RecoveryOptions {
+	return &RecoveryOptions{
+		RecoveryMode: RecoveryModeStandby,
+		RecoveryParameters: common.Parameters{
+			"primary_conninfo":         "host=127.0.0.1 port=5432 user=repl sslmode=prefer",
+			"primary_slot_name":        "stolon_db1",
+			"restore_command":          "wal-g wal-fetch %f %p",
+			"recovery_target_timeline": "latest",
+		},
 	}
 }

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"slices"
 	"sync"
 	"time"
@@ -29,55 +30,36 @@ import (
 	"github.com/sorintlab/stolon/cmd"
 	"github.com/sorintlab/stolon/internal/cluster"
 	"github.com/sorintlab/stolon/internal/common"
-	"github.com/sorintlab/stolon/internal/flagutil"
 	slog "github.com/sorintlab/stolon/internal/log"
 	"github.com/sorintlab/stolon/internal/store"
 	"github.com/sorintlab/stolon/internal/tcpproxy"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/spf13/cobra"
+	"github.com/woozymasta/flags"
 	"go.uber.org/zap"
 )
 
 var log = slog.S()
 
-// CmdProxy is the root command for stolon-proxy.
-var CmdProxy = &cobra.Command{
-	Use:     "stolon-proxy",
-	Run:     proxy,
-	Version: cmd.Version,
-}
-
 type config struct {
-	listenAddress string
-	port          string
-
+	ListenAddress string `short:"l" long:"listen-address" env:"LISTEN_ADDRESS" default:"127.0.0.1" description:"proxy listening address"`
+	Port          string `short:"p" long:"port" env:"PORT" default:"5432" description:"proxy listening port"`
 	cmd.CommonConfig
 
-	keepAliveIdle     int
-	keepAliveCount    int
-	keepAliveInterval int
-	stopListening     bool
-	debug             bool
+	KeepAlive     tcpKeepAliveOptions `group:"TCP Keep-Alive" namespace:"tcp-keepalive" env-namespace:"TCP_KEEPALIVE"`
+	StopListening bool                `long:"stop-listening" env:"STOP_LISTENING" description:"stop listening on store error (default true)"`
 }
 
-var cfg config
-
-func init() {
-	cmd.AddCommonFlags(CmdProxy, &cfg.CommonConfig)
-
-	CmdProxy.PersistentFlags().StringVar(&cfg.listenAddress, "listen-address", "127.0.0.1", "proxy listening address")
-	CmdProxy.PersistentFlags().StringVar(&cfg.port, "port", "5432", "proxy listening port")
-	CmdProxy.PersistentFlags().BoolVar(&cfg.stopListening, "stop-listening", true, "stop listening on store error")
-	CmdProxy.PersistentFlags().BoolVar(&cfg.debug, "debug", false, "enable debug logging")
-	CmdProxy.PersistentFlags().IntVar(&cfg.keepAliveIdle, "tcp-keepalive-idle", 0, "set tcp keepalive idle (seconds)")
-	CmdProxy.PersistentFlags().IntVar(&cfg.keepAliveCount, "tcp-keepalive-count", 0, "set tcp keepalive probe count number")
-	CmdProxy.PersistentFlags().IntVar(&cfg.keepAliveInterval, "tcp-keepalive-interval", 0, "set tcp keepalive interval (seconds)")
-
-	if err := CmdProxy.PersistentFlags().MarkDeprecated("debug", "use --log-level=debug instead"); err != nil {
-		log.Fatal(err)
-	}
+// tcpKeepAliveOptions tunes TCP keep-alive settings on accepted client
+// connections. Long names and env keys are derived from the enclosing
+// `tcp-keepalive`/`TCP_KEEPALIVE` namespace.
+type tcpKeepAliveOptions struct {
+	Idle     int `long:"idle" env:"IDLE" default:"0" validate-min:"0" description:"set tcp keepalive idle (seconds)"`
+	Count    int `long:"count" env:"COUNT" default:"0" validate-min:"0" description:"set tcp keepalive probe count number"`
+	Interval int `long:"interval" env:"INTERVAL" default:"0" validate-min:"0" description:"set tcp keepalive interval (seconds)"`
 }
+
+var cfg = config{StopListening: true}
 
 // ClusterChecker keeps the local TCP proxy aligned with cluster data.
 type ClusterChecker struct {
@@ -107,16 +89,16 @@ type ClusterChecker struct {
 
 // NewClusterChecker creates a ClusterChecker from proxy configuration.
 func NewClusterChecker(uid string, cfg config) (*ClusterChecker, error) {
-	e, err := cmd.NewStore(&cfg.CommonConfig)
+	e, err := cmd.NewStore(&cfg.CommonConfig, true)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create store: %v", err)
 	}
 
 	return &ClusterChecker{
 		uid:           uid,
-		listenAddress: cfg.listenAddress,
-		port:          cfg.port,
-		stopListening: cfg.stopListening,
+		listenAddress: cfg.ListenAddress,
+		port:          cfg.Port,
+		stopListening: cfg.StopListening,
 		e:             e,
 		endTCPProxyCh: make(chan error),
 
@@ -146,9 +128,9 @@ func (c *ClusterChecker) startTCPProxy() error {
 
 	pp := tcpproxy.New(listener, tcpproxy.Options{
 		KeepAlive:         true,
-		KeepAliveIdle:     time.Duration(cfg.keepAliveIdle) * time.Second,
-		KeepAliveCount:    cfg.keepAliveCount,
-		KeepAliveInterval: time.Duration(cfg.keepAliveInterval) * time.Second,
+		KeepAliveIdle:     time.Duration(cfg.KeepAlive.Idle) * time.Second,
+		KeepAliveCount:    cfg.KeepAlive.Count,
+		KeepAliveInterval: time.Duration(cfg.KeepAlive.Interval) * time.Second,
 	})
 
 	c.tcpProxy = pp
@@ -367,17 +349,24 @@ func (c *ClusterChecker) Start() error {
 
 // Execute runs the stolon-proxy command.
 func Execute() {
-	if err := flagutil.SetFlagsFromEnv(CmdProxy.PersistentFlags(), "STPROXY"); err != nil {
-		log.Fatal(err)
+	parser := NewParser()
+	if _, err := parser.Parse(); err != nil {
+		os.Exit(cmd.ParseErrorExitCode(err))
 	}
-
-	if err := CmdProxy.Execute(); err != nil {
-		log.Fatal(err)
-	}
+	proxy(parser)
 }
 
-func proxy(c *cobra.Command, _ []string) {
-	switch cfg.LogLevel {
+// NewParser creates a parser for stolon-proxy. Built-in helper
+// commands stay available; subcommands are optional because the proxy
+// is a daemon.
+func NewParser() *flags.Parser {
+	parser := cmd.NewParser("stolon-proxy", "STPROXY", &cfg, 0)
+	parser.SubcommandsOptional = true
+	return parser
+}
+
+func proxy(parser *flags.Parser) {
+	switch cfg.Log.Level {
 	case "error":
 		slog.SetLevel(zap.ErrorLevel)
 	case "warn":
@@ -386,17 +375,15 @@ func proxy(c *cobra.Command, _ []string) {
 		slog.SetLevel(zap.InfoLevel)
 	case "debug":
 		slog.SetLevel(zap.DebugLevel)
-	default:
-		log.Fatalf("invalid log level: %v", cfg.LogLevel)
 	}
-	if cfg.debug {
+	if cfg.Debug {
 		slog.SetDebug()
 	}
-	if cmd.IsColorLoggerEnable(c, &cfg.CommonConfig) {
+	if cmd.IsLogColorRequested(parser, &cfg.CommonConfig) {
 		log = slog.SColor()
 	}
 	if slog.IsDebug() {
-		if cmd.IsColorLoggerEnable(c, &cfg.CommonConfig) {
+		if cmd.IsLogColorRequested(parser, &cfg.CommonConfig) {
 			stdlog := slog.StdLogColor()
 			tcpproxy.SetLogger(stdlog)
 		} else {
@@ -405,21 +392,14 @@ func proxy(c *cobra.Command, _ []string) {
 		}
 	}
 
+	if err := cmd.CheckClusterName(&cfg.CommonConfig); err != nil {
+		log.Fatalf(err.Error())
+	}
 	if err := cmd.CheckCommonConfig(&cfg.CommonConfig); err != nil {
 		log.Fatalf(err.Error())
 	}
 
 	cmd.SetMetrics(&cfg.CommonConfig, "proxy")
-
-	if cfg.keepAliveIdle < 0 {
-		log.Fatalf("tcp keepalive idle value must be greater or equal to 0")
-	}
-	if cfg.keepAliveCount < 0 {
-		log.Fatalf("tcp keepalive count value must be greater or equal to 0")
-	}
-	if cfg.keepAliveInterval < 0 {
-		log.Fatalf("tcp keepalive interval value must be greater or equal to 0")
-	}
 
 	uid := common.UID()
 	log.Infow("proxy uid", "uid", uid)

@@ -1,6 +1,6 @@
 ## Forcing a failover
 
-You can force a "master" keeper failover using the [stolonctl failkeeper](commands/stolonctl_failkeeper.md)
+You can force a "master" keeper failover using `stolonctl failkeeper`.
 
 This commands forces a keeper as "temporarily" failed. It's just a one shot operation, the sentinel will compute a new clusterdata considering the keeper as failed and then restore its state to the real one.
 

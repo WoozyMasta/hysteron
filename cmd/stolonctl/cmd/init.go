@@ -1,4 +1,5 @@
 // Copyright 2016 Sorint.lab
+// Copyright 2026 WoozyMasta
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,101 +17,88 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"os"
 
-	cmdcommon "github.com/sorintlab/stolon/cmd"
 	"github.com/sorintlab/stolon/internal/cluster"
 	"github.com/sorintlab/stolon/internal/common"
-	"github.com/spf13/cobra"
+	"github.com/sorintlab/stolon/internal/configfile"
 )
 
-var cmdInit = &cobra.Command{
-	Use:   "init",
-	Run:   initCluster,
-	Short: "Initialize a new cluster",
+// InitCommand initializes a new cluster.
+type InitCommand struct {
+	File     string `short:"f" long:"file" description:"file containing the new cluster spec"`
+	ForceYes bool   `short:"y" long:"yes" description:"don't ask for confirmation"`
 }
 
-// InitOptions contains stolonctl init options.
-type InitOptions struct {
-	file     string
-	forceYes bool
+// Execute runs `stolonctl init`.
+func (c *InitCommand) Execute(args []string) error {
+	return runStolonCtl(func() error {
+		return c.run(args)
+	})
 }
 
-var initOpts InitOptions
-
-func init() {
-	cmdInit.PersistentFlags().StringVarP(&initOpts.file, "file", "f", "", "file contaning the new cluster spec")
-	cmdInit.PersistentFlags().BoolVarP(&initOpts.forceYes, "yes", "y", false, "don't ask for confirmation")
-
-	CmdStolonCtl.AddCommand(cmdInit)
-}
-
-func initCluster(_ *cobra.Command, args []string) {
+func (c *InitCommand) run(args []string) error {
 	if len(args) > 1 {
-		die("too many arguments")
+		return errors.New("too many arguments")
 	}
 
 	dataSupplied := false
-	data := []byte{}
+	var data []byte
 	switch len(args) {
 	case 1:
 		dataSupplied = true
 		data = []byte(args[0])
 	case 0:
-		if initOpts.file != "" {
+		if c.File != "" {
 			dataSupplied = true
 			var err error
-			if initOpts.file == "-" {
+			if c.File == "-" {
 				data, err = io.ReadAll(os.Stdin)
 				if err != nil {
-					die("cannot read from stdin: %v", err)
+					return fmt.Errorf("cannot read from stdin: %v", err)
 				}
 			} else {
-				data, err = os.ReadFile(initOpts.file)
+				data, err = os.ReadFile(c.File)
 				if err != nil {
-					die("cannot read file: %v", err)
+					return fmt.Errorf("cannot read file: %v", err)
 				}
 			}
 		}
 	}
 
-	e, err := cmdcommon.NewStore(&cfg.CommonConfig)
+	e, err := newStore()
 	if err != nil {
-		die("%v", err)
+		return err
 	}
 
 	cd, _, err := e.GetClusterData(context.TODO())
 	if err != nil {
-		die("cannot get cluster data: %v", err)
+		return fmt.Errorf("cannot get cluster data: %v", err)
 	}
 	if cd != nil {
 		stdout("WARNING: The current cluster data will be removed")
 	}
 	stdout("WARNING: The databases managed by the keepers will be overwritten depending on the provided cluster spec.")
 
-	accepted := true
-	if !initOpts.forceYes {
-		accepted, err = askConfirmation("Are you sure you want to continue? [yes/no] ")
+	if !c.ForceYes {
+		accepted, err := askConfirmation("Are you sure you want to continue? [yes/no] ")
 		if err != nil {
-			die("%v", err)
+			return err
 		}
-	}
-	if !accepted {
-		stdout("exiting")
-		os.Exit(0)
-	}
-
-	_, _, err = e.GetClusterData(context.TODO())
-	if err != nil {
-		die("cannot get cluster data: %v", err)
+		if !accepted {
+			stdout("exiting")
+			return nil
+		}
 	}
 
 	var cs *cluster.ClusterSpec
 	if dataSupplied {
-		if err := json.Unmarshal(data, &cs); err != nil {
-			die("failed to unmarshal cluster spec: %v", err)
+		cs, err = configfile.ClusterSpec(data)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal cluster spec: %v", err)
 		}
 	} else {
 		// Define a new cluster spec with initMode "new"
@@ -119,14 +107,14 @@ func initCluster(_ *cobra.Command, args []string) {
 	}
 
 	if err := cs.Validate(); err != nil {
-		die("invalid cluster spec: %v", err)
+		return fmt.Errorf("invalid cluster spec: %v", err)
 	}
 
-	c := cluster.NewCluster(common.UID(), cs)
-	cd = cluster.NewClusterData(c)
+	c2 := cluster.NewCluster(common.UID(), cs)
+	cd = cluster.NewClusterData(c2)
 
-	// We ignore if cd has been modified between reading and writing
 	if err := e.PutClusterData(context.TODO(), cd); err != nil {
-		die("cannot update cluster data: %v", err)
+		return fmt.Errorf("cannot update cluster data: %v", err)
 	}
+	return nil
 }

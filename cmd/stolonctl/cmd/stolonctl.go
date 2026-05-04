@@ -1,4 +1,5 @@
 // Copyright 2015 Sorint.lab
+// Copyright 2026 WoozyMasta
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package cmd implements stolonctl commands.
 package cmd
 
 import (
@@ -24,67 +26,75 @@ import (
 
 	"github.com/sorintlab/stolon/cmd"
 	"github.com/sorintlab/stolon/internal/cluster"
-	"github.com/sorintlab/stolon/internal/flagutil"
 	slog "github.com/sorintlab/stolon/internal/log"
 	"github.com/sorintlab/stolon/internal/store"
-
-	"github.com/spf13/cobra"
+	"github.com/woozymasta/flags"
 )
 
-const (
-	maxRetries = 3
-)
+const maxRetries = 3
 
-// CmdStolonCtl is the root stolonctl command.
-var CmdStolonCtl = &cobra.Command{
-	Use:     "stolonctl",
-	Short:   "stolon command line client",
-	Version: cmd.Version,
-	PersistentPreRun: func(c *cobra.Command, _ []string) {
-		if c.Name() != "stolonctl" && c.Name() != "version" {
-			if err := cmd.CheckCommonConfig(&cfg.CommonConfig); err != nil {
-				die("%s", err.Error())
-			}
-		}
-	},
-	// just defined to make --version work
-	Run: func(c *cobra.Command, _ []string) { _ = c.Help() },
-}
+// stolonCtl is the root option/command tree for stolonctl. Subcommands
+// are declared via `command:` tags so the parser walks the struct via
+// reflection and we never call AddCommand programmatically.
+type stolonCtl struct {
+	FailKeeper   FailKeeperCommand   `command:"failkeeper" description:"Force a keeper as temporarily failed"`
+	RemoveKeeper RemoveKeeperCommand `command:"removekeeper" description:"Remove a keeper from cluster data"`
 
-type config struct {
+	Status StatusCommand `command:"status" description:"Display the current cluster status"`
+
+	Init        InitCommand        `command:"init" description:"Initialize a new cluster"`
+	Update      UpdateCommand      `command:"update" description:"Update a cluster specification"`
+	ClusterData ClusterDataCommand `command:"clusterdata" description:"Manage current cluster data"`
+
 	cmd.CommonConfig
+
+	Spec    SpecCommand    `command:"spec" description:"Retrieve the current cluster specification"`
+	Promote PromoteCommand `command:"promote" description:"Promote a standby cluster to a primary cluster"`
 }
 
-var cfg config
-var log = slog.S()
+// Package-level singleton: subcommand handlers reach for `cfg.CommonConfig`
+// to construct the store/election clients without explicit plumbing.
+var (
+	cfg stolonCtl
+	log = slog.S()
+)
 
-func init() {
-	cfg.IsStolonCtl = true
-	cmd.AddCommonFlags(CmdStolonCtl, &cfg.CommonConfig)
-}
-
-var cmdVersion = &cobra.Command{
-	Use:   "version",
-	Run:   versionCommand,
-	Short: "Display the version",
-}
-
-func init() {
-	CmdStolonCtl.AddCommand(cmdVersion)
-}
-
-func versionCommand(_ *cobra.Command, _ []string) {
-	stdout("stolonctl version %s", cmd.Version)
+// NewParser returns the configured stolonctl parser. Used by the docs
+// generator and by `Execute` below.
+func NewParser() *flags.Parser {
+	return cmd.NewParser("stolonctl", "STOLONCTL", &cfg, 0)
 }
 
 // Execute runs the stolonctl command.
 func Execute() {
-	if err := flagutil.SetFlagsFromEnv(CmdStolonCtl.PersistentFlags(), "STOLONCTL"); err != nil {
-		log.Fatal(err)
+	parser := NewParser()
+	if _, err := parser.Parse(); err != nil {
+		os.Exit(cmd.ParseErrorExitCode(err))
 	}
-	if err := CmdStolonCtl.Execute(); err != nil {
-		log.Fatal(err)
+	if parser.Active == nil {
+		parser.WriteHelp(os.Stdout)
 	}
+}
+
+// runStolonCtl wraps a command body with shared validation. It is the
+// only piece of glue between the `flags.Commander` interface and the
+// existing handlers.
+func runStolonCtl(fn func() error) error {
+	if err := cmd.CheckClusterName(&cfg.CommonConfig); err != nil {
+		return err
+	}
+	if err := cmd.CheckCommonConfig(&cfg.CommonConfig); err != nil {
+		return err
+	}
+	return fn()
+}
+
+func newStore() (store.Store, error) {
+	return cmd.NewStore(&cfg.CommonConfig, false)
+}
+
+func newElection(uid string) (store.Election, error) {
+	return cmd.NewElection(&cfg.CommonConfig, uid)
 }
 
 func stderr(format string, a ...any) {

@@ -84,6 +84,26 @@ The format is based on [Keep a Changelog][], and this project adheres to
   preserving existing public type names.
 * Clean up common, logging, flag utility, and legacy cluster v0 revive findings
   with package and exported symbol comments.
+* Replace Cobra command parsing with `github.com/woozymasta/flags` and add
+  YAML/JSON cluster spec loading with guarded environment expansion through
+  `github.com/woozymasta/jamle`.
+* Centralize build metadata in the new `internal/buildflags` package and wire
+  it through the `flags` built-in `version` command via Makefile `ldflags`.
+* Reorganize CLI options into reflection-based groups (`Store`/`Logging`/
+  `Kubernetes` for every binary, `PostgreSQL` with nested `Replication User`
+  and `Superuser` sub-groups for the keeper, and `TCP Keep-Alive` for the
+  proxy), preserving the public flag and environment names while making help
+  output and generated docs easier to navigate.
+* Add convenient short flags for the most common options:
+  `-c/--cluster-name` (all binaries), `-i/--uid` and `-d/--data-dir` (keeper),
+  `-p/--pg-port` (keeper), `-l/--listen-address` and `-p/--port` (proxy), and
+  `-f/--initial-cluster-spec` (sentinel).
+* Drop the static `IgnoreExpandPaths` allowlist from `internal/configfile` so
+  every string scalar in cluster spec/data documents accepts `${VAR}`
+  environment expansion uniformly; use `$${VAR}` to keep a literal `${VAR}`.
+* Define stolonctl subcommands declaratively through `command:` struct tags
+  on a single root, dropping the previous programmatic
+  `parser.AddCommand` plumbing.
 
 ## v0.17.0
 

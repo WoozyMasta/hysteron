@@ -124,7 +124,7 @@ func TestValidatePostgresVersion(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			p := &PostgresKeeper{
-				cfg: &config{allowUnsupportedPG: tt.allowUnsupported},
+				cfg: &config{AllowUnsupportedPG: tt.allowUnsupported},
 				pgBinaryVersion: func() (int, int, error) {
 					return tt.major, 0, nil
 				},

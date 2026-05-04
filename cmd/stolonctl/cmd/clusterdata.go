@@ -1,4 +1,5 @@
 // Copyright 2017 Sorint.lab
+// Copyright 2026 WoozyMasta
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package cmd implements stolonctl commands.
 package cmd
 
 import (
@@ -23,146 +23,114 @@ import (
 	"io"
 	"os"
 
-	cmdcommon "github.com/sorintlab/stolon/cmd"
-	"github.com/sorintlab/stolon/internal/cluster"
+	"github.com/sorintlab/stolon/internal/configfile"
 	"github.com/sorintlab/stolon/internal/store"
-
-	"github.com/spf13/cobra"
 )
 
-var cmdClusterData = &cobra.Command{
-	Use:   "clusterdata",
-	Short: "Manage current cluster data",
+// ClusterDataCommand groups read/write subcommands for the cluster data
+// stored in the backend.
+type ClusterDataCommand struct {
+	Write ClusterDataWriteCommand `command:"write" description:"Write cluster data"`
+	Read  ClusterDataReadCommand  `command:"read" description:"Retrieve the current cluster data"`
 }
 
-type clusterdataReadOptions struct {
-	pretty bool
+// ClusterDataReadCommand prints the current cluster data as JSON.
+type ClusterDataReadCommand struct {
+	Pretty bool `long:"pretty" description:"pretty print"`
 }
 
-var readClusterdataOpts clusterdataReadOptions
-
-type clusterdataWriteOptions struct {
-	file     string
-	forceYes bool
+// Execute runs `stolonctl clusterdata read`.
+func (c *ClusterDataReadCommand) Execute(_ []string) error {
+	return runStolonCtl(func() error { return c.run() })
 }
 
-var writeClusterdataOpts clusterdataWriteOptions
-
-var cmdReadClusterData = &cobra.Command{
-	Use:   "read",
-	Run:   readClusterdata,
-	Short: "Retrieve the current cluster data",
-}
-
-var cmdWriteClusterData = &cobra.Command{
-	Use:   "write",
-	Run:   runWriteClusterdata,
-	Short: "Write cluster data",
-}
-
-func init() {
-	cmdReadClusterData.PersistentFlags().BoolVar(&readClusterdataOpts.pretty, "pretty", false, "pretty print")
-	cmdClusterData.AddCommand(cmdReadClusterData)
-
-	cmdWriteClusterData.PersistentFlags().StringVarP(&writeClusterdataOpts.file, "file", "f", "", "file containing the new cluster data")
-	cmdWriteClusterData.PersistentFlags().BoolVarP(&writeClusterdataOpts.forceYes, "yes", "y", false, "don't ask for confirmation")
-	cmdClusterData.AddCommand(cmdWriteClusterData)
-
-	CmdStolonCtl.AddCommand(cmdClusterData)
-}
-
-func readClusterdata(_ *cobra.Command, _ []string) {
-	e, err := cmdcommon.NewStore(&cfg.CommonConfig)
+func (c *ClusterDataReadCommand) run() error {
+	e, err := newStore()
 	if err != nil {
-		die("%v", err)
+		return err
 	}
-
 	cd, _, err := getClusterData(e)
 	if err != nil {
-		die("%v", err)
+		return err
 	}
 	if cd.Cluster == nil {
-		die("no cluster clusterdata available")
+		return errors.New("no cluster clusterdata available")
 	}
-	var clusterdataj []byte
-	if readClusterdataOpts.pretty {
-		clusterdataj, err = json.MarshalIndent(cd, "", "\t")
-		if err != nil {
-			die("failed to marshall clusterdata: %v", err)
-		}
+	var data []byte
+	if c.Pretty {
+		data, err = json.MarshalIndent(cd, "", "\t")
 	} else {
-		clusterdataj, err = json.Marshal(cd)
-		if err != nil {
-			die("failed to marshall clusterdata: %v", err)
-		}
+		data, err = json.Marshal(cd)
 	}
-	stdout("%s", clusterdataj)
-}
-
-func isSafeToWriteClusterData(store store.Store) error {
-	if cd, _, err := store.GetClusterData(context.TODO()); err != nil {
-		return err
-	} else if cd != nil {
-		if !writeClusterdataOpts.forceYes {
-			return errors.New("WARNING: cluster data already available use --yes to override")
-		}
-		stdout("WARNING: The current cluster data will be removed")
+	if err != nil {
+		return fmt.Errorf("failed to marshal clusterdata: %v", err)
 	}
+	stdout("%s", data)
 	return nil
 }
 
-func clusterData(data []byte) (*cluster.ClusterData, error) {
-	cd := cluster.ClusterData{}
-	err := json.Unmarshal(data, &cd)
-	return &cd, err
+// ClusterDataWriteCommand uploads a cluster data document to the store.
+type ClusterDataWriteCommand struct {
+	File     string `short:"f" long:"file" description:"file containing the new cluster data"`
+	ForceYes bool   `short:"y" long:"yes" description:"don't ask for confirmation"`
 }
 
-func writeClusterdata(reader io.Reader, s store.Store) error {
+// Execute runs `stolonctl clusterdata write`.
+func (c *ClusterDataWriteCommand) Execute(_ []string) error {
+	return runStolonCtl(func() error { return c.run() })
+}
+
+func (c *ClusterDataWriteCommand) run() error {
+	var reader io.Reader
+	if c.File == "" || c.File == "-" {
+		reader = os.Stdin
+	} else {
+		f, err := os.Open(c.File)
+		if err != nil {
+			return fmt.Errorf("cannot read file: %v", err)
+		}
+		defer func() {
+			_ = f.Close()
+		}()
+		reader = f
+	}
+
+	s, err := newStore()
+	if err != nil {
+		return fmt.Errorf("failed to create new store %v", err)
+	}
+	return c.writeFrom(reader, s)
+}
+
+func (c *ClusterDataWriteCommand) writeFrom(reader io.Reader, s store.Store) error {
 	data, err := io.ReadAll(reader)
 	if err != nil {
 		return fmt.Errorf("error while reading data: %v", err)
 	}
-
-	cd, err := clusterData(data)
-
+	cd, err := configfile.ClusterData(data)
 	if err != nil {
 		return fmt.Errorf("invalid cluster data: %v", err)
 	}
-
-	if err = isSafeToWriteClusterData(s); err != nil {
+	if err := c.isSafeToWrite(s); err != nil {
 		return err
 	}
-
-	err = s.PutClusterData(context.TODO(), cd)
-
-	if err != nil {
+	if err := s.PutClusterData(context.TODO(), cd); err != nil {
 		return fmt.Errorf("failed to write cluster data into new store %v", err)
 	}
 	stdout("successfully wrote cluster data into the new store")
 	return nil
 }
 
-func runWriteClusterdata(_ *cobra.Command, _ []string) {
-	var reader io.Reader
-	if writeClusterdataOpts.file == "" || writeClusterdataOpts.file == "-" {
-		reader = os.Stdin
-	} else {
-		file, err := os.Open(writeClusterdataOpts.file)
-		if err != nil {
-			die("cannot read file: %v", err)
-		}
-		defer func() {
-			if err := file.Close(); err != nil {
-				die("close cluster data file: %v", err)
-			}
-		}()
-		reader = file
-	}
-	s, err := cmdcommon.NewStore(&cfg.CommonConfig)
+func (c *ClusterDataWriteCommand) isSafeToWrite(s store.Store) error {
+	cd, _, err := s.GetClusterData(context.TODO())
 	if err != nil {
-		die("failed to create new store %v", err)
+		return err
 	}
-	if err := writeClusterdata(reader, s); err != nil {
-		die("%v", err)
+	if cd != nil {
+		if !c.ForceYes {
+			return errors.New("WARNING: cluster data already available use --yes to override")
+		}
+		stdout("WARNING: The current cluster data will be removed")
 	}
+	return nil
 }

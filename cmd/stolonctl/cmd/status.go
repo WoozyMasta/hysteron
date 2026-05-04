@@ -1,4 +1,5 @@
 // Copyright 2015 Sorint.lab
+// Copyright 2026 WoozyMasta
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,119 +23,88 @@ import (
 	"sort"
 	"text/tabwriter"
 
-	cmdcommon "github.com/sorintlab/stolon/cmd"
 	"github.com/sorintlab/stolon/internal/cluster"
 	"github.com/sorintlab/stolon/internal/store"
-
-	"github.com/spf13/cobra"
 )
 
-var cmdStatus = &cobra.Command{
-	Use:   "status",
-	Run:   status,
-	Short: "Display the current cluster status",
+// StatusCommand prints the current cluster status.
+type StatusCommand struct {
+	Format string `short:"f" long:"format" choices:"text;json" default:"text" description:"output format"`
 }
 
-// StatusOptions contains stolonctl status options.
-type StatusOptions struct {
-	// Format selects output format ("text" or "json").
-	Format string
-}
-
-var statusOpts StatusOptions
-
-func init() {
-	cmdStatus.PersistentFlags().StringVarP(&statusOpts.Format, "format", "f", "", "output format")
-	CmdStolonCtl.AddCommand(cmdStatus)
+// Execute runs `stolonctl status`.
+func (c *StatusCommand) Execute(_ []string) error {
+	return runStolonCtl(func() error { return c.run() })
 }
 
 // Status is the stolonctl status output model.
 type Status struct {
-	// Cluster is the cluster-level summary.
-	Cluster ClusterStatus `json:"cluster"`
-	// Sentinels is the list of active sentinels.
+	Cluster   ClusterStatus    `json:"cluster"`
 	Sentinels []SentinelStatus `json:"sentinels"`
-	// Proxies is the list of active proxies.
-	Proxies []ProxyStatus `json:"proxies"`
-	// Keepers is the list of keepers with PostgreSQL status details.
-	Keepers []KeeperStatus `json:"keepers"`
+	Proxies   []ProxyStatus    `json:"proxies"`
+	Keepers   []KeeperStatus   `json:"keepers"`
 }
 
 // SentinelStatus is the status output for one sentinel.
 type SentinelStatus struct {
-	// UID is the sentinel unique identifier.
-	UID string `json:"uid"`
-	// Leader reports whether this sentinel currently holds leadership.
-	Leader bool `json:"leader"`
+	UID    string `json:"uid"`
+	Leader bool   `json:"leader"`
 }
 
 // ProxyStatus is the status output for one proxy.
 type ProxyStatus struct {
-	// UID is the proxy unique identifier.
-	UID string `json:"uid"`
-	// Generation is the proxy generation currently reported by the proxy.
-	Generation int64 `json:"generation"`
+	UID        string `json:"uid"`
+	Generation int64  `json:"generation"`
 }
 
 // KeeperStatus is the status output for one keeper.
 type KeeperStatus struct {
-	// UID is the keeper unique identifier.
-	UID string `json:"uid"`
-	// ListenAddress is the PostgreSQL listen address advertised by the assigned DB.
-	ListenAddress string `json:"listen_address"`
-	// Healthy reports keeper health.
-	Healthy bool `json:"healthy"`
-	// PgHealthy reports PostgreSQL instance health.
-	PgHealthy bool `json:"pg_healthy"`
-	// PgWantedGeneration is the desired DB generation.
-	PgWantedGeneration int64 `json:"pg_wanted_generation"`
-	// PgCurrentGeneration is the current DB generation reported by PostgreSQL.
-	PgCurrentGeneration int64 `json:"pg_current_generation"`
+	UID                 string `json:"uid"`
+	ListenAddress       string `json:"listen_address"`
+	Healthy             bool   `json:"healthy"`
+	PgHealthy           bool   `json:"pg_healthy"`
+	PgWantedGeneration  int64  `json:"pg_wanted_generation"`
+	PgCurrentGeneration int64  `json:"pg_current_generation"`
 }
 
 // ClusterStatus is the status output for the cluster summary.
 type ClusterStatus struct {
-	// MasterKeeperUID is the keeper UID owning the master DB.
 	MasterKeeperUID string `json:"master_keeper_uid"`
-	// MasterDBUID is the master DB UID.
-	MasterDBUID string `json:"master_db_uid"`
-	// Available reports whether cluster data is available.
-	Available bool `json:"available"`
+	MasterDBUID     string `json:"master_db_uid"`
+	Available       bool   `json:"available"`
 }
 
-func status(_ *cobra.Command, _ []string) {
+func (c *StatusCommand) run() error {
 	status, generateErr := generateStatus()
-	switch statusOpts.Format {
+	switch c.Format {
 	case "json":
-		renderJSON(status, generateErr)
-	case "text":
-		renderText(status, generateErr)
-	case "":
-		renderText(status, generateErr)
+		return renderJSON(status, generateErr)
+	case "text", "":
+		return renderText(status, generateErr)
 	default:
-		die("unrecognised output format %s", statusOpts.Format)
+		return fmt.Errorf("unrecognised output format %s", c.Format)
 	}
 }
 
-func renderJSON(status Status, generateErr error) {
+func renderJSON(status Status, generateErr error) error {
 	if generateErr != nil {
-		marshalJSON(generateErr)
-	} else {
-		marshalJSON(status)
+		return marshalJSON(generateErr)
 	}
+	return marshalJSON(status)
 }
 
-func marshalJSON(value any) {
+func marshalJSON(value any) error {
 	output, err := json.MarshalIndent(value, "", "\t")
 	if err != nil {
-		die("failed to marshal error: %v", err)
+		return fmt.Errorf("failed to marshal: %v", err)
 	}
 	stdout("%s", output)
+	return nil
 }
 
-func renderText(status Status, generateErr error) {
+func renderText(status Status, generateErr error) error {
 	if generateErr != nil {
-		die("%v", generateErr)
+		return generateErr
 	}
 
 	tabOut := new(tabwriter.Writer)
@@ -149,7 +119,7 @@ func renderText(status Status, generateErr error) {
 		for _, s := range status.Sentinels {
 			writeOutput(tabOut, "%s\t%t\n", s.UID, s.Leader)
 			if err := tabOut.Flush(); err != nil {
-				die("flush status output: %v", err)
+				return fmt.Errorf("flush status output: %v", err)
 			}
 		}
 	}
@@ -164,7 +134,7 @@ func renderText(status Status, generateErr error) {
 		for _, p := range status.Proxies {
 			writeOutput(tabOut, "%s\n", p.UID)
 			if err := tabOut.Flush(); err != nil {
-				die("flush status output: %v", err)
+				return fmt.Errorf("flush status output: %v", err)
 			}
 		}
 	}
@@ -180,7 +150,7 @@ func renderText(status Status, generateErr error) {
 		for _, k := range status.Keepers {
 			writeOutput(tabOut, "%s\t%t\t%s\t%t\t%d\t%d\t\n", k.UID, k.Healthy, k.ListenAddress, k.PgHealthy, k.PgWantedGeneration, k.PgCurrentGeneration)
 			if err := tabOut.Flush(); err != nil {
-				die("flush status output: %v", err)
+				return fmt.Errorf("flush status output: %v", err)
 			}
 		}
 	}
@@ -191,21 +161,17 @@ func renderText(status Status, generateErr error) {
 		stdout("")
 		stdout("=== Cluster Info ===")
 		stdout("")
-		if status.Cluster.MasterKeeperUID != "" {
-			stdout("Master Keeper: %s", status.Cluster.MasterKeeperUID)
-		} else {
-			stdout("Master Keeper: (none)")
-		}
+		stdout("Master Keeper: %s", status.Cluster.MasterKeeperUID)
 	}
 
 	// This tree data isn't currently available in the Status struct
-	e, err := cmdcommon.NewStore(&cfg.CommonConfig)
+	e, err := newStore()
 	if err != nil {
-		die("%v", err)
+		return err
 	}
 	cd, _, err := getClusterData(e)
 	if err != nil {
-		die("%v", err)
+		return err
 	}
 	if status.Cluster.MasterDBUID != "" {
 		stdout("")
@@ -214,12 +180,10 @@ func renderText(status Status, generateErr error) {
 		printTree(status.Cluster.MasterDBUID, cd, 0, "", true)
 	}
 	stdout("")
+	return nil
 }
 
 func printTree(dbuid string, cd *cluster.ClusterData, level int, prefix string, tail bool) {
-	// skip not existing db: specified as a follower but not available in the
-	// cluster spec (this should happen only when doing a stolonctl
-	// removekeeper)
 	if _, ok := cd.DBs[dbuid]; !ok {
 		return
 	}
@@ -238,14 +202,14 @@ func printTree(dbuid string, cd *cluster.ClusterData, level int, prefix string, 
 	stdout("%s", out)
 	db := cd.DBs[dbuid]
 	followers := db.Spec.Followers
-	c := len(followers)
+	cnt := len(followers)
 	for i, f := range followers {
 		emptyspace := ""
 		if level > 0 {
 			emptyspace = "  "
 		}
 		linespace := "│ "
-		if i < c-1 {
+		if i < cnt-1 {
 			if tail {
 				printTree(f, cd, level+1, prefix+emptyspace, false)
 			} else {
@@ -263,15 +227,13 @@ func printTree(dbuid string, cd *cluster.ClusterData, level int, prefix string, 
 
 func generateStatus() (Status, error) {
 	status := Status{}
-	tabOut := new(tabwriter.Writer)
-	tabOut.Init(os.Stdout, 0, 8, 1, '\t', 0)
 
-	e, err := cmdcommon.NewStore(&cfg.CommonConfig)
+	e, err := newStore()
 	if err != nil {
 		return status, err
 	}
 
-	election, err := cmdcommon.NewElection(&cfg.CommonConfig, "")
+	election, err := newElection("")
 	if err != nil {
 		return status, err
 	}
@@ -313,8 +275,7 @@ func generateStatus() (Status, error) {
 	}
 
 	keepers := make([]KeeperStatus, 0)
-	kssKeys := cd.Keepers.SortedKeys()
-	for _, kuid := range kssKeys {
+	for _, kuid := range cd.Keepers.SortedKeys() {
 		k := cd.Keepers[kuid]
 		db := cd.FindDB(k)
 		dbListenAddress := "(no db assigned)"
@@ -333,31 +294,29 @@ func generateStatus() (Status, error) {
 				dbListenAddress = fmt.Sprintf("%s:%s", db.Status.ListenAddress, db.Status.Port)
 			}
 		}
-		keeper := KeeperStatus{
+		keepers = append(keepers, KeeperStatus{
 			UID:                 kuid,
 			ListenAddress:       dbListenAddress,
 			Healthy:             k.Status.Healthy,
 			PgHealthy:           pgHealthy,
 			PgWantedGeneration:  pgWantedGeneration,
 			PgCurrentGeneration: pgCurrentGeneration,
-		}
-		keepers = append(keepers, keeper)
+		})
 	}
 	status.Keepers = keepers
 
-	cluster := ClusterStatus{}
+	clusterStatus := ClusterStatus{}
 	if cd.Cluster == nil || cd.DBs == nil {
-		cluster.Available = false
+		clusterStatus.Available = false
 	} else {
 		master := cd.Cluster.Status.Master
-		cluster.Available = true
-
+		clusterStatus.Available = true
 		if master != "" {
-			cluster.MasterDBUID = cd.DBs[master].UID
-			cluster.MasterKeeperUID = cd.Keepers[cd.DBs[master].Spec.KeeperUID].UID
+			clusterStatus.MasterDBUID = cd.DBs[master].UID
+			clusterStatus.MasterKeeperUID = cd.Keepers[cd.DBs[master].Spec.KeeperUID].UID
 		}
 	}
-	status.Cluster = cluster
+	status.Cluster = clusterStatus
 
 	return status, nil
 }

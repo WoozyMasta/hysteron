@@ -1,4 +1,5 @@
 // Copyright 2016 Sorint.lab
+// Copyright 2026 WoozyMasta
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,85 +17,71 @@ package cmd
 
 import (
 	"context"
-	"os"
+	"errors"
+	"fmt"
 
-	cmdcommon "github.com/sorintlab/stolon/cmd"
 	"github.com/sorintlab/stolon/internal/cluster"
 	"github.com/sorintlab/stolon/internal/store"
-
-	"github.com/spf13/cobra"
 )
 
-var cmdPromote = &cobra.Command{
-	Use:   "promote",
-	Run:   promote,
-	Short: "Promotes a standby cluster to a primary cluster",
+// PromoteCommand promotes a standby cluster to a primary cluster.
+type PromoteCommand struct {
+	ForceYes bool `short:"y" long:"yes" description:"don't ask for confirmation"`
 }
 
-func init() {
-	cmdPromote.PersistentFlags().BoolVarP(&initOpts.forceYes, "yes", "y", false, "don't ask for confirmation")
-
-	CmdStolonCtl.AddCommand(cmdPromote)
+// Execute runs `stolonctl promote`.
+func (c *PromoteCommand) Execute(args []string) error {
+	return runStolonCtl(func() error { return c.run(args) })
 }
 
-func promote(_ *cobra.Command, args []string) {
+func (c *PromoteCommand) run(args []string) error {
 	if len(args) > 0 {
-		die("too many arguments")
+		return errors.New("too many arguments")
 	}
 
-	e, err := cmdcommon.NewStore(&cfg.CommonConfig)
+	e, err := newStore()
 	if err != nil {
-		die("%v", err)
+		return err
 	}
 
-	accepted := true
-	if !initOpts.forceYes {
-		accepted, err = askConfirmation("Are you sure you want to continue? [yes/no] ")
+	if !c.ForceYes {
+		accepted, err := askConfirmation("Are you sure you want to continue? [yes/no] ")
 		if err != nil {
-			die("%v", err)
+			return err
+		}
+		if !accepted {
+			stdout("exiting")
+			return nil
 		}
 	}
-	if !accepted {
-		stdout("exiting")
-		os.Exit(0)
-	}
 
-	retry := 0
-	for retry < maxRetries {
+	for range maxRetries {
 		cd, pair, err := getClusterData(e)
 		if err != nil {
-			die("%v", err)
+			return err
 		}
-		if cd.Cluster == nil {
-			die("no cluster spec available")
-		}
-		if cd.Cluster.Spec == nil {
-			die("no cluster spec available")
+		if cd.Cluster == nil || cd.Cluster.Spec == nil {
+			return errors.New("no cluster spec available")
 		}
 
 		ds := cd.Cluster.DefSpec()
 		if *ds.Role == cluster.ClusterRoleMaster {
 			stderr("cluster spec role already set to master")
-			os.Exit(0)
+			return nil
 		}
 		cd.Cluster.Spec.Role = cluster.ClusterRoleP(cluster.ClusterRoleMaster)
 
 		if err = cd.Cluster.UpdateSpec(cd.Cluster.Spec); err != nil {
-			die("Cannot update cluster spec: %v", err)
+			return fmt.Errorf("cannot update cluster spec: %v", err)
 		}
 
-		// retry if cd has been modified between reading and writing
-		_, err = e.AtomicPutClusterData(context.TODO(), cd, pair)
-		if err != nil {
+		if _, err := e.AtomicPutClusterData(context.TODO(), cd, pair); err != nil {
 			if err == store.ErrKeyModified {
-				retry++
 				continue
 			}
-			die("cannot update cluster data: %v", err)
+			return fmt.Errorf("cannot update cluster data: %v", err)
 		}
-		break
+		return nil
 	}
-	if retry == maxRetries {
-		die("failed to update cluster data after %d retries", maxRetries)
-	}
+	return fmt.Errorf("failed to update cluster data after %d retries", maxRetries)
 }

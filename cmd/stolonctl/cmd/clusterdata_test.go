@@ -1,4 +1,5 @@
 // Copyright 2018 Sorint.lab
+// Copyright 2026 WoozyMasta
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,135 +26,114 @@ import (
 )
 
 func TestWriteClusterdata(t *testing.T) {
-	writeClusterdataOpts.file = ""
-	writeClusterdataOpts.forceYes = false
-
 	t.Run("should handle error returned by stdin", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
+		c := &ClusterDataWriteCommand{}
 		store := mock_store.NewMockStore(ctrl)
 		reader := strings.Reader{}
-		err := writeClusterdata(&reader, store)
+		err := c.writeFrom(&reader, store)
 
 		if err == nil {
 			t.Error("expected to have an error")
 		}
 
-		expectedErrorMessage := "invalid cluster data: unexpected end of JSON input"
-		if err.Error() != expectedErrorMessage {
-			t.Errorf("expected %s error message but instead got %s", expectedErrorMessage, err.Error())
+		expected := "invalid cluster data: unexpected end of JSON input"
+		if err.Error() != expected {
+			t.Errorf("expected %s, got %s", expected, err.Error())
 		}
 	})
 
-	t.Run("should handle json unmarshal error", func(t *testing.T) {
-		fileName := "cluster_data.json"
-		writeClusterdataOpts.file = fileName
+	t.Run("should handle parse error", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
+		c := &ClusterDataWriteCommand{File: "cluster_data.json"}
 		store := mock_store.NewMockStore(ctrl)
-		reader := strings.NewReader("{a}")
-		err := writeClusterdata(reader, store)
+		reader := strings.NewReader("[")
+		err := c.writeFrom(reader, store)
 
 		if err == nil {
 			t.Error("expected to have an error")
 		}
 
-		expectedErrorMessage := "invalid cluster data: invalid character 'a' looking for beginning of object key string"
-		if err.Error() != expectedErrorMessage {
-			t.Errorf("expected %s error message but instead got %s", expectedErrorMessage, err.Error())
+		expected := "invalid cluster data: yaml: line 1: did not find expected node content"
+		if err.Error() != expected {
+			t.Errorf("expected %s, got %s", expected, err.Error())
 		}
 	})
 
-	t.Run("should throw an error if the new store is not valid", func(t *testing.T) {
-		fileName := "-"
-		writeClusterdataOpts.file = fileName
+	t.Run("should fail when GetClusterData errors", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
+		c := &ClusterDataWriteCommand{File: "-"}
 		reader := strings.NewReader("{}")
 		store := mock_store.NewMockStore(ctrl)
-
 		store.EXPECT().GetClusterData(gomock.Any()).Return(nil, nil, fmt.Errorf("Error in getting cluster data"))
 
-		err := writeClusterdata(reader, store)
-
+		err := c.writeFrom(reader, store)
 		if err == nil {
 			t.Error("expected to have an error")
 		}
-
-		expectedErrorMessage := "Error in getting cluster data"
-		if err.Error() != expectedErrorMessage {
-			t.Errorf("expected %s error message but instead got %s", expectedErrorMessage, err.Error())
+		if err.Error() != "Error in getting cluster data" {
+			t.Errorf("got %s", err.Error())
 		}
 	})
 
-	t.Run("should throw an error if the there is an error while uploading the cluster data", func(t *testing.T) {
-		fileName := "-"
-		writeClusterdataOpts.file = fileName
+	t.Run("should require --yes when cluster data already available", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
+		c := &ClusterDataWriteCommand{File: "-"}
 		reader := strings.NewReader("{}")
 		store := mock_store.NewMockStore(ctrl)
 		store.EXPECT().GetClusterData(gomock.Any()).Return(&cluster.ClusterData{}, nil, nil)
 
-		err := writeClusterdata(reader, store)
-
+		err := c.writeFrom(reader, store)
 		if err == nil {
 			t.Error("expected to have an error")
 		}
-
-		expectedErrorMessage := "WARNING: cluster data already available use --yes to override"
-		if err.Error() != expectedErrorMessage {
-			t.Errorf("expected %s error message but instead got %s", expectedErrorMessage, err.Error())
+		if err.Error() != "WARNING: cluster data already available use --yes to override" {
+			t.Errorf("got %s", err.Error())
 		}
 	})
 
-	t.Run("should throw an error if the there is an error while uploading the cluster data", func(t *testing.T) {
-		fileName := "-"
-		writeClusterdataOpts.file = fileName
-		writeClusterdataOpts.forceYes = true
+	t.Run("should propagate Put errors", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
+		c := &ClusterDataWriteCommand{File: "-", ForceYes: true}
 		reader := strings.NewReader("{}")
 		store := mock_store.NewMockStore(ctrl)
 		cd := &cluster.ClusterData{}
 		store.EXPECT().GetClusterData(gomock.Any()).Return(cd, nil, nil)
 		store.EXPECT().PutClusterData(gomock.Any(), cd).Return(fmt.Errorf("error while uploading the cluster data"))
 
-		err := writeClusterdata(reader, store)
-
+		err := c.writeFrom(reader, store)
 		if err == nil {
 			t.Error("expected to have an error")
 		}
-
-		expectedErrorMessage := "failed to write cluster data into new store error while uploading the cluster data"
-		if err.Error() != expectedErrorMessage {
-			t.Errorf("expected %s error message but instead got %s", expectedErrorMessage, err.Error())
+		if err.Error() != "failed to write cluster data into new store error while uploading the cluster data" {
+			t.Errorf("got %s", err.Error())
 		}
 	})
 
 	t.Run("should successfully upload the cluster data", func(t *testing.T) {
-		fileName := "-"
-		writeClusterdataOpts.file = fileName
-		writeClusterdataOpts.forceYes = true
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
+		c := &ClusterDataWriteCommand{File: "-", ForceYes: true}
 		reader := strings.NewReader("{}")
 		store := mock_store.NewMockStore(ctrl)
 		cd := &cluster.ClusterData{}
 		store.EXPECT().GetClusterData(gomock.Any()).Return(cd, nil, nil)
 		store.EXPECT().PutClusterData(gomock.Any(), cd).Return(nil)
 
-		err := writeClusterdata(reader, store)
-
+		err := c.writeFrom(reader, store)
 		if err != nil {
-			t.Error("expected not to have an error")
+			t.Errorf("expected no error, got %v", err)
 		}
 	})
-
 }

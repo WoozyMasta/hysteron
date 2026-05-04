@@ -36,16 +36,18 @@ ifeq ($(RACE),1)
 	EXTRA_BUILD_FLAGS := -race
 endif
 
+MODULE_PATH := $(shell GOWORK=$(GOWORK) $(GO) list -m 2>/dev/null)
 VERSION := $(shell git describe --tags --abbrev=0 2>/dev/null || echo v0.0.0)
 COMMIT  := $(shell git rev-parse HEAD 2>/dev/null || echo unknown)
 DATE    := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 URL     ?= https://$(MODULE_PATH)
 
+LDFLAGS_PKG := $(MODULE_PATH)/internal/buildflags
 LDFLAGS_X := \
-	-X 'main.Version=$(VERSION)' \
-	-X 'main.Commit=$(COMMIT)' \
-	-X 'main._buildTime=$(DATE)' \
-	-X 'main.URL=$(URL)'
+	-X '$(LDFLAGS_PKG).Version=$(VERSION)' \
+	-X '$(LDFLAGS_PKG).Commit=$(COMMIT)' \
+	-X '$(LDFLAGS_PKG).Date=$(DATE)' \
+	-X '$(LDFLAGS_PKG).URL=$(URL)'
 
 .PHONY: all build release clean check ci verify tidy tidy-check download fmt \
 	fmt-check vet lint lint-fix align align-fix test test-race test-short bench \

@@ -1,4 +1,5 @@
 // Copyright 2017 Sorint.lab
+// Copyright 2026 WoozyMasta
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package cmd contains shared command configuration and store helpers.
+// Package cmd contains shared command-line and store helpers reused by
+// every Stolon binary (keeper, sentinel, proxy, stolonctl).
 package cmd
 
 import (
@@ -23,227 +25,223 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/sorintlab/stolon/internal/cluster"
+	"github.com/sorintlab/stolon/internal/buildflags"
 	"github.com/sorintlab/stolon/internal/common"
 	"github.com/sorintlab/stolon/internal/store"
 	"github.com/sorintlab/stolon/internal/util"
+	"github.com/woozymasta/flags"
 
 	"github.com/mattn/go-isatty"
-	"github.com/spf13/cobra"
 	"k8s.io/client-go/kubernetes"
 
 	// Register optional Kubernetes auth plugins.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 )
 
-// CommonConfig contains shared command-line and store configuration.
+// CommonConfig groups CLI/env options shared by every Stolon binary.
+//
+// Related options are organized into nested groups so the parser can
+// derive long-name and env prefixes (`store`/`STORE`, `log`/`LOG`,
+// `kube`/`KUBE`) from a single declaration. Defaults are expressed via
+// `default:` tags; we never mutate the struct before parse.
 type CommonConfig struct {
-	// StoreBackend selects the store backend type.
-	StoreBackend string
-	// StoreEndpoints is a comma-separated list of store endpoints.
-	StoreEndpoints string
-	// StorePrefix is the root key prefix used by Stolon in the store.
-	StorePrefix string
-	// StoreCertFile is the client TLS certificate file path.
-	StoreCertFile string
-	// StoreKeyFile is the client TLS private key file path.
-	StoreKeyFile string
-	// StoreCAFile is the CA bundle used to verify store server certificates.
-	StoreCAFile string
-	// ClusterName is the target cluster name.
-	ClusterName string
-	// MetricsListenAddress is the local bind address for Prometheus metrics.
-	MetricsListenAddress string
-	// LogLevel selects command log verbosity.
-	LogLevel string
-	// KubeResourceKind selects Kubernetes resource kind for cluster data.
-	KubeResourceKind string
-	// KubeConfig overrides kubeconfig file path.
-	KubeConfig string
-	// KubeContext selects kubeconfig context name.
-	KubeContext string
-	// KubeNamespace selects Kubernetes namespace.
-	KubeNamespace string
-	// StoreTimeout is request timeout for store and election operations.
-	StoreTimeout time.Duration
-	// IsStolonCtl reports whether this config is used by stolonctl.
-	IsStolonCtl bool
-	// StoreSkipTLSVerify disables TLS verification for store connections.
-	StoreSkipTLSVerify bool
-	// LogColor enables colored log output.
-	LogColor bool
-	// Debug preserves legacy debug toggle behavior.
-	Debug bool
+	Kube                 KubeOptions  `group:"Kubernetes" namespace:"kube" env-namespace:"KUBE"`
+	ClusterName          string       `short:"c" long:"cluster-name" env:"CLUSTER_NAME" description:"cluster name"`
+	MetricsListenAddress string       `long:"metrics-listen-address" env:"METRICS_LISTEN_ADDRESS" description:"metrics listen address i.e \"0.0.0.0:8080\" (disabled by default)"`
+	KubeConfig           string       `long:"kubeconfig" env:"KUBECONFIG" description:"path to kubeconfig file. Overrides $KUBECONFIG"`
+	Log                  LogOptions   `group:"Logging" namespace:"log" env-namespace:"LOG"`
+	Store                StoreOptions `group:"Store" namespace:"store" env-namespace:"STORE"`
+	Debug                bool         `long:"debug" env:"DEBUG" hidden:"true" description:"deprecated: forces debug logging"`
 }
 
-// AddCommonFlags registers flags shared by Stolon commands.
-func AddCommonFlags(cmd *cobra.Command, cfg *CommonConfig) {
-	cmd.PersistentFlags().StringVar(&cfg.ClusterName, "cluster-name", "", "cluster name")
-	cmd.PersistentFlags().StringVar(&cfg.StoreBackend, "store-backend", "", "store backend type (etcdv3 or kubernetes)")
-	cmd.PersistentFlags().StringVar(&cfg.StoreEndpoints, "store-endpoints", "", "a comma-delimited list of store endpoints (use https scheme for tls communication) (defaults: http://127.0.0.1:2379 for etcdv3)")
-	cmd.PersistentFlags().DurationVar(&cfg.StoreTimeout, "store-timeout", cluster.DefaultStoreTimeout, "store request timeout")
-	cmd.PersistentFlags().StringVar(&cfg.StorePrefix, "store-prefix", common.StorePrefix, "the store base prefix")
-	cmd.PersistentFlags().StringVar(&cfg.StoreCertFile, "store-cert-file", "", "certificate file for client identification to the store")
-	cmd.PersistentFlags().StringVar(&cfg.StoreKeyFile, "store-key", "", "private key file for client identification to the store")
-	cmd.PersistentFlags().BoolVar(&cfg.StoreSkipTLSVerify, "store-skip-tls-verify", false, "skip store certificate verification (insecure!!!)")
-	cmd.PersistentFlags().StringVar(&cfg.StoreCAFile, "store-ca-file", "", "verify certificates of HTTPS-enabled store servers using this CA bundle")
-	cmd.PersistentFlags().StringVar(&cfg.MetricsListenAddress, "metrics-listen-address", "", "metrics listen address i.e \"0.0.0.0:8080\" (disabled by default)")
-	cmd.PersistentFlags().StringVar(&cfg.KubeResourceKind, "kube-resource-kind", "", `the k8s resource kind to be used to store stolon clusterdata (only "configmap" is currently supported; sentinel leader election uses leases)`)
-
-	if !cfg.IsStolonCtl {
-		cmd.PersistentFlags().BoolVar(&cfg.LogColor, "log-color", false, "enable color in log output (default if attached to a terminal)")
-		cmd.PersistentFlags().StringVar(&cfg.LogLevel, "log-level", "info", "debug, info (default), warn or error")
-	}
-
-	if cfg.IsStolonCtl {
-		cmd.PersistentFlags().StringVar(&cfg.LogLevel, "log-level", "info", "debug, info (default), warn or error")
-		cmd.PersistentFlags().StringVar(&cfg.KubeConfig, "kubeconfig", "", "path to kubeconfig file. Overrides $KUBECONFIG")
-		cmd.PersistentFlags().StringVar(&cfg.KubeContext, "kube-context", "", "name of the kubeconfig context to use")
-		cmd.PersistentFlags().StringVar(&cfg.KubeNamespace, "kube-namespace", "", "name of the kubernetes namespace to use")
-	}
+// StoreOptions configures the cluster data store backend (etcd v3 or
+// kubernetes). Long names and env keys are prefixed with `store-`/`STORE_`
+// because the enclosing CommonConfig declares the group namespaces.
+type StoreOptions struct {
+	Backend       string        `long:"backend" env:"BACKEND" choices:"etcdv3;kubernetes" description:"store backend type"`
+	Endpoints     string        `long:"endpoints" env:"ENDPOINTS" description:"a comma-delimited list of store endpoints (use https scheme for tls communication) (defaults: http://127.0.0.1:2379 for etcdv3)"`
+	Prefix        string        `long:"prefix" env:"PREFIX" default:"stolon/cluster" description:"the store base prefix"`
+	CertFile      string        `long:"cert-file" env:"CERT_FILE" description:"certificate file for client identification to the store"`
+	KeyFile       string        `long:"key" env:"KEY" description:"private key file for client identification to the store"`
+	CAFile        string        `long:"ca-file" env:"CA_FILE" description:"verify certificates of HTTPS-enabled store servers using this CA bundle"`
+	Timeout       time.Duration `long:"timeout" env:"TIMEOUT" default:"5s" description:"store request timeout"`
+	SkipTLSVerify bool          `long:"skip-tls-verify" env:"SKIP_TLS_VERIFY" description:"skip store certificate verification (insecure!!!)"`
 }
 
-var (
-	// clusterIdentifier provides a Prometheus metric that should uniquely identify the
-	// cluster that any stolon component is associated with. Users can then join between
-	// various metric series for the same cluster without making assumptions about service
-	// discovery labels.
-	clusterIdentifier = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Name: "stolon_cluster_identifier",
-			Help: "Set to 1, is labelled with the cluster_name and component",
-		},
-		[]string{"cluster_name", "component"},
+// LogOptions controls log formatting. The `log`/`LOG` namespace yields
+// public flags `--log-level`, `--log-color` and env vars `LOG_LEVEL`,
+// `LOG_COLOR`.
+type LogOptions struct {
+	Level string `long:"level" env:"LEVEL" choices:"debug;info;warn;error" default:"info" description:"log verbosity"`
+	Color bool   `long:"color" env:"COLOR" description:"enable color in log output (default if attached to a terminal)"`
+}
+
+// KubeOptions configures the kubernetes-backed store. KubeConfig is
+// kept on CommonConfig (outside the group) to preserve the standard
+// `--kubeconfig` flag and the conventional `KUBECONFIG` env variable.
+type KubeOptions struct {
+	ResourceKind string `long:"resource-kind" env:"RESOURCE_KIND" choice:"configmap" description:"the k8s resource kind to be used to store stolon clusterdata"`
+	Context      string `long:"context" env:"CONTEXT" description:"name of the kubeconfig context to use"`
+	Namespace    string `long:"namespace" env:"NAMESPACE" description:"name of the kubernetes namespace to use"`
+}
+
+// NewParser creates a Stolon command parser with repository-wide
+// defaults (help/version flags, env-prefix, build metadata) and scans
+// the data struct for option/command tags.
+func NewParser(name, envPrefix string, data any, opts flags.Options) *flags.Parser {
+	parser := flags.NewNamedParser(
+		name,
+		flags.Default|
+			flags.HelpCommands|
+			flags.VersionFlag|
+			flags.PassDoubleDash|
+			flags.DetectShellFlagStyle|
+			flags.DetectShellEnvStyle|
+			opts,
 	)
+	parser.SetEnvPrefix(envPrefix)
+	// Use a single dash instead of the default dot so that namespaced
+	// long flags read like a flat hyphenated name (e.g. `--store-backend`
+	// rather than `--store.backend`). EnvNamespaceDelimiter keeps its
+	// default underscore which already matches the Stolon convention.
+	parser.NamespaceDelimiter = "-"
+	parser.SetVersion(buildflags.Version)
+	parser.SetVersionCommit(buildflags.Commit)
+	parser.SetVersionTime(buildflags.BuildTime())
+	parser.SetVersionURL(buildflags.URL)
+	parser.SetVersionFields(flags.VersionFieldsAll)
+	if err := parser.SetMaxLongNameLength(64); err != nil {
+		panic(err)
+	}
+	if data != nil {
+		if _, err := parser.AddGroup("Application Options", "", data); err != nil {
+			panic(err)
+		}
+	}
+	return parser
+}
+
+// ParseErrorExitCode maps flags parser errors to process exit codes.
+// Help/version requests are reported as a successful exit (0).
+func ParseErrorExitCode(err error) int {
+	var flagsErr *flags.Error
+	if errors.As(err, &flagsErr) && (flagsErr.Type == flags.ErrHelp || flagsErr.Type == flags.ErrVersion) {
+		return 0
+	}
+	return 1
+}
+
+// IsLogColorRequested reports whether color logging should be enabled.
+// It honors an explicit user choice on the parsed log-color option and
+// falls back to terminal detection on stderr.
+func IsLogColorRequested(parser *flags.Parser, cfg *CommonConfig) bool {
+	if option := parser.FindOptionByLongName("log-color"); option != nil && option.IsSet() {
+		return cfg.Log.Color
+	}
+	return isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())
+}
+
+var clusterIdentifier = prometheus.NewGaugeVec(
+	prometheus.GaugeOpts{
+		Name: "stolon_cluster_identifier",
+		Help: "Set to 1, is labelled with the cluster_name and component",
+	},
+	[]string{"cluster_name", "component"},
 )
 
 func init() {
 	prometheus.MustRegister(clusterIdentifier)
 }
 
-// CheckCommonConfig validates shared command configuration.
+// CheckCommonConfig validates store backend specific requirements that
+// cannot be expressed in struct tags alone.
 func CheckCommonConfig(cfg *CommonConfig) error {
-	if cfg.ClusterName == "" {
-		return errors.New("cluster name required")
-	}
-	if cfg.StoreBackend == "" {
+	if cfg.Store.Backend == "" {
 		return errors.New("store backend type required")
 	}
-
-	switch cfg.StoreBackend {
-	case "etcdv3":
-	case "kubernetes":
-		if cfg.KubeResourceKind == "" {
-			return errors.New("unspecified kubernetes resource kind")
-		}
-		if cfg.KubeResourceKind != "configmap" {
-			return fmt.Errorf("wrong kubernetes resource kind: %q", cfg.KubeResourceKind)
-		}
-	default:
-		return fmt.Errorf("unknown store backend: %q", cfg.StoreBackend)
+	if cfg.Store.Backend == "kubernetes" && cfg.Kube.ResourceKind == "" {
+		return errors.New("unspecified kubernetes resource kind")
 	}
-
 	return nil
 }
 
-// SetMetrics should be called by any stolon component that outputs application metrics.
-// It sets the clusterIdentifier metric, which is key to joining across all the other
-// metric series.
+// SetMetrics labels the cluster identifier metric for the running component.
 func SetMetrics(cfg *CommonConfig, component string) {
 	clusterIdentifier.WithLabelValues(cfg.ClusterName, component).Set(1)
-}
-
-// IsColorLoggerEnable reports whether color logging should be enabled.
-func IsColorLoggerEnable(cmd *cobra.Command, cfg *CommonConfig) bool {
-	if cmd.PersistentFlags().Changed("log-color") {
-		return cfg.LogColor
-	}
-	return isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())
 }
 
 // NewKVStore creates the configured key-value store backend.
 func NewKVStore(cfg *CommonConfig) (store.KVStore, error) {
 	return store.NewKVStore(store.Config{
-		Backend:       store.Backend(cfg.StoreBackend),
-		Endpoints:     cfg.StoreEndpoints,
-		Timeout:       cfg.StoreTimeout,
-		CertFile:      cfg.StoreCertFile,
-		KeyFile:       cfg.StoreKeyFile,
-		CAFile:        cfg.StoreCAFile,
-		SkipTLSVerify: cfg.StoreSkipTLSVerify,
+		Backend:       store.Backend(cfg.Store.Backend),
+		Endpoints:     cfg.Store.Endpoints,
+		Timeout:       cfg.Store.Timeout,
+		CertFile:      cfg.Store.CertFile,
+		KeyFile:       cfg.Store.KeyFile,
+		CAFile:        cfg.Store.CAFile,
+		SkipTLSVerify: cfg.Store.SkipTLSVerify,
 	})
 }
 
-// NewStore creates the configured cluster-data store.
-func NewStore(cfg *CommonConfig) (store.Store, error) {
-	var s store.Store
-
-	switch cfg.StoreBackend {
+// NewStore creates the configured cluster-data store. The requirePod
+// flag controls whether the kubernetes backend is allowed to skip
+// resolving the local pod identity (useful for stolonctl).
+func NewStore(cfg *CommonConfig, requirePod bool) (store.Store, error) {
+	switch cfg.Store.Backend {
 	case "etcdv3":
-		storePath := filepath.Join(cfg.StorePrefix, cfg.ClusterName)
-
+		storePath := filepath.Join(cfg.Store.Prefix, cfg.ClusterName)
 		kvstore, err := NewKVStore(cfg)
 		if err != nil {
 			return nil, fmt.Errorf("cannot create kv store: %v", err)
 		}
-		s = store.NewKVBackedStore(kvstore, storePath)
+		return store.NewKVBackedStore(kvstore, storePath), nil
 	case "kubernetes":
-		kubecli, podName, namespace, err := getKubeValues(cfg)
+		kubecli, podName, namespace, err := getKubeValues(cfg, requirePod)
 		if err != nil {
 			return nil, err
 		}
-		s, err = store.NewKubeStore(kubecli, podName, namespace, cfg.ClusterName)
+		s, err := store.NewKubeStore(kubecli, podName, namespace, cfg.ClusterName)
 		if err != nil {
 			return nil, fmt.Errorf("cannot create store: %v", err)
 		}
+		return s, nil
 	}
-
-	return s, nil
+	return nil, fmt.Errorf("unknown store backend: %q", cfg.Store.Backend)
 }
 
 // NewElection creates the configured sentinel leader election backend.
 func NewElection(cfg *CommonConfig, uid string) (store.Election, error) {
-	var election store.Election
-
-	switch cfg.StoreBackend {
+	switch cfg.Store.Backend {
 	case "etcdv3":
-		storePath := filepath.Join(cfg.StorePrefix, cfg.ClusterName)
-
+		storePath := filepath.Join(cfg.Store.Prefix, cfg.ClusterName)
 		kvstore, err := NewKVStore(cfg)
 		if err != nil {
 			return nil, fmt.Errorf("cannot create kv store: %v", err)
 		}
-		election, err = store.NewKVBackedElection(kvstore, filepath.Join(storePath, common.SentinelLeaderKey), uid, cfg.StoreTimeout)
-		if err != nil {
-			return nil, err
-		}
+		return store.NewKVBackedElection(kvstore, filepath.Join(storePath, common.SentinelLeaderKey), uid, cfg.Store.Timeout)
 	case "kubernetes":
-		kubecli, podName, namespace, err := getKubeValues(cfg)
+		kubecli, podName, namespace, err := getKubeValues(cfg, true)
 		if err != nil {
 			return nil, err
 		}
-		election, err = store.NewKubeElection(kubecli, podName, namespace, cfg.ClusterName, uid)
-		if err != nil {
-			return nil, err
-		}
+		return store.NewKubeElection(kubecli, podName, namespace, cfg.ClusterName, uid)
 	}
-
-	return election, nil
+	return nil, fmt.Errorf("unknown store backend: %q", cfg.Store.Backend)
 }
 
-func getKubeValues(cfg *CommonConfig) (*kubernetes.Clientset, string, string, error) {
-	kubeClientConfig := util.NewKubeClientConfig(cfg.KubeConfig, cfg.KubeContext, cfg.KubeNamespace)
+func getKubeValues(cfg *CommonConfig, requirePod bool) (*kubernetes.Clientset, string, string, error) {
+	kubeClientConfig := util.NewKubeClientConfig(cfg.KubeConfig, cfg.Kube.Context, cfg.Kube.Namespace)
 	kubecfg, err := kubeClientConfig.ClientConfig()
 	if err != nil {
 		return nil, "", "", err
 	}
-	kubecfg.Timeout = cfg.StoreTimeout
+	kubecfg.Timeout = cfg.Store.Timeout
 	kubecli, err := kubernetes.NewForConfig(kubecfg)
 	if err != nil {
 		return nil, "", "", fmt.Errorf("cannot create kubernetes client: %v", err)
 	}
 	var podName string
-	if !cfg.IsStolonCtl {
+	if requirePod {
 		podName, err = util.PodName()
 		if err != nil {
 			return nil, "", "", err
@@ -254,4 +252,14 @@ func getKubeValues(cfg *CommonConfig) (*kubernetes.Clientset, string, string, er
 		return nil, "", "", err
 	}
 	return kubecli, podName, namespace, nil
+}
+
+// CheckClusterName fails when ClusterName has not been provided. Daemons
+// must always require a cluster name; we keep this as a separate check
+// because validate-non-empty alone would block --help.
+func CheckClusterName(cfg *CommonConfig) error {
+	if cfg.ClusterName == "" {
+		return errors.New("cluster name required")
+	}
+	return nil
 }

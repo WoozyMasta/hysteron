@@ -38,7 +38,6 @@ import (
 	"github.com/sorintlab/stolon/cmd"
 	"github.com/sorintlab/stolon/internal/cluster"
 	"github.com/sorintlab/stolon/internal/common"
-	"github.com/sorintlab/stolon/internal/flagutil"
 	slog "github.com/sorintlab/stolon/internal/log"
 	pg "github.com/sorintlab/stolon/internal/postgresql"
 	"github.com/sorintlab/stolon/internal/store"
@@ -46,18 +45,11 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/spf13/cobra"
+	"github.com/woozymasta/flags"
 	"go.uber.org/zap"
 )
 
 var log = slog.S()
-
-// CmdKeeper is the root stolon-keeper command.
-var CmdKeeper = &cobra.Command{
-	Use:     "stolon-keeper",
-	Run:     keeper,
-	Version: cmd.Version,
-}
 
 const (
 	maxPostgresTimelinesHistory = 2
@@ -103,65 +95,53 @@ func (s *DBLocalState) DeepCopy() *DBLocalState {
 }
 
 type config struct {
-	uid                string
-	dataDir            string
-	pgListenAddress    string
-	pgAdvertiseAddress string
-	pgPort             string
-	pgAdvertisePort    string
-	pgBinPath          string
-	pgReplAuthMethod   string
-	pgReplUsername     string
-	pgReplPassword     string
-	pgReplPasswordFile string
-	pgSUAuthMethod     string
-	pgSUUsername       string
-	pgSUPassword       string
-	pgSUPasswordFile   string
+	PG postgresOptions `group:"PostgreSQL" namespace:"pg" env-namespace:"PG"`
 
+	UID     string `short:"i" long:"uid" env:"UID" long-alias:"id" description:"keeper uid (must be unique in the cluster and can contain only lower-case letters, numbers and the underscore character). If not provided a random uid will be generated."`
+	DataDir string `short:"d" long:"data-dir" env:"DATA_DIR" description:"data directory"`
 	cmd.CommonConfig
 
-	debug                   bool
-	canBeMaster             bool
-	canBeSynchronousReplica bool
-	disableDataDirLocking   bool
-	allowUnsupportedPG      bool
+	CanBeMaster             bool `long:"can-be-master" env:"CAN_BE_MASTER" description:"allow keeper to be elected as master (default true)"`
+	CanBeSynchronousReplica bool `long:"can-be-synchronous-replica" env:"CAN_BE_SYNCHRONOUS_REPLICA" description:"allow keeper to be chosen as synchronous replica (default true)"`
+	DisableDataDirLocking   bool `long:"disable-data-dir-locking" env:"DISABLE_DATA_DIR_LOCKING" description:"disable locking on data dir. Warning! It'll cause data corruptions if two keepers are concurrently running with the same data dir."`
+	AllowUnsupportedPG      bool `long:"allow-unsupported-postgres-version" env:"ALLOW_UNSUPPORTED_POSTGRES_VERSION" description:"allow running with PostgreSQL versions outside the default supported major versions. This is best-effort and may break recovery, replication slots, configuration rendering, or file layout handling."`
 }
 
-var cfg config
+// postgresOptions groups PostgreSQL connection settings managed by the
+// keeper. The group namespaces produce flags like `--pg-listen-address`
+// and env vars like `PG_LISTEN_ADDRESS`.
+type postgresOptions struct {
+	ListenAddress    string `long:"listen-address" env:"LISTEN_ADDRESS" description:"postgresql instance listening address, local address used for the postgres instance. For all network interface, you can set the value to '*'."`
+	AdvertiseAddress string `long:"advertise-address" env:"ADVERTISE_ADDRESS" description:"postgresql instance address from outside. Use it to expose ip different than local ip with a NAT networking config"`
+	Port             string `short:"p" long:"port" env:"PORT" default:"5432" description:"postgresql instance listening port"`
+	AdvertisePort    string `long:"advertise-port" env:"ADVERTISE_PORT" description:"postgresql instance port from outside. Use it to expose port different than local port with a PAT networking config"`
+	BinPath          string `long:"bin-path" env:"BIN_PATH" description:"absolute path to postgresql binaries. If empty they will be searched in the current PATH"`
 
-func init() {
-	cmd.AddCommonFlags(CmdKeeper, &cfg.CommonConfig)
+	Repl postgresReplOptions `group:"PostgreSQL Replication User" namespace:"repl" env-namespace:"REPL"`
+	SU   postgresSUOptions   `group:"PostgreSQL Superuser"        namespace:"su"   env-namespace:"SU"`
+}
 
-	CmdKeeper.PersistentFlags().StringVar(&cfg.uid, "id", "", "keeper uid (must be unique in the cluster and can contain only lower-case letters, numbers and the underscore character). If not provided a random uid will be generated.")
-	CmdKeeper.PersistentFlags().StringVar(&cfg.uid, "uid", "", "keeper uid (must be unique in the cluster and can contain only lower-case letters, numbers and the underscore character). If not provided a random uid will be generated.")
-	CmdKeeper.PersistentFlags().StringVar(&cfg.dataDir, "data-dir", "", "data directory")
-	CmdKeeper.PersistentFlags().StringVar(&cfg.pgListenAddress, "pg-listen-address", "", "postgresql instance listening address, local address used for the postgres instance. For all network interface, you can set the value to '*'.")
-	CmdKeeper.PersistentFlags().StringVar(&cfg.pgAdvertiseAddress, "pg-advertise-address", "", "postgresql instance address from outside. Use it to expose ip different than local ip with a NAT networking config")
-	CmdKeeper.PersistentFlags().StringVar(&cfg.pgPort, "pg-port", "5432", "postgresql instance listening port")
-	CmdKeeper.PersistentFlags().StringVar(&cfg.pgAdvertisePort, "pg-advertise-port", "", "postgresql instance port from outside. Use it to expose port different than local port with a PAT networking config")
-	CmdKeeper.PersistentFlags().StringVar(&cfg.pgBinPath, "pg-bin-path", "", "absolute path to postgresql binaries. If empty they will be searched in the current PATH")
-	CmdKeeper.PersistentFlags().StringVar(&cfg.pgReplAuthMethod, "pg-repl-auth-method", "md5", "postgres replication user auth method. Default is md5.")
-	CmdKeeper.PersistentFlags().StringVar(&cfg.pgReplUsername, "pg-repl-username", "", "postgres replication user name. Required. It'll be created on db initialization. Must be the same for all keepers.")
-	CmdKeeper.PersistentFlags().StringVar(&cfg.pgReplPassword, "pg-repl-password", "", "postgres replication user password. Only one of --pg-repl-password or --pg-repl-passwordfile must be provided. Must be the same for all keepers.")
-	CmdKeeper.PersistentFlags().StringVar(&cfg.pgReplPasswordFile, "pg-repl-passwordfile", "", "postgres replication user password file. Only one of --pg-repl-password or --pg-repl-passwordfile must be provided. Must be the same for all keepers.")
-	CmdKeeper.PersistentFlags().StringVar(&cfg.pgSUAuthMethod, "pg-su-auth-method", "md5", "postgres superuser auth method. Default is md5.")
-	CmdKeeper.PersistentFlags().StringVar(&cfg.pgSUUsername, "pg-su-username", "", "postgres superuser user name. Used for keeper managed instance access and pg_rewind based synchronization. It'll be created on db initialization. Defaults to the name of the effective user running stolon-keeper. Must be the same for all keepers.")
-	CmdKeeper.PersistentFlags().StringVar(&cfg.pgSUPassword, "pg-su-password", "", "postgres superuser password. Only one of --pg-su-password or --pg-su-passwordfile must be provided. Must be the same for all keepers.")
-	CmdKeeper.PersistentFlags().StringVar(&cfg.pgSUPasswordFile, "pg-su-passwordfile", "", "postgres superuser password file. Only one of --pg-su-password or --pg-su-passwordfile must be provided. Must be the same for all keepers)")
-	CmdKeeper.PersistentFlags().BoolVar(&cfg.debug, "debug", false, "enable debug logging")
+// postgresReplOptions configures the postgres replication user.
+type postgresReplOptions struct {
+	AuthMethod   string `long:"auth-method" env:"AUTH_METHOD" choices:"md5;trust" default:"md5" description:"postgres replication user auth method"`
+	Username     string `long:"username" env:"USERNAME" description:"postgres replication user name. Required. It'll be created on db initialization. Must be the same for all keepers."`
+	Password     string `long:"password" env:"PASSWORD" xor:"pg-repl-secret" description:"postgres replication user password. Mutually exclusive with --pg-repl-passwordfile. Must be the same for all keepers."`
+	PasswordFile string `long:"passwordfile" env:"PASSWORDFILE" xor:"pg-repl-secret" description:"postgres replication user password file. Mutually exclusive with --pg-repl-password. Must be the same for all keepers."`
+}
 
-	CmdKeeper.PersistentFlags().BoolVar(&cfg.canBeMaster, "can-be-master", true, "prevent keeper from being elected as master")
-	CmdKeeper.PersistentFlags().BoolVar(&cfg.canBeSynchronousReplica, "can-be-synchronous-replica", true, "prevent keeper from being chosen as synchronous replica")
-	CmdKeeper.PersistentFlags().BoolVar(&cfg.disableDataDirLocking, "disable-data-dir-locking", false, "disable locking on data dir. Warning! It'll cause data corruptions if two keepers are concurrently running with the same data dir.")
-	CmdKeeper.PersistentFlags().BoolVar(&cfg.allowUnsupportedPG, "allow-unsupported-postgres-version", false, "allow running with PostgreSQL versions outside the default supported major versions. This is best-effort and may break recovery, replication slots, configuration rendering, or file layout handling.")
+// postgresSUOptions configures the postgres superuser.
+type postgresSUOptions struct {
+	AuthMethod   string `long:"auth-method" env:"AUTH_METHOD" choices:"md5;trust" default:"md5" description:"postgres superuser auth method"`
+	Username     string `long:"username" env:"USERNAME" description:"postgres superuser user name. Defaults to the effective user running stolon-keeper. Must be the same for all keepers."`
+	Password     string `long:"password" env:"PASSWORD" xor:"pg-su-secret" description:"postgres superuser password. Mutually exclusive with --pg-su-passwordfile. Must be the same for all keepers."`
+	PasswordFile string `long:"passwordfile" env:"PASSWORDFILE" xor:"pg-su-secret" description:"postgres superuser password file. Mutually exclusive with --pg-su-password. Must be the same for all keepers."`
+}
 
-	if err := CmdKeeper.PersistentFlags().MarkDeprecated("id", "please use --uid"); err != nil {
-		log.Fatal(err)
-	}
-	if err := CmdKeeper.PersistentFlags().MarkDeprecated("debug", "use --log-level=debug instead"); err != nil {
-		log.Fatal(err)
-	}
+// Defaults that cannot be expressed as struct tags (booleans default to
+// `true` for our use case).
+var cfg = config{
+	CanBeMaster:             true,
+	CanBeSynchronousReplica: true,
 }
 
 var managedPGParameters = []string{
@@ -548,15 +528,15 @@ type PostgresKeeper struct {
 
 // NewPostgresKeeper creates a PostgreSQL keeper from command configuration.
 func NewPostgresKeeper(cfg *config, end chan error) (*PostgresKeeper, error) {
-	e, err := cmd.NewStore(&cfg.CommonConfig)
+	e, err := cmd.NewStore(&cfg.CommonConfig, true)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create store: %v", err)
 	}
 
 	// Clean and get absolute datadir path
-	dataDir, err := filepath.Abs(cfg.dataDir)
+	dataDir, err := filepath.Abs(cfg.DataDir)
 	if err != nil {
-		return nil, fmt.Errorf("cannot get absolute datadir path for %q: %v", cfg.dataDir, err)
+		return nil, fmt.Errorf("cannot get absolute datadir path for %q: %v", cfg.DataDir, err)
 	}
 
 	p := &PostgresKeeper{
@@ -566,17 +546,17 @@ func NewPostgresKeeper(cfg *config, end chan error) (*PostgresKeeper, error) {
 
 		dataDir: dataDir,
 
-		pgListenAddress:    cfg.pgListenAddress,
-		pgAdvertiseAddress: cfg.pgAdvertiseAddress,
-		pgPort:             cfg.pgPort,
-		pgAdvertisePort:    cfg.pgAdvertisePort,
-		pgBinPath:          cfg.pgBinPath,
-		pgReplAuthMethod:   cfg.pgReplAuthMethod,
-		pgReplUsername:     cfg.pgReplUsername,
-		pgReplPassword:     cfg.pgReplPassword,
-		pgSUAuthMethod:     cfg.pgSUAuthMethod,
-		pgSUUsername:       cfg.pgSUUsername,
-		pgSUPassword:       cfg.pgSUPassword,
+		pgListenAddress:    cfg.PG.ListenAddress,
+		pgAdvertiseAddress: cfg.PG.AdvertiseAddress,
+		pgPort:             cfg.PG.Port,
+		pgAdvertisePort:    cfg.PG.AdvertisePort,
+		pgBinPath:          cfg.PG.BinPath,
+		pgReplAuthMethod:   cfg.PG.Repl.AuthMethod,
+		pgReplUsername:     cfg.PG.Repl.Username,
+		pgReplPassword:     cfg.PG.Repl.Password,
+		pgSUAuthMethod:     cfg.PG.SU.AuthMethod,
+		pgSUUsername:       cfg.PG.SU.Username,
+		pgSUPassword:       cfg.PG.SU.Password,
 
 		sleepInterval:  cluster.DefaultSleepInterval,
 		requestTimeout: cluster.DefaultRequestTimeout,
@@ -584,8 +564,8 @@ func NewPostgresKeeper(cfg *config, end chan error) (*PostgresKeeper, error) {
 		keeperLocalState: &KeeperLocalState{},
 		dbLocalState:     &DBLocalState{},
 
-		canBeMaster:             &cfg.canBeMaster,
-		canBeSynchronousReplica: &cfg.canBeSynchronousReplica,
+		canBeMaster:             &cfg.CanBeMaster,
+		canBeSynchronousReplica: &cfg.CanBeSynchronousReplica,
 
 		e:   e,
 		end: end,
@@ -595,12 +575,12 @@ func NewPostgresKeeper(cfg *config, end chan error) (*PostgresKeeper, error) {
 	if err != nil && !os.IsNotExist(err) {
 		return nil, fmt.Errorf("failed to load keeper local state file: %v", err)
 	}
-	if p.keeperLocalState.UID != "" && p.cfg.uid != "" && p.keeperLocalState.UID != p.cfg.uid {
-		log.Fatalf("saved uid %q differs from configuration uid: %q", p.keeperLocalState.UID, cfg.uid)
+	if p.keeperLocalState.UID != "" && p.cfg.UID != "" && p.keeperLocalState.UID != p.cfg.UID {
+		log.Fatalf("saved uid %q differs from configuration uid: %q", p.keeperLocalState.UID, cfg.UID)
 	}
 	if p.keeperLocalState.UID == "" {
-		p.keeperLocalState.UID = cfg.uid
-		if cfg.uid == "" {
+		p.keeperLocalState.UID = cfg.UID
+		if cfg.UID == "" {
 			p.keeperLocalState.UID = common.UID()
 			log.Infow("uid generated", "uid", p.keeperLocalState.UID)
 		}
@@ -683,7 +663,7 @@ func (p *PostgresKeeper) validatePostgresVersion() error {
 		return fmt.Errorf("failed to get postgres binary version: %w", err)
 	}
 	if err := pg.ValidateSupportedMajorVersion(major); err != nil {
-		if p.cfg.allowUnsupportedPG {
+		if p.cfg.AllowUnsupportedPG {
 			log.Warnw(
 				"running with unsupported PostgreSQL version",
 				"version", fmt.Sprintf("%d.%d", major, minor),
@@ -1774,7 +1754,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 }
 
 func (p *PostgresKeeper) keeperLocalStateFilePath() string {
-	return filepath.Join(p.cfg.dataDir, "keeperstate")
+	return filepath.Join(p.cfg.DataDir, "keeperstate")
 }
 
 func (p *PostgresKeeper) loadKeeperLocalState() error {
@@ -1799,7 +1779,7 @@ func (p *PostgresKeeper) saveKeeperLocalState() error {
 }
 
 func (p *PostgresKeeper) dbLocalStateFilePath() string {
-	return filepath.Join(p.cfg.dataDir, "dbstate")
+	return filepath.Join(p.cfg.DataDir, "dbstate")
 }
 
 func (p *PostgresKeeper) loadDBLocalState() error {
@@ -1923,37 +1903,40 @@ func sigHandler(sigs chan os.Signal, cancel context.CancelFunc) {
 
 // Execute runs the stolon-keeper command.
 func Execute() {
-	if err := flagutil.SetFlagsFromEnv(CmdKeeper.PersistentFlags(), "STKEEPER"); err != nil {
-		log.Fatal(err)
+	parser := NewParser()
+	if _, err := parser.Parse(); err != nil {
+		os.Exit(cmd.ParseErrorExitCode(err))
 	}
-
-	if err := CmdKeeper.Execute(); err != nil {
-		log.Fatal(err)
-	}
+	keeper(parser)
 }
 
-func keeper(c *cobra.Command, _ []string) {
+// NewParser creates a parser for stolon-keeper. Built-in helper
+// commands (`help`, `version`, `completion`, `config`, `docs`) are
+// available, but the keeper itself is a daemon so subcommand selection
+// is optional.
+func NewParser() *flags.Parser {
+	parser := cmd.NewParser("stolon-keeper", "STKEEPER", &cfg, 0)
+	parser.SubcommandsOptional = true
+	return parser
+}
+
+func keeper(parser *flags.Parser) {
 	var (
 		err           error
 		listenAddFlag = "pg-advertise-address"
 	)
 
-	flags := c.Flags()
-
-	if !flags.Changed("pg-su-username") {
+	if option := parser.FindOptionByLongName("pg-su-username"); option == nil || !option.IsSet() {
 		// set the pgSuUsername to the current user
 		var user string
 		user, err = util.GetUser()
 		if err != nil {
 			log.Fatalf("cannot get current user: %v", err)
 		}
-		cfg.pgSUUsername = user
+		cfg.PG.SU.Username = user
 	}
 
-	validAuthMethods := make(map[string]struct{})
-	validAuthMethods["trust"] = struct{}{}
-	validAuthMethods["md5"] = struct{}{}
-	switch cfg.LogLevel {
+	switch cfg.Log.Level {
 	case "error":
 		slog.SetLevel(zap.ErrorLevel)
 	case "warn":
@@ -1962,128 +1945,117 @@ func keeper(c *cobra.Command, _ []string) {
 		slog.SetLevel(zap.InfoLevel)
 	case "debug":
 		slog.SetLevel(zap.DebugLevel)
-	default:
-		log.Fatalf("invalid log level: %v", cfg.LogLevel)
 	}
-	if cfg.debug {
+	if cfg.Debug {
 		slog.SetDebug()
 	}
-	if cmd.IsColorLoggerEnable(c, &cfg.CommonConfig) {
+	if cmd.IsLogColorRequested(parser, &cfg.CommonConfig) {
 		log = slog.SColor()
 		pg.SetLogger(log)
 	}
 
-	if cfg.dataDir == "" {
+	if cfg.DataDir == "" {
 		log.Fatalf("data dir required")
 	}
 
+	if err = cmd.CheckClusterName(&cfg.CommonConfig); err != nil {
+		log.Fatalf(err.Error())
+	}
 	if err = cmd.CheckCommonConfig(&cfg.CommonConfig); err != nil {
 		log.Fatalf(err.Error())
 	}
 
 	cmd.SetMetrics(&cfg.CommonConfig, "keeper")
 
-	if err = os.MkdirAll(cfg.dataDir, 0700); err != nil {
+	if err = os.MkdirAll(cfg.DataDir, 0700); err != nil {
 		log.Fatalf("cannot create data dir: %v", err)
 	}
 
-	if cfg.pgListenAddress == "" {
+	if cfg.PG.ListenAddress == "" {
 		log.Fatalf("--pg-listen-address is required")
 	}
 
-	if cfg.pgAdvertiseAddress == "" {
+	if cfg.PG.AdvertiseAddress == "" {
 		listenAddFlag = "pg-listen-address"
-		cfg.pgAdvertiseAddress = cfg.pgListenAddress
+		cfg.PG.AdvertiseAddress = cfg.PG.ListenAddress
 	}
 
-	if cfg.pgAdvertisePort == "" {
-		cfg.pgAdvertisePort = cfg.pgPort
+	if cfg.PG.AdvertisePort == "" {
+		cfg.PG.AdvertisePort = cfg.PG.Port
 	}
 
-	ip := net.ParseIP(cfg.pgAdvertiseAddress)
+	ip := net.ParseIP(cfg.PG.AdvertiseAddress)
 	if ip == nil {
-		log.Warnf("provided --%s %q: is not an ip address but a hostname. This will be advertized to the other components and may have undefined behaviors if resolved differently by other hosts", listenAddFlag, cfg.pgAdvertiseAddress)
+		log.Warnf("provided --%s %q: is not an ip address but a hostname. This will be advertized to the other components and may have undefined behaviors if resolved differently by other hosts", listenAddFlag, cfg.PG.AdvertiseAddress)
 	}
 
-	ipAddr, err := net.ResolveIPAddr("ip", cfg.pgAdvertiseAddress)
+	ipAddr, err := net.ResolveIPAddr("ip", cfg.PG.AdvertiseAddress)
 	if err != nil {
-		log.Warnf("cannot resolve provided --%s %q: %v", listenAddFlag, cfg.pgAdvertiseAddress, err)
+		log.Warnf("cannot resolve provided --%s %q: %v", listenAddFlag, cfg.PG.AdvertiseAddress, err)
 	} else if ipAddr.IP.IsLoopback() {
-		log.Warnf("provided --%s %q is a loopback ip. This will be advertized to the other components and communication will fail if they are on different hosts", listenAddFlag, cfg.pgAdvertiseAddress)
+		log.Warnf("provided --%s %q is a loopback ip. This will be advertized to the other components and communication will fail if they are on different hosts", listenAddFlag, cfg.PG.AdvertiseAddress)
 	}
 
-	if _, ok := validAuthMethods[cfg.pgReplAuthMethod]; !ok {
-		log.Fatalf("--pg-repl-auth-method must be one of: md5, trust")
-	}
-	if cfg.pgReplUsername == "" {
+	if cfg.PG.Repl.Username == "" {
 		log.Fatalf("--pg-repl-username is required")
 	}
-	if cfg.pgReplAuthMethod == "trust" {
+	if cfg.PG.Repl.AuthMethod == "trust" {
 		log.Warn("not utilizing a password for replication between hosts is extremely dangerous")
-		if cfg.pgReplPassword != "" || cfg.pgReplPasswordFile != "" {
+		// xor:"pg-repl-secret" already prevents both being set; only need
+		// to make sure neither is set when auth is trust.
+		if cfg.PG.Repl.Password != "" || cfg.PG.Repl.PasswordFile != "" {
 			log.Fatalf("can not utilize --pg-repl-auth-method trust together with --pg-repl-password or --pg-repl-passwordfile")
 		}
-	}
-	if cfg.pgSUAuthMethod == "trust" {
-		log.Warn("not utilizing a password for superuser is extremely dangerous")
-		if cfg.pgSUPassword != "" || cfg.pgSUPasswordFile != "" {
-			log.Fatalf("can not utilize --pg-su-auth-method trust together with --pg-su-password or --pg-su-passwordfile")
-		}
-	}
-	if cfg.pgReplAuthMethod != "trust" && cfg.pgReplPassword == "" && cfg.pgReplPasswordFile == "" {
+	} else if cfg.PG.Repl.Password == "" && cfg.PG.Repl.PasswordFile == "" {
 		log.Fatalf("one of --pg-repl-password or --pg-repl-passwordfile is required")
 	}
-	if cfg.pgReplAuthMethod != "trust" && cfg.pgReplPassword != "" && cfg.pgReplPasswordFile != "" {
-		log.Fatalf("only one of --pg-repl-password or --pg-repl-passwordfile must be provided")
-	}
-	if _, ok := validAuthMethods[cfg.pgSUAuthMethod]; !ok {
-		log.Fatalf("--pg-su-auth-method must be one of: md5, password, trust")
-	}
-	if cfg.pgSUAuthMethod != "trust" && cfg.pgSUPassword == "" && cfg.pgSUPasswordFile == "" {
+	if cfg.PG.SU.AuthMethod == "trust" {
+		log.Warn("not utilizing a password for superuser is extremely dangerous")
+		if cfg.PG.SU.Password != "" || cfg.PG.SU.PasswordFile != "" {
+			log.Fatalf("can not utilize --pg-su-auth-method trust together with --pg-su-password or --pg-su-passwordfile")
+		}
+	} else if cfg.PG.SU.Password == "" && cfg.PG.SU.PasswordFile == "" {
 		log.Fatalf("one of --pg-su-password or --pg-su-passwordfile is required")
 	}
-	if cfg.pgSUAuthMethod != "trust" && cfg.pgSUPassword != "" && cfg.pgSUPasswordFile != "" {
-		log.Fatalf("only one of --pg-su-password or --pg-su-passwordfile must be provided")
-	}
 
-	if cfg.pgReplPasswordFile != "" {
-		cfg.pgReplPassword, err = readPasswordFromFile(cfg.pgReplPasswordFile)
+	if cfg.PG.Repl.PasswordFile != "" {
+		cfg.PG.Repl.Password, err = readPasswordFromFile(cfg.PG.Repl.PasswordFile)
 		if err != nil {
 			log.Fatalf("cannot read pg replication user password: %v", err)
 		}
 	}
-	if cfg.pgSUPasswordFile != "" {
-		cfg.pgSUPassword, err = readPasswordFromFile(cfg.pgSUPasswordFile)
+	if cfg.PG.SU.PasswordFile != "" {
+		cfg.PG.SU.Password, err = readPasswordFromFile(cfg.PG.SU.PasswordFile)
 		if err != nil {
 			log.Fatalf("cannot read pg superuser password: %v", err)
 		}
 	}
 
 	// Trim trailing new lines from passwords
-	tp := strings.TrimRight(cfg.pgSUPassword, "\r\n")
-	if cfg.pgSUPassword != tp {
+	tp := strings.TrimRight(cfg.PG.SU.Password, "\r\n")
+	if cfg.PG.SU.Password != tp {
 		log.Warn("superuser password contain trailing new line, removing")
 		if tp == "" {
 			log.Fatalf("superuser password is empty after removing trailing new line")
 		}
-		cfg.pgSUPassword = tp
+		cfg.PG.SU.Password = tp
 	}
 
-	tp = strings.TrimRight(cfg.pgReplPassword, "\r\n")
-	if cfg.pgReplPassword != tp {
+	tp = strings.TrimRight(cfg.PG.Repl.Password, "\r\n")
+	if cfg.PG.Repl.Password != tp {
 		log.Warn("replication user password contain trailing new line, removing")
 		if tp == "" {
 			log.Fatalf("replication user password is empty after removing trailing new line")
 		}
-		cfg.pgReplPassword = tp
+		cfg.PG.Repl.Password = tp
 	}
 
-	if cfg.pgSUUsername == cfg.pgReplUsername {
+	if cfg.PG.SU.Username == cfg.PG.Repl.Username {
 		log.Warn("superuser name and replication user name are the same. Different users are suggested.")
-		if cfg.pgReplAuthMethod != cfg.pgSUAuthMethod {
+		if cfg.PG.Repl.AuthMethod != cfg.PG.SU.AuthMethod {
 			log.Fatalf("do not support different auth methods when utilizing superuser for replication.")
 		}
-		if cfg.pgSUPassword != cfg.pgReplPassword && cfg.pgSUAuthMethod != "trust" && cfg.pgReplAuthMethod != "trust" {
+		if cfg.PG.SU.Password != cfg.PG.Repl.Password && cfg.PG.SU.AuthMethod != "trust" && cfg.PG.Repl.AuthMethod != "trust" {
 			log.Fatalf("provided superuser name and replication user name are the same but provided passwords are different")
 		}
 	}
@@ -2092,8 +2064,8 @@ func keeper(c *cobra.Command, _ []string) {
 	// There is no need to clean up this file since we don't use the file as an actual lock. We get a lock
 	// on the file. So the lock get released when our process stops (or log.Fatalfs).
 	var lockFile *os.File
-	if !cfg.disableDataDirLocking {
-		lockFileName := filepath.Join(cfg.dataDir, "lock")
+	if !cfg.DisableDataDirLocking {
+		lockFileName := filepath.Join(cfg.DataDir, "lock")
 		lockFile, err = os.OpenFile(lockFileName, os.O_RDWR|os.O_CREATE, 0600)
 		if err != nil {
 			log.Fatalf("cannot take exclusive lock on data dir %q: %v", lockFileName, err)
@@ -2106,9 +2078,9 @@ func keeper(c *cobra.Command, _ []string) {
 		log.Infow("exclusive lock on data dir taken")
 	}
 
-	if cfg.uid != "" {
-		if !pg.IsValidReplSlotName(cfg.uid) {
-			log.Fatalf("keeper uid %q not valid. It can contain only lower-case letters, numbers and the underscore character", cfg.uid)
+	if cfg.UID != "" {
+		if !pg.IsValidReplSlotName(cfg.UID) {
+			log.Fatalf("keeper uid %q not valid. It can contain only lower-case letters, numbers and the underscore character", cfg.UID)
 		}
 	}
 
@@ -2145,7 +2117,7 @@ func keeper(c *cobra.Command, _ []string) {
 		log.Errorw("keeper stopped with error", zap.Error(err))
 	}
 
-	if !cfg.disableDataDirLocking {
+	if !cfg.DisableDataDirLocking {
 		if err := lockFile.Close(); err != nil {
 			log.Errorw("failed to close data dir lock file", zap.Error(err))
 		}

@@ -16,7 +16,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -34,7 +33,7 @@ import (
 	"github.com/sorintlab/stolon/cmd"
 	"github.com/sorintlab/stolon/internal/cluster"
 	"github.com/sorintlab/stolon/internal/common"
-	"github.com/sorintlab/stolon/internal/flagutil"
+	"github.com/sorintlab/stolon/internal/configfile"
 	slog "github.com/sorintlab/stolon/internal/log"
 	pg "github.com/sorintlab/stolon/internal/postgresql"
 	"github.com/sorintlab/stolon/internal/store"
@@ -43,7 +42,7 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/mitchellh/copystructure"
-	"github.com/spf13/cobra"
+	"github.com/woozymasta/flags"
 	"go.uber.org/zap"
 )
 
@@ -53,31 +52,12 @@ const (
 	fakeStandbyName = "stolonfakestandby"
 )
 
-// CmdSentinel is the root stolon-sentinel command.
-var CmdSentinel = &cobra.Command{
-	Use:     "stolon-sentinel",
-	Run:     sentinel,
-	Version: cmd.Version,
-}
-
 type config struct {
-	initialClusterSpecFile string
+	InitialClusterSpecFile string `short:"f" long:"initial-cluster-spec" env:"INITIAL_CLUSTER_SPEC" description:"a file providing the initial cluster specification, used only at cluster initialization, ignored if cluster is already initialized"`
 	cmd.CommonConfig
-	debug bool
 }
 
 var cfg config
-
-func init() {
-	cmd.AddCommonFlags(CmdSentinel, &cfg.CommonConfig)
-
-	CmdSentinel.PersistentFlags().StringVar(&cfg.initialClusterSpecFile, "initial-cluster-spec", "", "a file providing the initial cluster specification, used only at cluster initialization, ignored if cluster is already initialized")
-	CmdSentinel.PersistentFlags().BoolVar(&cfg.debug, "debug", false, "enable debug logging (deprecated, use log-level instead)")
-
-	if err := CmdSentinel.PersistentFlags().MarkDeprecated("debug", "use --log-level=debug instead"); err != nil {
-		log.Fatal(err)
-	}
-}
 
 func (s *Sentinel) electionLoop(ctx context.Context) {
 	for {
@@ -1806,12 +1786,13 @@ type Sentinel struct {
 // NewSentinel creates a sentinel from command configuration.
 func NewSentinel(uid string, cfg *config, end chan bool) (*Sentinel, error) {
 	var initialClusterSpec *cluster.ClusterSpec
-	if cfg.initialClusterSpecFile != "" {
-		configData, err := os.ReadFile(cfg.initialClusterSpecFile)
+	if cfg.InitialClusterSpecFile != "" {
+		configData, err := os.ReadFile(cfg.InitialClusterSpecFile)
 		if err != nil {
 			return nil, fmt.Errorf("cannot read provided initial cluster config file: %v", err)
 		}
-		if err := json.Unmarshal(configData, &initialClusterSpec); err != nil {
+		initialClusterSpec, err = configfile.ClusterSpec(configData)
+		if err != nil {
 			return nil, fmt.Errorf("cannot parse provided initial cluster config: %v", err)
 		}
 		log.Debugw("initialClusterSpec dump", "initialClusterSpec", spew.Sdump(initialClusterSpec))
@@ -1820,7 +1801,7 @@ func NewSentinel(uid string, cfg *config, end chan bool) (*Sentinel, error) {
 		}
 	}
 
-	e, err := cmd.NewStore(&cfg.CommonConfig)
+	e, err := cmd.NewStore(&cfg.CommonConfig, true)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create store: %v", err)
 	}
@@ -2008,17 +1989,24 @@ func sigHandler(sigs chan os.Signal, cancel context.CancelFunc) {
 
 // Execute runs the stolon-sentinel command.
 func Execute() {
-	if err := flagutil.SetFlagsFromEnv(CmdSentinel.PersistentFlags(), "STSENTINEL"); err != nil {
-		log.Fatal(err)
+	parser := NewParser()
+	if _, err := parser.Parse(); err != nil {
+		os.Exit(cmd.ParseErrorExitCode(err))
 	}
-
-	if err := CmdSentinel.Execute(); err != nil {
-		log.Fatal(err)
-	}
+	sentinel(parser)
 }
 
-func sentinel(c *cobra.Command, _ []string) {
-	switch cfg.LogLevel {
+// NewParser creates a parser for stolon-sentinel. Built-in helper
+// commands remain available; subcommands are optional because the
+// sentinel is a daemon.
+func NewParser() *flags.Parser {
+	parser := cmd.NewParser("stolon-sentinel", "STSENTINEL", &cfg, 0)
+	parser.SubcommandsOptional = true
+	return parser
+}
+
+func sentinel(parser *flags.Parser) {
+	switch cfg.Log.Level {
 	case "error":
 		slog.SetLevel(zap.ErrorLevel)
 	case "warn":
@@ -2027,17 +2015,18 @@ func sentinel(c *cobra.Command, _ []string) {
 		slog.SetLevel(zap.InfoLevel)
 	case "debug":
 		slog.SetLevel(zap.DebugLevel)
-	default:
-		log.Fatalf("invalid log level: %v", cfg.LogLevel)
 	}
-	if cfg.debug {
+	if cfg.Debug {
 		slog.SetDebug()
 	}
-	if cmd.IsColorLoggerEnable(c, &cfg.CommonConfig) {
+	if cmd.IsLogColorRequested(parser, &cfg.CommonConfig) {
 		log = slog.SColor()
 		pg.SetLogger(log)
 	}
 
+	if err := cmd.CheckClusterName(&cfg.CommonConfig); err != nil {
+		log.Fatalf(err.Error())
+	}
 	if err := cmd.CheckCommonConfig(&cfg.CommonConfig); err != nil {
 		log.Fatalf(err.Error())
 	}

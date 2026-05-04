@@ -75,16 +75,16 @@ func init() {
 }
 
 func benchmarkProxyChecker(cd *cluster.ClusterData) *ClusterChecker {
-	cfg.listenAddress = "127.0.0.1"
-	cfg.port = "0"
-	cfg.keepAliveIdle = 0
-	cfg.keepAliveCount = 0
-	cfg.keepAliveInterval = 0
+	cfg.ListenAddress = "127.0.0.1"
+	cfg.Port = "0"
+	cfg.KeepAlive.Idle = 0
+	cfg.KeepAlive.Count = 0
+	cfg.KeepAlive.Interval = 0
 
 	return &ClusterChecker{
 		uid:                "proxy-0",
-		listenAddress:      cfg.listenAddress,
-		port:               cfg.port,
+		listenAddress:      cfg.ListenAddress,
+		port:               cfg.Port,
 		stopListening:      true,
 		e:                  &benchmarkProxyStore{cd: cd},
 		endTCPProxyCh:      make(chan error, 1),

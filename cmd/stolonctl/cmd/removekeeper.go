@@ -1,4 +1,5 @@
 // Copyright 2017 Sorint.lab
+// Copyright 2026 WoozyMasta
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,72 +17,59 @@ package cmd
 
 import (
 	"context"
-
-	cmdcommon "github.com/sorintlab/stolon/cmd"
-	"github.com/spf13/cobra"
+	"errors"
+	"fmt"
 )
 
-var removeKeeperCmd = &cobra.Command{
-	Use:   "removekeeper [keeper uid]",
-	Short: "Removes keeper from cluster data",
-	Run:   removeKeeper,
+// RemoveKeeperCommand removes a keeper from cluster data.
+type RemoveKeeperCommand struct{}
+
+// Execute runs `stolonctl removekeeper KEEPER_UID`.
+func (c *RemoveKeeperCommand) Execute(args []string) error {
+	return runStolonCtl(func() error { return c.run(args) })
 }
 
-func init() {
-	CmdStolonCtl.AddCommand(removeKeeperCmd)
-}
-
-func removeKeeper(_ *cobra.Command, args []string) {
+func (c *RemoveKeeperCommand) run(args []string) error {
 	if len(args) > 1 {
-		die("too many arguments")
+		return errors.New("too many arguments")
 	}
-
 	if len(args) == 0 {
-		die("keeper uid required")
+		return errors.New("keeper uid required")
 	}
-
 	keeperID := args[0]
 
-	store, err := cmdcommon.NewStore(&cfg.CommonConfig)
+	s, err := newStore()
 	if err != nil {
-		die("%v", err)
+		return err
 	}
 
-	cd, pair, err := getClusterData(store)
+	cd, pair, err := getClusterData(s)
 	if err != nil {
-		die("cannot get cluster data: %v", err)
+		return err
 	}
-	if cd.Cluster == nil {
-		die("no cluster spec available")
-	}
-	if cd.Cluster.Spec == nil {
-		die("no cluster spec available")
+	if cd.Cluster == nil || cd.Cluster.Spec == nil {
+		return errors.New("no cluster spec available")
 	}
 
 	newCd := cd.DeepCopy()
 	keeperInfo := newCd.Keepers[keeperID]
 	if keeperInfo == nil {
-		die("keeper doesn't exist")
+		return errors.New("keeper doesn't exist")
 	}
-
 	keeperDb := newCd.FindDB(keeperInfo)
-
-	if keeperDb != nil {
-		if newCd.Cluster.Status.Master == keeperDb.UID {
-			die("keeper assigned db is the current cluster master db.")
-		}
+	if keeperDb != nil && newCd.Cluster.Status.Master == keeperDb.UID {
+		return errors.New("keeper assigned db is the current cluster master db")
 	}
 
 	delete(newCd.Keepers, keeperID)
 	if keeperDb != nil {
 		delete(newCd.DBs, keeperDb.UID)
 	}
+	// NOTE: if the removed db is listed inside another db.Followers it'll
+	// be cleaned up by the sentinels.
 
-	// NOTE: if the removed db is listed inside another db.Followers it'll will
-	// be cleaned by the sentinels
-
-	_, err = store.AtomicPutClusterData(context.TODO(), newCd, pair)
-	if err != nil {
-		die("cannot update cluster data: %v", err)
+	if _, err := s.AtomicPutClusterData(context.TODO(), newCd, pair); err != nil {
+		return fmt.Errorf("cannot update cluster data: %v", err)
 	}
+	return nil
 }

@@ -1,4 +1,5 @@
 // Copyright 2018 Sorint.lab
+// Copyright 2026 WoozyMasta
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,60 +17,55 @@ package cmd
 
 import (
 	"context"
-
-	cmdcommon "github.com/sorintlab/stolon/cmd"
-	"github.com/spf13/cobra"
+	"errors"
+	"fmt"
 )
 
-var failKeeperCmd = &cobra.Command{
-	Use:   "failkeeper [keeper uid]",
-	Short: `Force keeper as "temporarily" failed. The sentinel will compute a new clusterdata considering it as failed and then restore its state to the real one.`,
-	Long:  `Force keeper as "temporarily" failed. It's just a one shot operation, the sentinel will compute a new clusterdata considering the keeper as failed and then restore its state to the real one. For example, if the force failed keeper is a master, the sentinel will try to elect a new master. If no new master can be elected, the force failed keeper, if really healthy, will be re-elected as master`,
-	Run:   failKeeper,
+// FailKeeperCommand forces a keeper into a temporarily failed state.
+//
+// It's a one-shot operation: the sentinel computes a new clusterdata
+// considering the keeper as failed and restores its state to the real
+// one. For example, if the force-failed keeper is master, the sentinel
+// will try to elect a new master; if no new master can be elected, the
+// force-failed keeper, if really healthy, will be re-elected.
+type FailKeeperCommand struct{}
+
+// Execute runs `stolonctl failkeeper KEEPER_UID`.
+func (c *FailKeeperCommand) Execute(args []string) error {
+	return runStolonCtl(func() error { return c.run(args) })
 }
 
-func init() {
-	CmdStolonCtl.AddCommand(failKeeperCmd)
-}
-
-func failKeeper(_ *cobra.Command, args []string) {
+func (c *FailKeeperCommand) run(args []string) error {
 	if len(args) > 1 {
-		die("too many arguments")
+		return errors.New("too many arguments")
 	}
-
 	if len(args) == 0 {
-		die("keeper uid required")
+		return errors.New("keeper uid required")
 	}
-
 	keeperID := args[0]
 
-	store, err := cmdcommon.NewStore(&cfg.CommonConfig)
+	s, err := newStore()
 	if err != nil {
-		die("%v", err)
+		return err
 	}
 
-	cd, pair, err := getClusterData(store)
+	cd, pair, err := getClusterData(s)
 	if err != nil {
-		die("cannot get cluster data: %v", err)
+		return err
 	}
-	if cd.Cluster == nil {
-		die("no cluster spec available")
-	}
-	if cd.Cluster.Spec == nil {
-		die("no cluster spec available")
+	if cd.Cluster == nil || cd.Cluster.Spec == nil {
+		return errors.New("no cluster spec available")
 	}
 
 	newCd := cd.DeepCopy()
 	keeperInfo := newCd.Keepers[keeperID]
 	if keeperInfo == nil {
-		die("keeper doesn't exist")
-		return
+		return errors.New("keeper doesn't exist")
 	}
-
 	keeperInfo.Status.ForceFail = true
 
-	_, err = store.AtomicPutClusterData(context.TODO(), newCd, pair)
-	if err != nil {
-		die("cannot update cluster data: %v", err)
+	if _, err := s.AtomicPutClusterData(context.TODO(), newCd, pair); err != nil {
+		return fmt.Errorf("cannot update cluster data: %v", err)
 	}
+	return nil
 }

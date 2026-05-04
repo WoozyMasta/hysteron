@@ -16,8 +16,10 @@ package v0
 
 import "github.com/sorintlab/stolon/internal/common"
 
+// KeepersInfo maps keeper ID to legacy keeper info.
 type KeepersInfo map[string]*KeeperInfo
 
+// KeeperInfo is the legacy state published by one keeper.
 type KeeperInfo struct {
 	ID                 string
 	ClusterViewVersion int
@@ -27,6 +29,7 @@ type KeeperInfo struct {
 	PGPort             string
 }
 
+// Copy returns an independent copy of keeper info.
 func (k *KeeperInfo) Copy() *KeeperInfo {
 	if k == nil {
 		return nil
@@ -35,8 +38,10 @@ func (k *KeeperInfo) Copy() *KeeperInfo {
 	return &nk
 }
 
+// PostgresTimelinesHistory is a list of legacy PostgreSQL timeline entries.
 type PostgresTimelinesHistory []*PostgresTimelineHistory
 
+// Copy returns an independent copy of timeline history.
 func (tlsh PostgresTimelinesHistory) Copy() PostgresTimelinesHistory {
 	if tlsh == nil {
 		return nil
@@ -46,12 +51,14 @@ func (tlsh PostgresTimelinesHistory) Copy() PostgresTimelinesHistory {
 	return ntlsh
 }
 
+// PostgresTimelineHistory is one legacy PostgreSQL timeline history entry.
 type PostgresTimelineHistory struct {
 	TimelineID  uint64
 	SwitchPoint uint64
 	Reason      string
 }
 
+// GetTimelineHistory returns the entry for id, if present.
 func (tlsh PostgresTimelinesHistory) GetTimelineHistory(id uint64) *PostgresTimelineHistory {
 	for _, tlh := range tlsh {
 		if tlh.TimelineID == id {
@@ -61,6 +68,7 @@ func (tlsh PostgresTimelinesHistory) GetTimelineHistory(id uint64) *PostgresTime
 	return nil
 }
 
+// PostgresState is the legacy PostgreSQL state observed by a keeper.
 type PostgresState struct {
 	Initialized      bool
 	Role             common.Role
@@ -70,6 +78,7 @@ type PostgresState struct {
 	TimelinesHistory PostgresTimelinesHistory
 }
 
+// Copy returns an independent copy of PostgreSQL state.
 func (p *PostgresState) Copy() *PostgresState {
 	if p == nil {
 		return nil
@@ -79,31 +88,37 @@ func (p *PostgresState) Copy() *PostgresState {
 	return &np
 }
 
+// KeepersDiscoveryInfo is a list of legacy keeper discovery records.
 type KeepersDiscoveryInfo []*KeeperDiscoveryInfo
 
+// KeeperDiscoveryInfo is one legacy keeper discovery record.
 type KeeperDiscoveryInfo struct {
 	ListenAddress string
 	Port          string
 }
 
+// SentinelsInfo is a sortable list of legacy sentinel info records.
 type SentinelsInfo []*SentinelInfo
 
 func (s SentinelsInfo) Len() int           { return len(s) }
 func (s SentinelsInfo) Less(i, j int) bool { return s[i].ID < s[j].ID }
 func (s SentinelsInfo) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 
+// SentinelInfo is the legacy state published by one sentinel.
 type SentinelInfo struct {
 	ID            string
 	ListenAddress string
 	Port          string
 }
 
+// ProxiesInfo is a sortable list of legacy proxy info records.
 type ProxiesInfo []*ProxyInfo
 
 func (p ProxiesInfo) Len() int           { return len(p) }
 func (p ProxiesInfo) Less(i, j int) bool { return p[i].ID < p[j].ID }
 func (p ProxiesInfo) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
+// ProxyInfo is the legacy state published by one proxy.
 type ProxyInfo struct {
 	ID                 string
 	ListenAddress      string

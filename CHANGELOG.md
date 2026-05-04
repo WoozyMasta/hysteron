@@ -74,6 +74,8 @@ The format is based on [Keep a Changelog][], and this project adheres to
   symbol comments.
 * Clean up cluster contract revive findings with documentation comments while
   preserving existing public type names.
+* Clean up common, logging, flag utility, and legacy cluster v0 revive findings
+  with package and exported symbol comments.
 
 ## v0.17.0
 

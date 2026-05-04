@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package log provides shared Stolon logging helpers.
 package log
 
 import (
@@ -56,30 +57,37 @@ func init() {
 	sColor = logger.Sugar()
 }
 
+// SetDebug sets the global log level to debug.
 func SetDebug() {
 	level.SetLevel(zapcore.DebugLevel)
 }
 
+// SetLevel sets the global log level.
 func SetLevel(lvl zapcore.Level) {
 	level.SetLevel(lvl)
 }
 
+// IsDebug reports whether the global log level is debug.
 func IsDebug() bool {
 	return level.Level() == zapcore.DebugLevel
 }
 
+// S returns the shared sugared logger.
 func S() *zap.SugaredLogger {
 	return s
 }
 
+// StdLog returns the shared logger as a standard library logger.
 func StdLog() *log.Logger {
 	return zap.NewStdLog(s.Desugar())
 }
 
+// SColor returns the shared colorized sugared logger.
 func SColor() *zap.SugaredLogger {
 	return sColor
 }
 
+// StdLogColor returns the colorized logger as a standard library logger.
 func StdLogColor() *log.Logger {
 	return zap.NewStdLog(sColor.Desugar())
 }

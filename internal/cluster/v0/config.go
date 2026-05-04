@@ -24,17 +24,26 @@ import (
 )
 
 const (
+	// DefaultProxyCheckInterval is the default legacy proxy check interval.
 	DefaultProxyCheckInterval = 5 * time.Second
 
-	DefaultRequestTimeout          = 10 * time.Second
-	DefaultSleepInterval           = 5 * time.Second
-	DefaultKeeperFailInterval      = 20 * time.Second
-	DefaultMaxStandbysPerSender    = 3
-	DefaultSynchronousReplication  = false
+	// DefaultRequestTimeout is the default legacy request timeout.
+	DefaultRequestTimeout = 10 * time.Second
+	// DefaultSleepInterval is the default legacy sleep interval.
+	DefaultSleepInterval = 5 * time.Second
+	// DefaultKeeperFailInterval is the default legacy keeper failure interval.
+	DefaultKeeperFailInterval = 20 * time.Second
+	// DefaultMaxStandbysPerSender is the default legacy max standbys per sender.
+	DefaultMaxStandbysPerSender = 3
+	// DefaultSynchronousReplication is the default legacy synchronous replication setting.
+	DefaultSynchronousReplication = false
+	// DefaultInitWithMultipleKeepers is the default legacy multiple-keeper init setting.
 	DefaultInitWithMultipleKeepers = false
-	DefaultUsePGRewind             = false
+	// DefaultUsePGRewind is the default legacy pg_rewind setting.
+	DefaultUsePGRewind = false
 )
 
+// NilConfig is the legacy nullable cluster config.
 type NilConfig struct {
 	RequestTimeout          *Duration          `json:"request_timeout,omitempty"`
 	SleepInterval           *Duration          `json:"sleep_interval,omitempty"`
@@ -46,6 +55,7 @@ type NilConfig struct {
 	PGParameters            *map[string]string `json:"pg_parameters,omitempty"`
 }
 
+// Config is the legacy cluster config with defaults applied.
 type Config struct {
 	// Time after which any request (keepers checks from sentinel etc...) will fail.
 	RequestTimeout time.Duration
@@ -66,26 +76,35 @@ type Config struct {
 	PGParameters map[string]string
 }
 
+// StringP returns a pointer to s.
+//
 //go:fix inline
 func StringP(s string) *string {
 	return new(s)
 }
 
+// UintP returns a pointer to u.
+//
 //go:fix inline
 func UintP(u uint) *uint {
 	return new(u)
 }
 
+// BoolP returns a pointer to b.
+//
 //go:fix inline
 func BoolP(b bool) *bool {
 	return new(b)
 }
 
+// DurationP returns a pointer to d.
+//
 //go:fix inline
 func DurationP(d Duration) *Duration {
 	return new(d)
 }
 
+// MapStringP returns a pointer to a copy of m.
 func MapStringP(m map[string]string) *map[string]string {
 	nm := map[string]string{}
 	maps.Copy(nm, m)
@@ -94,6 +113,7 @@ func MapStringP(m map[string]string) *map[string]string {
 
 type nilConfig NilConfig
 
+// UnmarshalJSON decodes and validates legacy nullable config.
 func (c *NilConfig) UnmarshalJSON(in []byte) error {
 	var nc nilConfig
 	if err := json.Unmarshal(in, &nc); err != nil {
@@ -106,6 +126,7 @@ func (c *NilConfig) UnmarshalJSON(in []byte) error {
 	return nil
 }
 
+// Copy returns an independent copy of nullable config.
 func (c *NilConfig) Copy() *NilConfig {
 	if c == nil {
 		return c
@@ -138,6 +159,7 @@ func (c *NilConfig) Copy() *NilConfig {
 	return &nc
 }
 
+// Copy returns an independent copy of config.
 func (c *Config) Copy() *Config {
 	if c == nil {
 		return c
@@ -157,10 +179,12 @@ type Duration struct {
 	time.Duration
 }
 
+// MarshalJSON encodes Duration as a Go duration string.
 func (d Duration) MarshalJSON() ([]byte, error) {
 	return json.Marshal(d.String())
 }
 
+// UnmarshalJSON decodes Duration from a Go duration string.
 func (d *Duration) UnmarshalJSON(b []byte) error {
 	s := strings.Trim(string(b), `"`)
 	du, err := time.ParseDuration(s)
@@ -171,6 +195,7 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate validates nullable config.
 func (c *NilConfig) Validate() error {
 	if c.RequestTimeout != nil && c.RequestTimeout.Duration < 0 {
 		return errors.New("request_timeout must be positive")
@@ -187,6 +212,7 @@ func (c *NilConfig) Validate() error {
 	return nil
 }
 
+// MergeDefaults fills absent nullable config fields with defaults.
 func (c *NilConfig) MergeDefaults() {
 	if c.RequestTimeout == nil {
 		c.RequestTimeout = &Duration{DefaultRequestTimeout}
@@ -214,6 +240,7 @@ func (c *NilConfig) MergeDefaults() {
 	}
 }
 
+// ToConfig returns config with defaults applied.
 func (c *NilConfig) ToConfig() *Config {
 	nc := c.Copy()
 	nc.MergeDefaults()
@@ -229,6 +256,7 @@ func (c *NilConfig) ToConfig() *Config {
 	}
 }
 
+// NewDefaultConfig returns legacy config populated with defaults.
 func NewDefaultConfig() *Config {
 	nc := &NilConfig{}
 	nc.MergeDefaults()

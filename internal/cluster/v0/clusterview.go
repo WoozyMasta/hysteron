@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package v0 contains legacy cluster-data v0 contracts.
 package v0
 
 import (
@@ -22,11 +23,14 @@ import (
 )
 
 const (
+	// CurrentCDFormatVersion is the legacy cluster-data format version.
 	CurrentCDFormatVersion uint64 = 0
 )
 
+// KeepersState maps keeper ID to legacy keeper state.
 type KeepersState map[string]*KeeperState
 
+// SortedKeys returns sorted keeper IDs.
 func (kss KeepersState) SortedKeys() []string {
 	keys := make([]string, 0, len(kss))
 	for k := range kss {
@@ -36,6 +40,7 @@ func (kss KeepersState) SortedKeys() []string {
 	return keys
 }
 
+// Copy returns an independent copy of keeper states.
 func (kss KeepersState) Copy() KeepersState {
 	nkss := KeepersState{}
 	for k, v := range kss {
@@ -44,6 +49,7 @@ func (kss KeepersState) Copy() KeepersState {
 	return nkss
 }
 
+// NewFromKeeperInfo adds keeper state from keeper info.
 func (kss KeepersState) NewFromKeeperInfo(ki *KeeperInfo) error {
 	id := ki.ID
 	if _, ok := kss[id]; ok {
@@ -61,6 +67,7 @@ func (kss KeepersState) NewFromKeeperInfo(ki *KeeperInfo) error {
 	return nil
 }
 
+// KeeperState is the legacy keeper state stored in cluster data.
 type KeeperState struct {
 	ID                 string
 	ErrorStartTime     time.Time
@@ -73,6 +80,7 @@ type KeeperState struct {
 	PGState            *PostgresState
 }
 
+// Copy returns an independent copy of keeper state.
 func (ks *KeeperState) Copy() *KeeperState {
 	if ks == nil {
 		return nil
@@ -81,6 +89,7 @@ func (ks *KeeperState) Copy() *KeeperState {
 	return &nks
 }
 
+// ChangedFromKeeperInfo reports whether keeper info differs from state.
 func (ks *KeeperState) ChangedFromKeeperInfo(ki *KeeperInfo) (bool, error) {
 	if ks.ID != ki.ID {
 		return false, fmt.Errorf("different IDs, keeperState.ID: %s != keeperInfo.ID: %s", ks.ID, ki.ID)
@@ -95,6 +104,7 @@ func (ks *KeeperState) ChangedFromKeeperInfo(ki *KeeperInfo) (bool, error) {
 	return false, nil
 }
 
+// UpdateFromKeeperInfo updates keeper state from keeper info.
 func (ks *KeeperState) UpdateFromKeeperInfo(ki *KeeperInfo) error {
 	if ks.ID != ki.ID {
 		return fmt.Errorf("different IDs, keeperState.ID: %s != keeperInfo.ID: %s", ks.ID, ki.ID)
@@ -108,22 +118,27 @@ func (ks *KeeperState) UpdateFromKeeperInfo(ki *KeeperInfo) error {
 	return nil
 }
 
+// SetError records the first keeper error time.
 func (ks *KeeperState) SetError() {
 	if ks.ErrorStartTime.IsZero() {
 		ks.ErrorStartTime = time.Now()
 	}
 }
 
+// CleanError clears the keeper error time.
 func (ks *KeeperState) CleanError() {
 	ks.ErrorStartTime = time.Time{}
 }
 
+// KeepersRole maps keeper ID to legacy keeper role.
 type KeepersRole map[string]*KeeperRole
 
+// NewKeepersRole creates an empty keepers role map.
 func NewKeepersRole() KeepersRole {
 	return make(KeepersRole)
 }
 
+// Copy returns an independent copy of keepers role.
 func (ksr KeepersRole) Copy() KeepersRole {
 	nksr := KeepersRole{}
 	for k, v := range ksr {
@@ -132,6 +147,7 @@ func (ksr KeepersRole) Copy() KeepersRole {
 	return nksr
 }
 
+// Add adds a keeper role.
 func (ksr KeepersRole) Add(id string, follow string) error {
 	if _, ok := ksr[id]; ok {
 		return fmt.Errorf("keeperRole with id %q already exists", id)
@@ -140,11 +156,13 @@ func (ksr KeepersRole) Add(id string, follow string) error {
 	return nil
 }
 
+// KeeperRole stores a keeper role and follow target.
 type KeeperRole struct {
 	ID     string
 	Follow string
 }
 
+// Copy returns an independent copy of keeper role.
 func (kr *KeeperRole) Copy() *KeeperRole {
 	if kr == nil {
 		return nil
@@ -153,11 +171,13 @@ func (kr *KeeperRole) Copy() *KeeperRole {
 	return &nkr
 }
 
+// ProxyConf stores legacy proxy connection settings.
 type ProxyConf struct {
 	Host string
 	Port string
 }
 
+// Copy returns an independent copy of proxy config.
 func (pc *ProxyConf) Copy() *ProxyConf {
 	if pc == nil {
 		return nil
@@ -166,6 +186,7 @@ func (pc *ProxyConf) Copy() *ProxyConf {
 	return &npc
 }
 
+// ClusterView stores the legacy computed cluster view.
 type ClusterView struct {
 	Version     int
 	Master      string
@@ -196,6 +217,7 @@ func (cv *ClusterView) Equals(ncv *ClusterView) bool {
 		reflect.DeepEqual(cv.Config, ncv.Config)
 }
 
+// Copy returns an independent copy of the cluster view.
 func (cv *ClusterView) Copy() *ClusterView {
 	if cv == nil {
 		return nil
@@ -208,7 +230,7 @@ func (cv *ClusterView) Copy() *ClusterView {
 	return &ncv
 }
 
-// Returns a sorted list of followersIDs
+// GetFollowersIDs returns a sorted list of follower IDs.
 func (cv *ClusterView) GetFollowersIDs(id string) []string {
 	followersIDs := []string{}
 	for keeperID, kr := range cv.KeepersRole {
@@ -220,7 +242,7 @@ func (cv *ClusterView) GetFollowersIDs(id string) []string {
 	return followersIDs
 }
 
-// A struct containing the KeepersState and the ClusterView since they need to be in sync
+// ClusterData contains keeper state and cluster view that must stay in sync.
 type ClusterData struct {
 	// ClusterData format version. Used to detect incompatible
 	// version and do upgrade. Needs to be bumped when a non

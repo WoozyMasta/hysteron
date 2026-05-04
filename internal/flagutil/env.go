@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package flagutil contains helpers for Cobra and pflag integration.
 package flagutil
 
 import (

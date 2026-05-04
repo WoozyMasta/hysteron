@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package common contains shared constants and helpers used across Stolon.
 package common
 
 import (
@@ -29,19 +30,26 @@ import (
 )
 
 const (
+	// StorePrefix is the default base path used for cluster data in key-value stores.
 	StorePrefix = "stolon/cluster"
 
+	// SentinelLeaderKey is the key used for sentinel leader election state.
 	SentinelLeaderKey = "sentinel-leader"
 )
 
+// PgUnixSocketDirectories is the default PostgreSQL Unix socket directory.
 const PgUnixSocketDirectories = "/tmp"
 
+// Role identifies a PostgreSQL instance role.
 type Role string
 
 const (
+	// RoleUndefined means the PostgreSQL role is not known.
 	RoleUndefined Role = "undefined"
-	RoleMaster    Role = "master"
-	RoleStandby   Role = "standby"
+	// RoleMaster means the PostgreSQL instance is primary.
+	RoleMaster Role = "master"
+	// RoleStandby means the PostgreSQL instance is standby.
+	RoleStandby Role = "standby"
 )
 
 // Roles enumerates all possible Role values
@@ -51,11 +59,13 @@ var Roles = []Role{
 	RoleStandby,
 }
 
+// UID returns a short random identifier.
 func UID() string {
 	u := uuid.Must(uuid.NewV4())
 	return hex.EncodeToString(u[:4])
 }
 
+// UUID returns a random UUID string.
 func UUID() string {
 	return uuid.Must(uuid.NewV4()).String()
 }
@@ -64,20 +74,25 @@ const (
 	stolonPrefix = "stolon_"
 )
 
+// StolonName returns name with the Stolon-managed object prefix.
 func StolonName(name string) string {
 	return stolonPrefix + name
 }
 
+// NameFromStolonName removes the Stolon-managed object prefix from stolonName.
 func NameFromStolonName(stolonName string) string {
 	return strings.TrimPrefix(stolonName, stolonPrefix)
 }
 
+// IsStolonName reports whether name has the Stolon-managed object prefix.
 func IsStolonName(name string) bool {
 	return strings.HasPrefix(name, stolonPrefix)
 }
 
+// Parameters maps PostgreSQL parameter names to values.
 type Parameters map[string]string
 
+// Equals reports whether s and is contain the same parameters.
 func (s Parameters) Equals(is Parameters) bool {
 	return reflect.DeepEqual(s, is)
 }
@@ -135,7 +150,7 @@ func WriteFileAtomicFunc(filename string, perm os.FileMode, writeFunc func(f io.
 	return err
 }
 
-// WriteFileAtomic atomically writes a file
+// WriteFileAtomic atomically writes a file.
 func WriteFileAtomic(filename string, perm os.FileMode, data []byte) error {
 	return WriteFileAtomicFunc(filename, perm,
 		func(f io.Writer) error {

@@ -21,6 +21,7 @@ import (
 	"os"
 )
 
+// NewTLSConfig creates a TLS configuration from certificate, key, and CA files.
 func NewTLSConfig(certFile, keyFile, caFile string, insecureSkipVerify bool) (*tls.Config, error) {
 	tlsConfig := tls.Config{}
 

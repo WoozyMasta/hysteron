@@ -19,7 +19,6 @@ package integration
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -36,7 +35,7 @@ import (
 func TestSentinelEnabledProxies(t *testing.T) {
 	t.Parallel()
 
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}

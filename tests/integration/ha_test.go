@@ -20,7 +20,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -62,7 +61,7 @@ func setupStore(t *testing.T, dir string) *TestStore {
 func TestInitWithMultipleKeepers(t *testing.T) {
 	t.Parallel()
 
-	dir, err := ioutil.TempDir("", "stolon")
+	dir, err := os.MkdirTemp("", "stolon")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -156,7 +155,7 @@ func setupServers(t *testing.T, clusterName, dir string, numKeepers, numSentinel
 		// if primaryKeeper is provided then we should create a standby cluster and do a
 		// pitr recovery from the external primary database
 
-		pgpass, err := ioutil.TempFile(dir, "pgpass")
+		pgpass, err := os.CreateTemp(dir, "pgpass")
 		if err != nil {
 			t.Fatalf("unexpected err: %v", err)
 		}
@@ -329,7 +328,7 @@ func waitMasterStandbysReady(t *testing.T, sm *store.KVBackedStore, tks testKeep
 }
 
 func testMasterStandby(t *testing.T, syncRepl bool) {
-	dir, err := ioutil.TempDir("", "stolon")
+	dir, err := os.MkdirTemp("", "stolon")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -381,7 +380,7 @@ func TestMasterStandbySyncRepl(t *testing.T) {
 }
 
 func testFailover(t *testing.T, syncRepl bool, standbyCluster bool) {
-	dir, err := ioutil.TempDir("", "stolon")
+	dir, err := os.MkdirTemp("", "stolon")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -492,7 +491,7 @@ func TestFailoverSyncReplStandbyCluster(t *testing.T) {
 // Tests standby elected as new master but fails to become master. Then old
 // master comes back and is re-elected as master.
 func testFailoverFailed(t *testing.T, syncRepl bool, standbyCluster bool) {
-	dir, err := ioutil.TempDir("", "stolon")
+	dir, err := os.MkdirTemp("", "stolon")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -604,7 +603,7 @@ func TestFailoverFailedSyncStandbyCluster(t *testing.T) {
 // master (reported) xlogpos won't be elected as the new master. This test is
 // valid only for asynchronous replication
 func testFailoverTooMuchLag(t *testing.T, standbyCluster bool) {
-	dir, err := ioutil.TempDir("", "stolon")
+	dir, err := os.MkdirTemp("", "stolon")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -683,7 +682,7 @@ func TestFailoverTooMuchLagStandbyCluster(t *testing.T) {
 }
 
 func testOldMasterRestart(t *testing.T, syncRepl, minSync0 bool, usePgrewind bool, standbyCluster bool) {
-	dir, err := ioutil.TempDir("", "stolon")
+	dir, err := os.MkdirTemp("", "stolon")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -837,7 +836,7 @@ func TestOldMasterRestartStandbyCluster(t *testing.T) {
 }
 
 func testPartition1(t *testing.T, syncRepl, minSync0, usePgrewind bool, standbyCluster bool) {
-	dir, err := ioutil.TempDir("", "stolon")
+	dir, err := os.MkdirTemp("", "stolon")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -1006,7 +1005,7 @@ func TestPartition1StandbyCluster(t *testing.T) {
 }
 
 func testTimelineFork(t *testing.T, syncRepl, usePgrewind bool) {
-	dir, err := ioutil.TempDir("", "stolon")
+	dir, err := os.MkdirTemp("", "stolon")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -1199,7 +1198,7 @@ func TestTimelineForkSyncReplPgrewind(t *testing.T) {
 // postgres (without triggering failover since it restart before being marked
 // ad failed) make the slave continue to sync using the new address
 func testMasterChangedAddress(t *testing.T, standbyCluster bool) {
-	dir, err := ioutil.TempDir("", "stolon")
+	dir, err := os.MkdirTemp("", "stolon")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -1297,7 +1296,7 @@ func TestMasterChangedAddressStandbyCluster(t *testing.T) {
 
 func TestFailedStandby(t *testing.T) {
 	t.Parallel()
-	dir, err := ioutil.TempDir("", "stolon")
+	dir, err := os.MkdirTemp("", "stolon")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -1388,7 +1387,7 @@ func TestFailedStandby(t *testing.T) {
 
 func TestLoweredMaxStandbysPerSender(t *testing.T) {
 	t.Parallel()
-	dir, err := ioutil.TempDir("", "stolon")
+	dir, err := os.MkdirTemp("", "stolon")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -1453,7 +1452,7 @@ func TestLoweredMaxStandbysPerSender(t *testing.T) {
 
 func TestKeeperRemoval(t *testing.T) {
 	t.Parallel()
-	dir, err := ioutil.TempDir("", "stolon")
+	dir, err := os.MkdirTemp("", "stolon")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -1561,7 +1560,7 @@ func TestKeeperRemoval(t *testing.T) {
 }
 
 func testKeeperRemovalStolonCtl(t *testing.T, syncRepl bool) {
-	dir, err := ioutil.TempDir("", "stolon")
+	dir, err := os.MkdirTemp("", "stolon")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -1687,7 +1686,7 @@ func TestKeeperRemovalStolonCtlSyncRepl(t *testing.T) {
 func TestStandbyCantSync(t *testing.T) {
 	t.Parallel()
 
-	dir, err := ioutil.TempDir("", "stolon")
+	dir, err := os.MkdirTemp("", "stolon")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -1817,7 +1816,7 @@ func TestStandbyCantSync(t *testing.T) {
 func TestDisappearedKeeperData(t *testing.T) {
 	t.Parallel()
 
-	dir, err := ioutil.TempDir("", "stolon")
+	dir, err := os.MkdirTemp("", "stolon")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -1898,7 +1897,7 @@ func TestDisappearedKeeperData(t *testing.T) {
 }
 
 func testForceFail(t *testing.T, syncRepl bool, standbyCluster bool) {
-	dir, err := ioutil.TempDir("", "stolon")
+	dir, err := os.MkdirTemp("", "stolon")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -2014,7 +2013,7 @@ func TestForceFailSyncReplStandbyCluster(t *testing.T) {
 // defined synchronous standbys are in sync.
 func testSyncStandbyNotInSync(t *testing.T, minSync0 bool) {
 	t.Parallel()
-	dir, err := ioutil.TempDir("", "stolon")
+	dir, err := os.MkdirTemp("", "stolon")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}

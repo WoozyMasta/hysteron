@@ -18,11 +18,12 @@ package integration
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -43,7 +44,6 @@ import (
 
 	"github.com/gofrs/uuid"
 	_ "github.com/lib/pq"
-	"github.com/sgotti/gexpect"
 )
 
 const (
@@ -241,8 +241,154 @@ type Process struct {
 	uid  string
 	name string
 	args []string
-	cmd  *gexpect.ExpectSubprocess
+	cmd  *expectProcess
 	bin  string
+}
+
+type expectProcess struct {
+	Cmd *exec.Cmd
+
+	mu   sync.Mutex
+	cond *sync.Cond
+	buf  bytes.Buffer
+	done chan error
+}
+
+func newExpectProcess(cmd *exec.Cmd) *expectProcess {
+	p := &expectProcess{
+		Cmd:  cmd,
+		done: make(chan error, 1),
+	}
+	p.cond = sync.NewCond(&p.mu)
+	return p
+}
+
+func (p *expectProcess) Start(output io.WriteCloser) error {
+	pr, pw, err := os.Pipe()
+	if err != nil {
+		return err
+	}
+	p.Cmd.Stdout = pw
+	p.Cmd.Stderr = pw
+
+	if err := p.Cmd.Start(); err != nil {
+		_ = pr.Close()
+		_ = pw.Close()
+		_ = output.Close()
+		return err
+	}
+	_ = pw.Close()
+
+	go p.captureOutput(pr, output)
+	go func() {
+		p.done <- p.Cmd.Wait()
+		p.cond.Broadcast()
+	}()
+	return nil
+}
+
+func (p *expectProcess) captureOutput(r io.ReadCloser, output io.Writer) {
+	defer r.Close()
+	if closer, ok := output.(io.Closer); ok {
+		defer closer.Close()
+	}
+
+	scanner := bufio.NewScanner(r)
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		p.mu.Lock()
+		_, _ = p.buf.Write(line)
+		_ = p.buf.WriteByte('\n')
+		p.cond.Broadcast()
+		p.mu.Unlock()
+
+		_, _ = fmt.Fprintln(output, string(line))
+	}
+	p.mu.Lock()
+	p.cond.Broadcast()
+	p.mu.Unlock()
+}
+
+func (p *expectProcess) Continue() {}
+
+func (p *expectProcess) Expect(searchString string) error {
+	return p.ExpectTimeout(searchString, 0)
+}
+
+func (p *expectProcess) ExpectTimeout(searchString string, timeout time.Duration) error {
+	deadline, hasDeadline := deadlineFromTimeout(timeout)
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for {
+		if bytes.Contains(p.buf.Bytes(), []byte(searchString)) {
+			return nil
+		}
+		if err := p.wait(deadline, hasDeadline); err != nil {
+			return fmt.Errorf("expect %q: %w", searchString, err)
+		}
+	}
+}
+
+func (p *expectProcess) ExpectTimeoutRegexFind(regex string, timeout time.Duration) ([]string, error) {
+	re, err := regexp.Compile(regex)
+	if err != nil {
+		return nil, err
+	}
+	deadline, hasDeadline := deadlineFromTimeout(timeout)
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for {
+		if matches := re.FindStringSubmatch(p.buf.String()); len(matches) > 0 {
+			return matches, nil
+		}
+		if err := p.wait(deadline, hasDeadline); err != nil {
+			return nil, fmt.Errorf("expect regex %q: %w", regex, err)
+		}
+	}
+}
+
+func (p *expectProcess) wait(deadline time.Time, hasDeadline bool) error {
+	if hasDeadline {
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return fmt.Errorf("timeout")
+		}
+		timer := time.AfterFunc(remaining, func() {
+			p.mu.Lock()
+			p.cond.Broadcast()
+			p.mu.Unlock()
+		})
+		p.cond.Wait()
+		timer.Stop()
+	} else {
+		p.cond.Wait()
+	}
+
+	select {
+	case err := <-p.done:
+		p.done <- err
+		if err != nil {
+			return fmt.Errorf("process exited: %w", err)
+		}
+		return fmt.Errorf("process exited")
+	default:
+		return nil
+	}
+}
+
+func (p *expectProcess) Wait() error {
+	err := <-p.done
+	p.done <- err
+	return err
+}
+
+func deadlineFromTimeout(timeout time.Duration) (time.Time, bool) {
+	if timeout <= 0 {
+		return time.Time{}, false
+	}
+	return time.Now().Add(timeout), true
 }
 
 func (p *Process) start() error {
@@ -254,11 +400,12 @@ func (p *Process) start() error {
 	if err != nil {
 		return err
 	}
-	p.cmd = &gexpect.ExpectSubprocess{Cmd: cmd, Output: pw}
-	if err := p.cmd.Start(); err != nil {
+	p.cmd = newExpectProcess(cmd)
+	if err := p.cmd.Start(pw); err != nil {
 		return err
 	}
 	go func() {
+		defer pr.Close()
 		scanner := bufio.NewScanner(pr)
 		for scanner.Scan() {
 			p.t.Logf("[%s %s]: %s", p.name, p.uid, scanner.Text())
@@ -1343,7 +1490,7 @@ func writeClusterSpec(dir string, cs *cluster.ClusterSpec) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	tmpFile, err := ioutil.TempFile(dir, "initial-cluster-spec.json")
+	tmpFile, err := os.CreateTemp(dir, "initial-cluster-spec.json")
 	if err != nil {
 		return "", err
 	}

@@ -19,7 +19,6 @@ package integration
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -35,7 +34,7 @@ import (
 func TestServerParameters(t *testing.T) {
 	t.Parallel()
 
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -132,7 +131,7 @@ func TestServerParameters(t *testing.T) {
 func TestWalLevel(t *testing.T) {
 	t.Parallel()
 
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -247,7 +246,7 @@ func TestWalLevel(t *testing.T) {
 func TestWalKeepSegments(t *testing.T) {
 	t.Parallel()
 
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -420,7 +419,7 @@ func TestWalKeepSegments(t *testing.T) {
 func TestAlterSystem(t *testing.T) {
 	t.Parallel()
 
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -505,7 +504,7 @@ func TestAlterSystem(t *testing.T) {
 func TestAdditionalReplicationSlots(t *testing.T) {
 	t.Parallel()
 
-	dir, err := ioutil.TempDir("", "stolon")
+	dir, err := os.MkdirTemp("", "stolon")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -641,7 +640,7 @@ func TestAdditionalReplicationSlots(t *testing.T) {
 func TestAutomaticPgRestart(t *testing.T) {
 	t.Parallel()
 
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -765,7 +764,7 @@ func TestAutomaticPgRestart(t *testing.T) {
 func TestAdvertise(t *testing.T) {
 	t.Parallel()
 
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}

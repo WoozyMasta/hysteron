@@ -590,7 +590,7 @@ func (s *Sentinel) dbCanSync(cd *cluster.ClusterData, dbUID string) bool {
 	// check only if the xlogpos isn't increasing for some time. This can also
 	// happen when no writes are happening on the master but the standby should
 	// be, if syncing at the same xlogpos.
-	if s.isDBIncreasingXLogPos(cd, db) {
+	if s.isDBIncreasingXLogPos(db) {
 		return true
 	}
 
@@ -1632,7 +1632,7 @@ func (s *Sentinel) isDBHealthy(cd *cluster.ClusterData, db *cluster.DB) bool {
 	return true
 }
 
-func (s *Sentinel) isDBIncreasingXLogPos(cd *cluster.ClusterData, db *cluster.DB) bool {
+func (s *Sentinel) isDBIncreasingXLogPos(db *cluster.DB) bool {
 	t, ok := s.dbNotIncreasingXLogPos[db.UID]
 	if !ok {
 		return true

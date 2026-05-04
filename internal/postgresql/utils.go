@@ -43,12 +43,12 @@ var (
 	postgresBinaryVersionRegexp = regexp.MustCompile(`.* \(PostgreSQL\) ([0-9\.]+).*`)
 )
 
-func dbExec(ctx context.Context, db *sql.DB, query string, args ...any) (sql.Result, error) {
-	return db.ExecContext(ctx, query, args...)
+func dbExec(ctx context.Context, db *sql.DB, query string) (sql.Result, error) {
+	return db.ExecContext(ctx, query)
 }
 
-func query(ctx context.Context, db *sql.DB, query string, args ...any) (*sql.Rows, error) {
-	return db.QueryContext(ctx, query, args...)
+func query(ctx context.Context, db *sql.DB, query string) (*sql.Rows, error) {
+	return db.QueryContext(ctx, query)
 }
 
 func ping(ctx context.Context, connParams ConnParams) error {
@@ -91,7 +91,7 @@ func setPassword(ctx context.Context, connParams ConnParams, username, password 
 	return tx.Commit()
 }
 
-func createRole(ctx context.Context, connParams ConnParams, roles []string, username, password string) error {
+func createRole(ctx context.Context, connParams ConnParams, username, password string) error {
 	db, err := sql.Open("postgres", connParams.ConnString())
 	if err != nil {
 		return err
@@ -117,7 +117,7 @@ func createRole(ctx context.Context, connParams ConnParams, roles []string, user
 	return tx.Commit()
 }
 
-func createPasswordlessRole(ctx context.Context, connParams ConnParams, roles []string, username string) error {
+func createPasswordlessRole(ctx context.Context, connParams ConnParams, username string) error {
 	db, err := sql.Open("postgres", connParams.ConnString())
 	if err != nil {
 		return err
@@ -128,7 +128,7 @@ func createPasswordlessRole(ctx context.Context, connParams ConnParams, roles []
 	return err
 }
 
-func alterRole(ctx context.Context, connParams ConnParams, roles []string, username, password string) error {
+func alterRole(ctx context.Context, connParams ConnParams, username, password string) error {
 	db, err := sql.Open("postgres", connParams.ConnString())
 	if err != nil {
 		return err
@@ -154,7 +154,7 @@ func alterRole(ctx context.Context, connParams ConnParams, roles []string, usern
 	return tx.Commit()
 }
 
-func alterPasswordlessRole(ctx context.Context, connParams ConnParams, roles []string, username string) error {
+func alterPasswordlessRole(ctx context.Context, connParams ConnParams, username string) error {
 	db, err := sql.Open("postgres", connParams.ConnString())
 	if err != nil {
 		return err
@@ -516,14 +516,14 @@ func isRestartRequiredUsingPgSettingsContext(ctx context.Context, connParams Con
 	}
 	defer ignoreClose(db)
 
-	stmt, err := db.Prepare("select count(*) > 0 from pg_settings where context = 'postmaster' and name = ANY($1)")
+	stmt, err := db.PrepareContext(ctx, "select count(*) > 0 from pg_settings where context = 'postmaster' and name = ANY($1)")
 
 	if err != nil {
 		return false, err
 	}
 	defer func() { _ = stmt.Close() }()
 
-	rows, err := stmt.Query(pq.Array(changedParams))
+	rows, err := stmt.QueryContext(ctx, pq.Array(changedParams))
 	if err != nil {
 		return isRestartRequired, err
 	}

@@ -60,6 +60,10 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Clean up initial style lint findings for whitespace, unconvert, gocritic,
   predeclared, prealloc, and perfsprint.
 * Replace the internal string-slice membership helper with `slices.Contains`.
+* Remove unused internal parameters and move a keeper-only parser helper out of
+  production code.
+* Apply safe Go modernization for pointer defaults and build tags while leaving
+  cluster-data JSON tag changes for a dedicated migration pass.
 
 ## v0.17.0
 

@@ -29,14 +29,14 @@ import (
 )
 
 func Uint16P(u uint16) *uint16 {
-	return &u
+	return new(u)
 }
 func Uint32P(u uint32) *uint32 {
-	return &u
+	return new(u)
 }
 
 func BoolP(b bool) *bool {
-	return &b
+	return new(b)
 }
 
 const (
@@ -128,11 +128,11 @@ const (
 )
 
 func ClusterInitModeP(s ClusterInitMode) *ClusterInitMode {
-	return &s
+	return new(s)
 }
 
 func ClusterRoleP(s ClusterRole) *ClusterRole {
-	return &s
+	return new(s)
 }
 
 type DBInitMode string
@@ -207,7 +207,7 @@ const (
 )
 
 func SUReplAccessModeP(s SUReplAccessMode) *SUReplAccessMode {
-	return &s
+	return new(s)
 }
 
 type ClusterSpec struct {
@@ -375,31 +375,31 @@ func (os *ClusterSpec) WithDefaults() *ClusterSpec {
 		s.ProxyTimeout = &Duration{Duration: DefaultProxyTimeout}
 	}
 	if s.MaxStandbys == nil {
-		s.MaxStandbys = Uint16P(DefaultMaxStandbys)
+		s.MaxStandbys = new(DefaultMaxStandbys)
 	}
 	if s.MaxStandbysPerSender == nil {
-		s.MaxStandbysPerSender = Uint16P(DefaultMaxStandbysPerSender)
+		s.MaxStandbysPerSender = new(DefaultMaxStandbysPerSender)
 	}
 	if s.MaxStandbyLag == nil {
 		s.MaxStandbyLag = Uint32P(DefaultMaxStandbyLag)
 	}
 	if s.SynchronousReplication == nil {
-		s.SynchronousReplication = BoolP(DefaultSynchronousReplication)
+		s.SynchronousReplication = new(DefaultSynchronousReplication)
 	}
 	if s.UsePgrewind == nil {
-		s.UsePgrewind = BoolP(DefaultUsePgrewind)
+		s.UsePgrewind = new(DefaultUsePgrewind)
 	}
 	if s.MinSynchronousStandbys == nil {
-		s.MinSynchronousStandbys = Uint16P(DefaultMinSynchronousStandbys)
+		s.MinSynchronousStandbys = new(DefaultMinSynchronousStandbys)
 	}
 	if s.MaxSynchronousStandbys == nil {
-		s.MaxSynchronousStandbys = Uint16P(DefaultMaxSynchronousStandbys)
+		s.MaxSynchronousStandbys = new(DefaultMaxSynchronousStandbys)
 	}
 	if s.AdditionalWalSenders == nil {
 		s.AdditionalWalSenders = Uint16P(DefaultAdditionalWalSenders)
 	}
 	if s.MergePgParameters == nil {
-		s.MergePgParameters = BoolP(DefaultMergePGParameter)
+		s.MergePgParameters = new(DefaultMergePGParameter)
 	}
 	if s.DefaultSUReplAccessMode == nil {
 		v := DefaultSUReplAccess
@@ -410,7 +410,7 @@ func (os *ClusterSpec) WithDefaults() *ClusterSpec {
 		s.Role = &v
 	}
 	if s.AutomaticPgRestart == nil {
-		s.AutomaticPgRestart = BoolP(DefaultAutomaticPgRestart)
+		s.AutomaticPgRestart = new(DefaultAutomaticPgRestart)
 	}
 	return s
 }

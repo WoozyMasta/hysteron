@@ -19,6 +19,8 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -28,6 +30,31 @@ import (
 	"github.com/sorintlab/stolon/internal/cluster"
 	"github.com/sorintlab/stolon/internal/common"
 )
+
+func parseSynchronousStandbyNames(s string) ([]string, error) {
+	spacesSplit := strings.Split(s, " ")
+	var entries []string
+	if len(spacesSplit) < 2 {
+		entries = strings.Split(s, ",")
+	} else {
+		_, err := strconv.Atoi(spacesSplit[0])
+		if err == nil {
+			rest := strings.Join(spacesSplit[1:], " ")
+			inBrackets := strings.TrimSpace(rest)
+			if !strings.HasPrefix(inBrackets, "(") || !strings.HasSuffix(inBrackets, ")") {
+				return nil, errors.New("synchronous standby string has number but lacks brackets")
+			}
+			withoutBrackets := strings.TrimRight(strings.TrimLeft(inBrackets, "("), ")")
+			entries = strings.Split(withoutBrackets, ",")
+		} else {
+			entries = strings.Split(s, ",")
+		}
+	}
+	for i, e := range entries {
+		entries[i] = strings.TrimSpace(e)
+	}
+	return entries, nil
+}
 
 func TestParseSynchronousStandbyNames(t *testing.T) {
 	tests := []struct {

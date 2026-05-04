@@ -18,7 +18,6 @@ package cmd
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"maps"
 	"net"
@@ -639,59 +638,6 @@ func (p *PostgresKeeper) updatePGState(pctx context.Context) {
 	p.lastPGState = pgState
 }
 
-// parseSynchronousStandbyNames extracts the standby names from the
-// "synchronous_standby_names" postgres parameter.
-//
-// Since postgres 9.6 (https://www.postgresql.org/docs/9.6/static/runtime-config-replication.html)
-// `synchronous_standby_names` can be in one of two formats:
-//
-//	num_sync ( standby_name [, ...] )
-//	standby_name [, ...]
-//
-// two examples for this:
-//
-//	2 (node1,node2)
-//	node1,node2
-//
-// TODO(sgotti) since postgres 10 (https://www.postgresql.org/docs/10/static/runtime-config-replication.html)
-// `synchronous_standby_names` can be in one of three formats:
-//
-//	[FIRST] num_sync ( standby_name [, ...] )
-//	ANY num_sync ( standby_name [, ...] )
-//	standby_name [, ...]
-//
-// since we are writing ourself the synchronous_standby_names we don't handle this case.
-// If needed, to better handle all the cases with also a better validation of
-// standby names we could use something like the parser used by postgres
-func parseSynchronousStandbyNames(s string) ([]string, error) {
-	spacesSplit := strings.Split(s, " ")
-	var entries []string
-	if len(spacesSplit) < 2 {
-		// We're parsing format: standby_name [, ...]
-		entries = strings.Split(s, ",")
-	} else {
-		// We don't know yet which of the 2 formats we're parsing
-		_, err := strconv.Atoi(spacesSplit[0])
-		if err == nil {
-			// We're parsing format: num_sync ( standby_name [, ...] )
-			rest := strings.Join(spacesSplit[1:], " ")
-			inBrackets := strings.TrimSpace(rest)
-			if !strings.HasPrefix(inBrackets, "(") || !strings.HasSuffix(inBrackets, ")") {
-				return nil, errors.New("synchronous standby string has number but lacks brackets")
-			}
-			withoutBrackets := strings.TrimRight(strings.TrimLeft(inBrackets, "("), ")")
-			entries = strings.Split(withoutBrackets, ",")
-		} else {
-			// We're parsing format: standby_name [, ...]
-			entries = strings.Split(s, ",")
-		}
-	}
-	for i, e := range entries {
-		entries[i] = strings.TrimSpace(e)
-	}
-	return entries, nil
-}
-
 func (p *PostgresKeeper) GetInSyncStandbys() ([]string, error) {
 	inSyncStandbysFullName, err := p.pgm.GetSyncStandbys()
 	if err != nil {
@@ -1027,7 +973,7 @@ func (p *PostgresKeeper) updateReplSlots(curReplSlots []string, uid string, foll
 	return nil
 }
 
-func (p *PostgresKeeper) refreshReplicationSlots(cd *cluster.ClusterData, db *cluster.DB) error {
+func (p *PostgresKeeper) refreshReplicationSlots(db *cluster.DB) error {
 	var currentReplicationSlots []string
 	currentReplicationSlots, err := p.pgm.GetReplicationSlots()
 	if err != nil {
@@ -1555,7 +1501,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 			log.Infow("already master")
 		}
 
-		if err := p.refreshReplicationSlots(cd, db); err != nil {
+		if err := p.refreshReplicationSlots(db); err != nil {
 			log.Errorw("error updating replication slots", zap.Error(err))
 			return
 		}
@@ -1627,7 +1573,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 					}
 				}
 
-				if err = p.refreshReplicationSlots(cd, db); err != nil {
+				if err = p.refreshReplicationSlots(db); err != nil {
 					log.Errorw("error updating replication slots", zap.Error(err))
 				}
 
@@ -1646,7 +1592,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 					}
 				}
 
-				if err = p.refreshReplicationSlots(cd, db); err != nil {
+				if err = p.refreshReplicationSlots(db); err != nil {
 					log.Errorw("error updating replication slots", zap.Error(err))
 				}
 			}

@@ -33,11 +33,12 @@ import (
 )
 
 const (
-	// TODO(sgotti) for now we assume wal size is the default 16MiB size
+	// WalSegSize is the assumed WAL segment size in bytes.
 	WalSegSize = (16 * 1024 * 1024) // 16MiB
 )
 
 var (
+	// ValidReplSlotName validates PostgreSQL replication slot names.
 	ValidReplSlotName           = regexp.MustCompile("^[a-z0-9_]+$")
 	timelineHistoryLineRegexp   = regexp.MustCompile(`(\S+)\s+(\S+)\s+(.*)$`)
 	postgresBinaryVersionRegexp = regexp.MustCompile(`.* \(PostgreSQL\) ([0-9\.]+).*`)
@@ -255,6 +256,7 @@ func getSyncStandbys(ctx context.Context, connParams ConnParams) ([]string, erro
 	return syncStandbys, nil
 }
 
+// PGLsnToInt converts a PostgreSQL LSN string into an integer value.
 func PGLsnToInt(lsn string) (uint64, error) {
 	parts := strings.Split(lsn, "/")
 	if len(parts) != 2 {
@@ -272,6 +274,7 @@ func PGLsnToInt(lsn string) (uint64, error) {
 	return v, nil
 }
 
+// GetSystemData returns system identifier and WAL position from IDENTIFY_SYSTEM.
 func GetSystemData(ctx context.Context, replConnParams ConnParams) (*SystemData, error) {
 	// Add "replication=1" connection option
 	replConnParams["replication"] = "1"
@@ -371,6 +374,7 @@ func getTimelinesHistory(ctx context.Context, timeline uint64, replConnParams Co
 	return tlsh, nil
 }
 
+// IsValidReplSlotName reports whether name is a valid replication slot name.
 func IsValidReplSlotName(name string) bool {
 	return ValidReplSlotName.MatchString(name)
 }
@@ -395,12 +399,14 @@ func expand(s, dataDir string) string {
 			case 'd':
 				buf = append(buf, s[i:j]...)
 				buf = append(buf, []byte(dataDir)...)
-				j += 1
+				j++
 				i = j + 1
+
 			case '%':
-				j += 1
+				j++
 				buf = append(buf, s[i:j]...)
 				i = j + 1
+
 			default:
 			}
 		}
@@ -540,6 +546,7 @@ func isRestartRequiredUsingPgSettingsContext(ctx context.Context, connParams Con
 	return isRestartRequired, nil
 }
 
+// ParseBinaryVersion parses postgres --version output.
 func ParseBinaryVersion(v string) (int, int, error) {
 	// extract version (removing beta*, rc* etc...)
 	m := postgresBinaryVersionRegexp.FindStringSubmatch(v)
@@ -549,6 +556,7 @@ func ParseBinaryVersion(v string) (int, int, error) {
 	return ParseVersion(m[1])
 }
 
+// ParseVersion parses a PostgreSQL major.minor version string.
 func ParseVersion(v string) (int, int, error) {
 	parts := strings.Split(v, ".")
 	if len(parts) < 1 {
@@ -569,6 +577,7 @@ func ParseVersion(v string) (int, int, error) {
 	return maj, minor, nil
 }
 
+// IsWalFileName reports whether name matches a WAL segment filename.
 func IsWalFileName(name string) bool {
 	walChars := "0123456789ABCDEF"
 	if len(name) != 24 {
@@ -588,6 +597,7 @@ func IsWalFileName(name string) bool {
 	return true
 }
 
+// XlogPosToWalFileNameNoTimeline converts an LSN to WAL file suffix without timeline.
 func XlogPosToWalFileNameNoTimeline(xLogPos uint64) string {
 	id := uint32(xLogPos >> 32)
 	// The WAL segment offset is defined by the lower 32 bits of the LSN.
@@ -597,6 +607,7 @@ func XlogPosToWalFileNameNoTimeline(xLogPos uint64) string {
 	return fmt.Sprintf("%08X%08X", id, seg)
 }
 
+// WalFileNameNoTimeLine strips timeline prefix from a WAL filename.
 func WalFileNameNoTimeLine(name string) (string, error) {
 	if !IsWalFileName(name) {
 		return "", errors.New("bad wal file name")

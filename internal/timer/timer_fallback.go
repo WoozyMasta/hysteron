@@ -20,6 +20,7 @@ import (
 	"time"
 )
 
+// Now returns current time as Unix nanoseconds.
 func Now() int64 {
 	return time.Now().UnixNano()
 }

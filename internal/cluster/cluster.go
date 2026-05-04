@@ -359,11 +359,11 @@ type ClusterStatus struct { //nolint:revive
 type Cluster struct {
 	UID        string    `json:"uid,omitempty"`
 	Generation int64     `json:"generation,omitempty"`
-	ChangeTime time.Time `json:"changeTime,omitempty"`
+	ChangeTime time.Time `json:"changeTime,omitzero"`
 
 	Spec *ClusterSpec `json:"spec,omitempty"`
 
-	Status ClusterStatus `json:"status,omitempty"`
+	Status ClusterStatus `json:"status,omitzero"`
 }
 
 // DeepCopy returns an independent copy of the cluster.
@@ -632,11 +632,11 @@ type KeeperSpec struct{}
 // KeeperStatus is the observed keeper status.
 type KeeperStatus struct {
 	Healthy         bool      `json:"healthy,omitempty"`
-	LastHealthyTime time.Time `json:"lastHealthyTime,omitempty"`
+	LastHealthyTime time.Time `json:"lastHealthyTime,omitzero"`
 
 	BootUUID string `json:"bootUUID,omitempty"`
 
-	PostgresBinaryVersion PostgresBinaryVersion `json:"postgresBinaryVersion,omitempty"`
+	PostgresBinaryVersion PostgresBinaryVersion `json:"postgresBinaryVersion,omitzero"`
 
 	ForceFail bool `json:"forceFail,omitempty"`
 
@@ -649,11 +649,11 @@ type Keeper struct {
 	// Keeper ID
 	UID        string    `json:"uid,omitempty"`
 	Generation int64     `json:"generation,omitempty"`
-	ChangeTime time.Time `json:"changeTime,omitempty"`
+	ChangeTime time.Time `json:"changeTime,omitzero"`
 
 	Spec *KeeperSpec `json:"spec,omitempty"`
 
-	Status KeeperStatus `json:"status,omitempty"`
+	Status KeeperStatus `json:"status,omitzero"`
 }
 
 // NewKeeperFromKeeperInfo creates a keeper object from keeper info.
@@ -686,7 +686,7 @@ type DBSpec struct {
 	// The KeeperUID this db is assigned to
 	KeeperUID string `json:"keeperUID,omitempty"`
 	// Time after which any request (keepers checks from sentinel etc...) will fail.
-	RequestTimeout Duration `json:"requestTimeout,omitempty"`
+	RequestTimeout Duration `json:"requestTimeout,omitzero"`
 	// See ClusterSpec MaxStandbys description
 	MaxStandbys uint16 `json:"maxStandbys,omitempty"`
 	// Use Synchronous replication between master and its standbys
@@ -760,11 +760,11 @@ type DBStatus struct {
 type DB struct {
 	UID        string    `json:"uid,omitempty"`
 	Generation int64     `json:"generation,omitempty"`
-	ChangeTime time.Time `json:"changeTime,omitempty"`
+	ChangeTime time.Time `json:"changeTime,omitzero"`
 
 	Spec *DBSpec `json:"spec,omitempty"`
 
-	Status DBStatus `json:"status,omitempty"`
+	Status DBStatus `json:"status,omitzero"`
 }
 
 // ProxySpec is the desired proxy configuration.
@@ -781,11 +781,11 @@ type ProxyStatus struct {
 type Proxy struct {
 	UID        string    `json:"uid,omitempty"`
 	Generation int64     `json:"generation,omitempty"`
-	ChangeTime time.Time `json:"changeTime,omitempty"`
+	ChangeTime time.Time `json:"changeTime,omitzero"`
 
-	Spec ProxySpec `json:"spec,omitempty"`
+	Spec ProxySpec `json:"spec,omitzero"`
 
-	Status ProxyStatus `json:"status,omitempty"`
+	Status ProxyStatus `json:"status,omitzero"`
 }
 
 // Duration is needed to be able to marshal/unmarshal json strings with time

@@ -31,6 +31,7 @@ import (
 	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 	"k8s.io/client-go/kubernetes"
+
 	// Register optional Kubernetes auth plugins.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 )

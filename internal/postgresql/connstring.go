@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package postgresql implements PostgreSQL process and protocol helpers.
 package postgresql
 
 import (
@@ -27,29 +28,36 @@ import (
 
 // This is based on github.com/lib/pq
 
+// ConnParams is a map of PostgreSQL connection string parameters.
 type ConnParams map[string]string
 
+// Set stores a connection parameter value.
 func (cp ConnParams) Set(k, v string) {
 	cp[k] = v
 }
 
+// Get returns a connection parameter value.
 func (cp ConnParams) Get(k string) (v string) {
 	return cp[k]
 }
 
+// Del removes a connection parameter.
 func (cp ConnParams) Del(k string) {
 	delete(cp, k)
 }
 
+// Isset reports whether a connection parameter exists.
 func (cp ConnParams) Isset(k string) bool {
 	_, ok := cp[k]
 	return ok
 }
 
+// Equals reports whether two connection parameter maps are equal.
 func (cp ConnParams) Equals(cp2 ConnParams) bool {
 	return reflect.DeepEqual(cp, cp2)
 }
 
+// Copy returns a shallow copy of the connection parameter map.
 func (cp ConnParams) Copy() ConnParams {
 	ncp := ConnParams{}
 	maps.Copy(ncp, cp)
@@ -209,10 +217,10 @@ func URLToConnParams(urlStr string) (ConnParams, error) {
 
 // ConnString returns a connection string, its entries are sorted so the
 // returned string can be reproducible and comparable
-func (p ConnParams) ConnString() string {
+func (cp ConnParams) ConnString() string {
 	var kvs []string
 	escaper := strings.NewReplacer(` `, `\ `, `'`, `\'`, `\`, `\\`)
-	for k, v := range p {
+	for k, v := range cp {
 		if v != "" {
 			kvs = append(kvs, k+"="+escaper.Replace(v))
 		}

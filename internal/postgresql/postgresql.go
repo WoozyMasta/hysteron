@@ -55,15 +55,18 @@ const (
 )
 
 var (
+	// ErrUnknownState reports an unrecognized PostgreSQL state value.
 	ErrUnknownState = errors.New("unknown postgres state")
 )
 
 var log = slog.S()
 
+// PGManager exposes PostgreSQL manager methods required by other packages.
 type PGManager interface {
 	GetTimelinesHistory(timeline uint64) ([]*TimelineHistory, error)
 }
 
+// Manager manages one local PostgreSQL instance lifecycle.
 type Manager struct {
 	pgBinPath          string
 	dataDir            string
@@ -84,23 +87,30 @@ type Manager struct {
 	requestTimeout     time.Duration
 }
 
+// RecoveryMode defines PostgreSQL startup recovery mode.
 type RecoveryMode int
 
 const (
+	// RecoveryModeNone disables recovery-specific startup behavior.
 	RecoveryModeNone RecoveryMode = iota
+	// RecoveryModeStandby starts PostgreSQL in standby mode.
 	RecoveryModeStandby
+	// RecoveryModeRecovery starts PostgreSQL in recovery mode.
 	RecoveryModeRecovery
 )
 
+// RecoveryOptions configures recovery mode and recovery parameters.
 type RecoveryOptions struct {
 	RecoveryMode       RecoveryMode
 	RecoveryParameters common.Parameters
 }
 
+// NewRecoveryOptions builds empty recovery options.
 func NewRecoveryOptions() *RecoveryOptions {
 	return &RecoveryOptions{RecoveryParameters: make(common.Parameters)}
 }
 
+// DeepCopy returns an independent copy of recovery options.
 func (r *RecoveryOptions) DeepCopy() *RecoveryOptions {
 	nr, err := copystructure.Copy(r)
 	if err != nil {
@@ -112,28 +122,33 @@ func (r *RecoveryOptions) DeepCopy() *RecoveryOptions {
 	return nr.(*RecoveryOptions)
 }
 
+// SystemData contains PostgreSQL system identifier and position data.
 type SystemData struct {
 	SystemID   string
 	TimelineID uint64
 	XLogPos    uint64
 }
 
+// TimelineHistory is one timeline history record from PostgreSQL.
 type TimelineHistory struct {
 	TimelineID  uint64
 	SwitchPoint uint64
 	Reason      string
 }
 
+// InitConfig configures initdb options.
 type InitConfig struct {
 	Locale        string
 	Encoding      string
 	DataChecksums bool
 }
 
+// SetLogger sets the package logger used by PostgreSQL helpers.
 func SetLogger(l *zap.SugaredLogger) {
 	log = l
 }
 
+// NewManager creates a PostgreSQL manager bound to one data directory.
 func NewManager(pgBinPath string, dataDir string, localConnParams, replConnParams ConnParams, suAuthMethod, suUsername, suPassword, replAuthMethod, replUsername, replPassword string, requestTimeout time.Duration) *Manager {
 	return &Manager{
 		pgBinPath:          pgBinPath,
@@ -154,14 +169,17 @@ func NewManager(pgBinPath string, dataDir string, localConnParams, replConnParam
 	}
 }
 
+// SetParameters sets desired PostgreSQL configuration parameters.
 func (p *Manager) SetParameters(parameters common.Parameters) {
 	p.parameters = parameters
 }
 
+// CurParameters returns the current tracked PostgreSQL parameters.
 func (p *Manager) CurParameters() common.Parameters {
 	return p.curParameters
 }
 
+// SetRecoveryOptions sets desired recovery options.
 func (p *Manager) SetRecoveryOptions(recoveryOptions *RecoveryOptions) {
 	if recoveryOptions == nil {
 		p.recoveryOptions = NewRecoveryOptions()
@@ -171,18 +189,22 @@ func (p *Manager) SetRecoveryOptions(recoveryOptions *RecoveryOptions) {
 	p.recoveryOptions = recoveryOptions
 }
 
+// CurRecoveryOptions returns the current tracked recovery options.
 func (p *Manager) CurRecoveryOptions() *RecoveryOptions {
 	return p.curRecoveryOptions
 }
 
+// SetHba sets desired pg_hba entries.
 func (p *Manager) SetHba(hba []string) {
 	p.hba = hba
 }
 
+// CurHba returns the current tracked pg_hba entries.
 func (p *Manager) CurHba() []string {
 	return p.curHba
 }
 
+// UpdateCurParameters snapshots desired parameters as current parameters.
 func (p *Manager) UpdateCurParameters() {
 	n, err := copystructure.Copy(p.parameters)
 	if err != nil {
@@ -191,10 +213,12 @@ func (p *Manager) UpdateCurParameters() {
 	p.curParameters = n.(common.Parameters)
 }
 
+// UpdateCurRecoveryOptions snapshots desired recovery options.
 func (p *Manager) UpdateCurRecoveryOptions() {
 	p.curRecoveryOptions = p.recoveryOptions.DeepCopy()
 }
 
+// UpdateCurHba snapshots desired pg_hba entries.
 func (p *Manager) UpdateCurHba() {
 	n, err := copystructure.Copy(p.hba)
 	if err != nil {
@@ -203,6 +227,7 @@ func (p *Manager) UpdateCurHba() {
 	p.curHba = n.([]string)
 }
 
+// Init initializes a new PostgreSQL data directory via initdb.
 func (p *Manager) Init(initConfig *InitConfig) error {
 	// os.CreateTemp creates files with 0600 permissions.
 	pwfile, err := os.CreateTemp("", "pwfile")
@@ -249,6 +274,7 @@ func (p *Manager) Init(initConfig *InitConfig) error {
 	return nil
 }
 
+// Restore restores a data directory using a configured restore command.
 func (p *Manager) Restore(command string) error {
 	var err error
 	var cmd *exec.Cmd
@@ -282,6 +308,7 @@ out:
 
 // StartTmpMerged starts postgres with a conf file different than
 // postgresql.conf, including it at the start of the conf if it exists
+// StartTmpMerged starts PostgreSQL with temporary merged configuration.
 func (p *Manager) StartTmpMerged() error {
 	if err := p.writeConfs(true); err != nil {
 		return err
@@ -291,6 +318,7 @@ func (p *Manager) StartTmpMerged() error {
 	return p.start("-c", "config_file="+tmpPostgresConfPath)
 }
 
+// Start starts PostgreSQL with the configured runtime settings.
 func (p *Manager) Start() error {
 	if err := p.writeConfs(false); err != nil {
 		return err
@@ -392,6 +420,7 @@ func (p *Manager) start(args ...string) error {
 
 // Stop tries to stop an instance. An error will be returned if the instance isn't started, stop fails or
 // times out (60 second).
+// Stop stops PostgreSQL.
 func (p *Manager) Stop(fast bool) error {
 	log.Infow("stopping database")
 	name := filepath.Join(p.pgBinPath, "pg_ctl")
@@ -410,6 +439,7 @@ func (p *Manager) Stop(fast bool) error {
 	return nil
 }
 
+// IsStarted reports whether PostgreSQL is currently running.
 func (p *Manager) IsStarted() (bool, error) {
 	name := filepath.Join(p.pgBinPath, "pg_ctl")
 	cmd := exec.Command(name, "status", "-D", p.dataDir, "-o", "-c unix_socket_directories="+common.PgUnixSocketDirectories)
@@ -429,6 +459,7 @@ func (p *Manager) IsStarted() (bool, error) {
 	return true, nil
 }
 
+// Reload requests PostgreSQL to reload its configuration.
 func (p *Manager) Reload() error {
 	log.Infow("reloading database configuration")
 
@@ -456,6 +487,7 @@ func (p *Manager) Reload() error {
 
 // StopIfStarted checks if the instance is started, then calls stop and
 // then check if the instance is really stopped
+// StopIfStarted stops PostgreSQL only when it is currently running.
 func (p *Manager) StopIfStarted(fast bool) error {
 	// Stop will return an error if the instance isn't started, so first check
 	// if it's started
@@ -484,6 +516,7 @@ func (p *Manager) StopIfStarted(fast bool) error {
 	return nil
 }
 
+// Restart restarts PostgreSQL.
 func (p *Manager) Restart(fast bool) error {
 	log.Infow("restarting database")
 	if err := p.StopIfStarted(fast); err != nil {
@@ -495,6 +528,7 @@ func (p *Manager) Restart(fast bool) error {
 	return nil
 }
 
+// WaitReady waits until PostgreSQL accepts local connections.
 func (p *Manager) WaitReady(timeout time.Duration) error {
 	start := time.Now()
 	for timeout == 0 || time.Since(start) < timeout {
@@ -506,6 +540,7 @@ func (p *Manager) WaitReady(timeout time.Duration) error {
 	return errors.New("timeout waiting for db ready")
 }
 
+// WaitRecoveryDone waits until recovery mode exits.
 func (p *Manager) WaitRecoveryDone(timeout time.Duration) error {
 	maj, _, err := p.BinaryVersion()
 	if err != nil {
@@ -540,6 +575,7 @@ func (p *Manager) WaitRecoveryDone(timeout time.Duration) error {
 	return errors.New("timeout waiting for db recovery")
 }
 
+// Promote promotes a standby to primary.
 func (p *Manager) Promote() error {
 	log.Infow("promoting database")
 
@@ -561,6 +597,7 @@ func (p *Manager) Promote() error {
 	return nil
 }
 
+// SetupRoles ensures required superuser and replication roles exist.
 func (p *Manager) SetupRoles() error {
 	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeout)
 	defer cancel()
@@ -601,12 +638,14 @@ func (p *Manager) SetupRoles() error {
 	return nil
 }
 
+// GetSyncStandbys returns synchronous standby names currently reported by PostgreSQL.
 func (p *Manager) GetSyncStandbys() ([]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeout)
 	defer cancel()
 	return getSyncStandbys(ctx, p.localConnParams)
 }
 
+// GetReplicationSlots returns replication slot names currently present.
 func (p *Manager) GetReplicationSlots() ([]string, error) {
 	maj, _, err := p.PGDataVersion()
 	if err != nil {
@@ -618,18 +657,21 @@ func (p *Manager) GetReplicationSlots() ([]string, error) {
 	return getReplicationSlots(ctx, p.localConnParams, maj)
 }
 
+// CreateReplicationSlot creates a physical replication slot.
 func (p *Manager) CreateReplicationSlot(name string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeout)
 	defer cancel()
 	return createReplicationSlot(ctx, p.localConnParams, name)
 }
 
+// DropReplicationSlot removes a replication slot.
 func (p *Manager) DropReplicationSlot(name string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeout)
 	defer cancel()
 	return dropReplicationSlot(ctx, p.localConnParams, name)
 }
 
+// BinaryVersion returns the PostgreSQL binary major and minor version.
 func (p *Manager) BinaryVersion() (int, int, error) {
 	name := filepath.Join(p.pgBinPath, "postgres")
 	cmd := exec.Command(name, "-V")
@@ -642,6 +684,7 @@ func (p *Manager) BinaryVersion() (int, int, error) {
 	return ParseBinaryVersion(string(out))
 }
 
+// PGDataVersion returns the data directory PostgreSQL major and minor version.
 func (p *Manager) PGDataVersion() (int, int, error) {
 	fh, err := os.Open(filepath.Join(p.dataDir, "PG_VERSION"))
 	if err != nil {
@@ -658,6 +701,7 @@ func (p *Manager) PGDataVersion() (int, int, error) {
 	return ParseVersion(version)
 }
 
+// IsInitialized reports whether the data directory is initialized.
 func (p *Manager) IsInitialized() (bool, error) {
 	// List of required files or directories relative to postgres data dir
 	// From https://www.postgresql.org/docs/9.4/static/storage-file-layout.html
@@ -896,6 +940,7 @@ func (p *Manager) createPostgresqlAutoConf() error {
 	return nil
 }
 
+// SyncFromFollowedPGRewind synchronizes from a source using pg_rewind.
 func (p *Manager) SyncFromFollowedPGRewind(followedConnParams ConnParams, password string) error {
 	// Remove postgresql.auto.conf since pg_rewind will error if it's a symlink to /dev/null
 	pgAutoConfPath := filepath.Join(p.dataDir, postgresAutoConf)
@@ -939,6 +984,7 @@ func (p *Manager) SyncFromFollowedPGRewind(followedConnParams ConnParams, passwo
 	return nil
 }
 
+// SyncFromFollowed synchronizes from a source using pg_basebackup.
 func (p *Manager) SyncFromFollowed(followedConnParams ConnParams, replSlot string) error {
 	fcp := followedConnParams.Copy()
 
@@ -1006,6 +1052,7 @@ func (p *Manager) SyncFromFollowed(followedConnParams ConnParams, replSlot strin
 	return nil
 }
 
+// RemoveAll removes the managed PostgreSQL data directory.
 func (p *Manager) RemoveAll() error {
 	initialized, err := p.IsInitialized()
 	if err != nil {
@@ -1025,30 +1072,35 @@ func (p *Manager) RemoveAll() error {
 	return os.RemoveAll(p.dataDir)
 }
 
+// GetSystemData returns current PostgreSQL system data.
 func (p *Manager) GetSystemData() (*SystemData, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeout)
 	defer cancel()
 	return GetSystemData(ctx, p.replConnParams)
 }
 
+// GetTimelinesHistory returns timeline history records up to timeline.
 func (p *Manager) GetTimelinesHistory(timeline uint64) ([]*TimelineHistory, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeout)
 	defer cancel()
 	return getTimelinesHistory(ctx, timeline, p.replConnParams)
 }
 
+// GetConfigFilePGParameters returns PostgreSQL parameters read from config files.
 func (p *Manager) GetConfigFilePGParameters() (common.Parameters, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeout)
 	defer cancel()
 	return getConfigFilePGParameters(ctx, p.localConnParams)
 }
 
+// Ping checks PostgreSQL readiness through a local connection.
 func (p *Manager) Ping() error {
 	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeout)
 	defer cancel()
 	return ping(ctx, p.localConnParams)
 }
 
+// OlderWalFile returns the oldest WAL filename needed by configured replication.
 func (p *Manager) OlderWalFile() (string, error) {
 	maj, _, err := p.PGDataVersion()
 	if err != nil {

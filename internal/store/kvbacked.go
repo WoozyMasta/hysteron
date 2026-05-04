@@ -35,6 +35,7 @@ import (
 type Backend string
 
 const (
+	// ETCDV3 identifies the etcd v3 backend.
 	ETCDV3 Backend = "etcdv3"
 )
 
@@ -46,15 +47,19 @@ const (
 )
 
 const (
+	// DefaultEtcdEndpoints is the default etcd endpoint list.
 	DefaultEtcdEndpoints = "http://127.0.0.1:2379"
 )
 
 const (
+	// MinTTL is the minimum allowed ttl for heartbeat keys.
 	MinTTL = 20 * time.Second
 )
 
+// URLSchemeRegexp matches URL schemes in endpoint strings.
 var URLSchemeRegexp = regexp.MustCompile(`^([a-zA-Z][a-zA-Z0-9+-.]*)://`)
 
+// Config configures a KV backend connection.
 type Config struct {
 	Backend       Backend
 	Endpoints     string
@@ -73,10 +78,12 @@ type KVPair struct {
 	LastIndex uint64
 }
 
+// WriteOptions configures optional write behavior.
 type WriteOptions struct {
 	TTL time.Duration
 }
 
+// KVStore defines primitive key-value operations used by Store.
 type KVStore interface {
 	// Put a value at the specified key
 	Put(ctx context.Context, key string, value []byte, options *WriteOptions) error
@@ -97,6 +104,7 @@ type KVStore interface {
 	Close() error
 }
 
+// NewKVStore creates a KVStore from Config.
 func NewKVStore(cfg Config) (KVStore, error) {
 	if cfg.Backend != ETCDV3 {
 		return nil, fmt.Errorf("unknown store backend: %q", cfg.Backend)
@@ -160,11 +168,13 @@ func NewKVStore(cfg Config) (KVStore, error) {
 	return &etcdV3Store{c: c, requestTimeout: cfg.Timeout}, nil
 }
 
+// KVBackedStore implements Store over a KVStore.
 type KVBackedStore struct {
 	clusterPath string
 	store       KVStore
 }
 
+// NewKVBackedStore creates a Store backed by a KVStore.
 func NewKVBackedStore(kvStore KVStore, path string) *KVBackedStore {
 	return &KVBackedStore{
 		clusterPath: path,
@@ -172,6 +182,7 @@ func NewKVBackedStore(kvStore KVStore, path string) *KVBackedStore {
 	}
 }
 
+// AtomicPutClusterData stores cluster data with optimistic concurrency.
 func (s *KVBackedStore) AtomicPutClusterData(ctx context.Context, cd *cluster.ClusterData, previous *KVPair) (*KVPair, error) {
 	cdj, err := json.Marshal(cd)
 	if err != nil {
@@ -189,6 +200,7 @@ func (s *KVBackedStore) AtomicPutClusterData(ctx context.Context, cd *cluster.Cl
 	return s.store.AtomicPut(ctx, path, cdj, prev, nil)
 }
 
+// PutClusterData stores cluster data without concurrency checks.
 func (s *KVBackedStore) PutClusterData(ctx context.Context, cd *cluster.ClusterData) error {
 	cdj, err := json.Marshal(cd)
 	if err != nil {
@@ -198,6 +210,7 @@ func (s *KVBackedStore) PutClusterData(ctx context.Context, cd *cluster.ClusterD
 	return s.store.Put(ctx, path, cdj, nil)
 }
 
+// GetClusterData loads cluster data and the backing kv pair metadata.
 func (s *KVBackedStore) GetClusterData(ctx context.Context) (*cluster.ClusterData, *KVPair, error) {
 	var cd *cluster.ClusterData
 	path := filepath.Join(s.clusterPath, clusterDataFile)
@@ -214,6 +227,7 @@ func (s *KVBackedStore) GetClusterData(ctx context.Context) (*cluster.ClusterDat
 	return cd, pair, nil
 }
 
+// SetKeeperInfo stores one keeper info record.
 func (s *KVBackedStore) SetKeeperInfo(ctx context.Context, id string, ms *cluster.KeeperInfo, ttl time.Duration) error {
 	msj, err := json.Marshal(ms)
 	if err != nil {
@@ -225,6 +239,7 @@ func (s *KVBackedStore) SetKeeperInfo(ctx context.Context, id string, ms *cluste
 	return s.store.Put(ctx, filepath.Join(s.clusterPath, keepersInfoDir, id), msj, &WriteOptions{TTL: ttl})
 }
 
+// GetKeepersInfo lists all keeper info records.
 func (s *KVBackedStore) GetKeepersInfo(ctx context.Context) (cluster.KeepersInfo, error) {
 	keepers := cluster.KeepersInfo{}
 	pairs, err := s.store.List(ctx, filepath.Join(s.clusterPath, keepersInfoDir))
@@ -245,6 +260,7 @@ func (s *KVBackedStore) GetKeepersInfo(ctx context.Context) (cluster.KeepersInfo
 	return keepers, nil
 }
 
+// SetSentinelInfo stores one sentinel info record.
 func (s *KVBackedStore) SetSentinelInfo(ctx context.Context, si *cluster.SentinelInfo, ttl time.Duration) error {
 	sij, err := json.Marshal(si)
 	if err != nil {
@@ -256,6 +272,7 @@ func (s *KVBackedStore) SetSentinelInfo(ctx context.Context, si *cluster.Sentine
 	return s.store.Put(ctx, filepath.Join(s.clusterPath, sentinelsInfoDir, si.UID), sij, &WriteOptions{TTL: ttl})
 }
 
+// GetSentinelsInfo lists all sentinel info records.
 func (s *KVBackedStore) GetSentinelsInfo(ctx context.Context) (cluster.SentinelsInfo, error) {
 	ssi := cluster.SentinelsInfo{}
 	pairs, err := s.store.List(ctx, filepath.Join(s.clusterPath, sentinelsInfoDir))
@@ -276,6 +293,7 @@ func (s *KVBackedStore) GetSentinelsInfo(ctx context.Context) (cluster.Sentinels
 	return ssi, nil
 }
 
+// SetProxyInfo stores one proxy info record.
 func (s *KVBackedStore) SetProxyInfo(ctx context.Context, pi *cluster.ProxyInfo, ttl time.Duration) error {
 	pij, err := json.Marshal(pi)
 	if err != nil {
@@ -287,6 +305,7 @@ func (s *KVBackedStore) SetProxyInfo(ctx context.Context, pi *cluster.ProxyInfo,
 	return s.store.Put(ctx, filepath.Join(s.clusterPath, proxiesInfoDir, pi.UID), pij, &WriteOptions{TTL: ttl})
 }
 
+// GetProxiesInfo lists all proxy info records.
 func (s *KVBackedStore) GetProxiesInfo(ctx context.Context) (cluster.ProxiesInfo, error) {
 	psi := cluster.ProxiesInfo{}
 	pairs, err := s.store.List(ctx, filepath.Join(s.clusterPath, proxiesInfoDir))
@@ -307,6 +326,7 @@ func (s *KVBackedStore) GetProxiesInfo(ctx context.Context) (cluster.ProxiesInfo
 	return psi, nil
 }
 
+// NewKVBackedElection creates a KV-backed election instance.
 func NewKVBackedElection(kvStore KVStore, path, candidateUID string, timeout time.Duration) (Election, error) {
 	switch kvStore := kvStore.(type) {
 	case *etcdV3Store:

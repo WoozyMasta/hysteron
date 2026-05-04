@@ -21,6 +21,7 @@ import (
 	"strconv"
 )
 
+// GetSystemdID returns the PostgreSQL system identifier from pg_control.
 func (p *Manager) GetSystemdID() (string, error) {
 	pgControl, err := os.Open(filepath.Join(p.dataDir, "global", "pg_control"))
 	if err != nil {

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package timer provides small monotonic timing helpers.
 package timer
 
 import "time"

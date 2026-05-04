@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package util provides shared helper functions.
 package util
 
 import (
@@ -22,16 +23,22 @@ import (
 )
 
 const (
+	// KubePodName is the pod-name environment variable key.
 	KubePodName = "POD_NAME"
 
+	// KubeResourcePrefix is the name prefix for Stolon Kubernetes resources.
 	KubeResourcePrefix = "stolon-cluster"
 
+	// KubeClusterLabel is the label key for cluster name association.
 	KubeClusterLabel = "stolon-cluster"
 
+	// KubeClusterDataAnnotation stores serialized cluster data.
 	KubeClusterDataAnnotation = "stolon-clusterdata"
-	KubeStatusAnnnotation     = "stolon-status"
+	// KubeStatusAnnnotation stores serialized component status data.
+	KubeStatusAnnnotation = "stolon-status"
 )
 
+// PodName returns the current pod name from environment.
 func PodName() (string, error) {
 	podName := os.Getenv(KubePodName)
 	if len(podName) == 0 {

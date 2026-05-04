@@ -39,16 +39,22 @@ import (
 	"k8s.io/client-go/util/retry"
 )
 
+// ComponentLabelValue is the value of the component discriminator label.
 type ComponentLabelValue string
 
 const (
+	// DefaultComponentLabel is the default label key used for component type.
 	DefaultComponentLabel = "component"
 
-	KeeperLabelValue   ComponentLabelValue = "stolon-keeper"
+	// KeeperLabelValue identifies keeper pods.
+	KeeperLabelValue ComponentLabelValue = "stolon-keeper"
+	// SentinelLabelValue identifies sentinel pods.
 	SentinelLabelValue ComponentLabelValue = "stolon-sentinel"
-	ProxyLabelValue    ComponentLabelValue = "stolon-proxy"
+	// ProxyLabelValue identifies proxy pods.
+	ProxyLabelValue ComponentLabelValue = "stolon-proxy"
 )
 
+// KubeStore stores cluster state in Kubernetes objects.
 type KubeStore struct {
 	client       kubernetes.Interface
 	podName      string
@@ -57,6 +63,7 @@ type KubeStore struct {
 	resourceName string
 }
 
+// NewKubeStore creates a Kubernetes-backed store implementation.
 func NewKubeStore(kubecli kubernetes.Interface, podName, namespace, clusterName string) (*KubeStore, error) {
 	return &KubeStore{
 		client:       kubecli,
@@ -112,6 +119,7 @@ func (s *KubeStore) patchKubeStatusAnnotation(ctx context.Context, annotationDat
 	return nil
 }
 
+// AtomicPutClusterData stores cluster data with optimistic concurrency.
 func (s *KubeStore) AtomicPutClusterData(ctx context.Context, cd *cluster.ClusterData, previous *KVPair) (*KVPair, error) {
 	cdj, err := json.Marshal(cd)
 	if err != nil {
@@ -182,6 +190,7 @@ func (s *KubeStore) AtomicPutClusterData(ctx context.Context, cd *cluster.Cluste
 	return &KVPair{Value: cdj}, nil
 }
 
+// PutClusterData stores cluster data without concurrency checks.
 func (s *KubeStore) PutClusterData(ctx context.Context, cd *cluster.ClusterData) error {
 	cdj, err := json.Marshal(cd)
 	if err != nil {
@@ -219,6 +228,7 @@ func (s *KubeStore) PutClusterData(ctx context.Context, cd *cluster.ClusterData)
 	return nil
 }
 
+// GetClusterData loads cluster data from Kubernetes.
 func (s *KubeStore) GetClusterData(ctx context.Context) (*cluster.ClusterData, *KVPair, error) {
 	epsClient := s.client.CoreV1().ConfigMaps(s.namespace)
 	result, err := epsClient.Get(ctx, s.resourceName, metav1.GetOptions{})
@@ -241,6 +251,7 @@ func (s *KubeStore) GetClusterData(ctx context.Context) (*cluster.ClusterData, *
 	return cd, &KVPair{Value: []byte(cdj)}, nil
 }
 
+// SetKeeperInfo publishes keeper info.
 func (s *KubeStore) SetKeeperInfo(ctx context.Context, _ string, ms *cluster.KeeperInfo, _ time.Duration) error {
 	msj, err := json.Marshal(ms)
 	if err != nil {
@@ -249,6 +260,7 @@ func (s *KubeStore) SetKeeperInfo(ctx context.Context, _ string, ms *cluster.Kee
 	return s.patchKubeStatusAnnotation(ctx, msj)
 }
 
+// GetKeepersInfo lists published keeper info.
 func (s *KubeStore) GetKeepersInfo(ctx context.Context) (cluster.KeepersInfo, error) {
 	keepers := cluster.KeepersInfo{}
 
@@ -276,6 +288,7 @@ func (s *KubeStore) GetKeepersInfo(ctx context.Context) (cluster.KeepersInfo, er
 	return keepers, nil
 }
 
+// SetSentinelInfo publishes sentinel info.
 func (s *KubeStore) SetSentinelInfo(ctx context.Context, si *cluster.SentinelInfo, _ time.Duration) error {
 	sij, err := json.Marshal(si)
 	if err != nil {
@@ -284,6 +297,7 @@ func (s *KubeStore) SetSentinelInfo(ctx context.Context, si *cluster.SentinelInf
 	return s.patchKubeStatusAnnotation(ctx, sij)
 }
 
+// GetSentinelsInfo lists published sentinel info.
 func (s *KubeStore) GetSentinelsInfo(ctx context.Context) (cluster.SentinelsInfo, error) {
 	ssi := cluster.SentinelsInfo{}
 
@@ -311,6 +325,7 @@ func (s *KubeStore) GetSentinelsInfo(ctx context.Context) (cluster.SentinelsInfo
 	return ssi, nil
 }
 
+// SetProxyInfo publishes proxy info.
 func (s *KubeStore) SetProxyInfo(ctx context.Context, pi *cluster.ProxyInfo, _ time.Duration) error {
 	pij, err := json.Marshal(pi)
 	if err != nil {
@@ -319,6 +334,7 @@ func (s *KubeStore) SetProxyInfo(ctx context.Context, pi *cluster.ProxyInfo, _ t
 	return s.patchKubeStatusAnnotation(ctx, pij)
 }
 
+// GetProxiesInfo lists published proxy info.
 func (s *KubeStore) GetProxiesInfo(ctx context.Context) (cluster.ProxiesInfo, error) {
 	psi := cluster.ProxiesInfo{}
 
@@ -346,6 +362,7 @@ func (s *KubeStore) GetProxiesInfo(ctx context.Context) (cluster.ProxiesInfo, er
 	return psi, nil
 }
 
+// KubeElection implements sentinel leader election via Kubernetes Lease locks.
 type KubeElection struct {
 	client       kubernetes.Interface
 	podName      string
@@ -363,6 +380,7 @@ type KubeElection struct {
 	rl resourcelock.Interface
 }
 
+// NewKubeElection creates a Kubernetes-backed election.
 func NewKubeElection(kubecli kubernetes.Interface, podName, namespace, clusterName, candidateUID string) (*KubeElection, error) {
 	resourceName := fmt.Sprintf("%s-%s", util.KubeResourcePrefix, clusterName)
 
@@ -388,6 +406,7 @@ func NewKubeElection(kubecli kubernetes.Interface, podName, namespace, clusterNa
 	}, nil
 }
 
+// RunForElection starts campaigning and returns election and error channels.
 func (e *KubeElection) RunForElection() (<-chan bool, <-chan error) {
 	if e.running {
 		panic("already running")
@@ -403,6 +422,7 @@ func (e *KubeElection) RunForElection() (<-chan bool, <-chan error) {
 	return e.electedCh, e.errCh
 }
 
+// Stop stops election campaigning.
 func (e *KubeElection) Stop() {
 	if !e.running {
 		panic("not running")
@@ -411,6 +431,7 @@ func (e *KubeElection) Stop() {
 	e.running = false
 }
 
+// Leader returns the current leader identity.
 func (e *KubeElection) Leader() (string, error) {
 	ler, _, err := e.rl.Get(context.Background())
 	if err != nil {

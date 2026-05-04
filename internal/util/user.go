@@ -20,6 +20,7 @@ import (
 	"os/user"
 )
 
+// GetUser returns the current user name.
 func GetUser() (string, error) {
 	u, err := user.Current()
 	if err == nil {

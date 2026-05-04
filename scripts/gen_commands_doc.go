@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Command gen_commands_doc generates markdown docs for CLI commands.
 package main
 
 import (

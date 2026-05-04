@@ -26,11 +26,14 @@ import (
 
 var (
 	// ErrKeyNotFound is thrown when the key is not found in the store during a Get operation
-	ErrKeyNotFound      = errors.New("key not found in store")
-	ErrKeyModified      = errors.New("unable to complete atomic operation, key modified")
+	ErrKeyNotFound = errors.New("key not found in store")
+	// ErrKeyModified reports optimistic write conflicts.
+	ErrKeyModified = errors.New("unable to complete atomic operation, key modified")
+	// ErrElectionNoLeader reports missing election leader.
 	ErrElectionNoLeader = errors.New("election: no leader")
 )
 
+// Store stores and retrieves cluster state and component heartbeats.
 type Store interface {
 	AtomicPutClusterData(ctx context.Context, cd *cluster.ClusterData, previous *KVPair) (*KVPair, error)
 	PutClusterData(ctx context.Context, cd *cluster.ClusterData) error
@@ -43,6 +46,7 @@ type Store interface {
 	GetProxiesInfo(ctx context.Context) (cluster.ProxiesInfo, error)
 }
 
+// Election coordinates leader election among sentinel instances.
 type Election interface {
 	// WARNING: If the election error channel receives any error, it is vital that
 	// the consuming code calls election.Stop(). Failure to do so can cause

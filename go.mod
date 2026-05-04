@@ -9,7 +9,7 @@ require (
 	github.com/golang/mock v1.6.0
 	github.com/google/go-cmp v0.7.0
 	github.com/hashicorp/consul/api v1.4.0
-	github.com/lib/pq v1.3.0
+	github.com/lib/pq v1.12.3
 	github.com/mattn/go-isatty v0.0.12
 	github.com/mitchellh/copystructure v1.0.0
 	github.com/prometheus/client_golang v1.4.1

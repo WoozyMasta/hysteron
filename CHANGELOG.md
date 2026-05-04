@@ -31,6 +31,8 @@ The format is based on [Keep a Changelog][], and this project adheres to
   findings.
 * Update test and mock helper dependencies in the first controlled dependency
   modernization batch.
+* Update the PostgreSQL driver dependency in a separate controlled runtime
+  modernization batch.
 
 ## v0.17.0
 

@@ -15,7 +15,7 @@ stolon-keeper [flags]
       --data-dir string                 data directory
       --disable-data-dir-locking        disable locking on data dir. Warning! It'll cause data corruptions if two keepers are concurrently running with the same data dir.
   -h, --help                            help for stolon-keeper
-      --kube-resource-kind string       the k8s resource kind to be used to store stolon clusterdata and do sentinel leader election (only "configmap" is currently supported)
+      --kube-resource-kind string       the k8s resource kind to be used to store stolon clusterdata (only "configmap" is currently supported; sentinel leader election uses leases)
       --log-color                       enable color in log output (default if attached to a terminal)
       --log-level string                debug, info (default), warn or error (default "info")
       --metrics-listen-address string   metrics listen address i.e "0.0.0.0:8080" (disabled by default)

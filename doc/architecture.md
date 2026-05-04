@@ -61,7 +61,15 @@ The k8s API server must be configured with enabled etcd quorum read (should be t
 
 **NOTE**: a kubernetes based store will share the kubernetes API server with all the other k8s cluster resources. If the API servers are overloaded and doesn't answer in time, as explained above, the proxies will, after a timeout, close connections to the master keeper. The same will happen if you're updating you kubernetes cluster and you have the need to shutdown all your API servers. A dedicated store, like an etcd cluster, will probably be more reliable and avoid the proxies closing connection and impacting you application availability.
 
-To store the clusterdata and handle sentinel leader election a configmap resource named `stolon-cluster-$CLUSTERNAME` is created/updated. Pay attention to don't delete this configmap or you'll lose you cluster data. The clusterdata is saved inside a metadata field called `stolon-clusterdata`. No data provided by the configmap is used and user should pay attention to not manually modify the configmap.
+To store the clusterdata a configmap resource named
+`stolon-cluster-$CLUSTERNAME` is created/updated. Pay attention to don't delete
+this configmap or you'll lose you cluster data. The clusterdata is saved inside
+a metadata field called `stolon-clusterdata`. No data provided by the configmap
+is used and user should pay attention to not manually modify the configmap.
+
+Sentinel leader election uses a `coordination.k8s.io/Lease` resource with the
+same `stolon-cluster-$CLUSTERNAME` name. Kubernetes RBAC must allow the sentinel
+to get, create, and update leases.
 
 To discovery stolon components (keepers, proxies, sentinels) a lookup with specific label selectors is executed. These labels must be correctly set on the pod definition (see the [kubernetes example](/examples/kubernetes)). They are:
 

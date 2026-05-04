@@ -20,7 +20,7 @@ stolonctl clusterdata write [flags]
       --cluster-name string             cluster name
       --kube-context string             name of the kubeconfig context to use
       --kube-namespace string           name of the kubernetes namespace to use
-      --kube-resource-kind string       the k8s resource kind to be used to store stolon clusterdata and do sentinel leader election (only "configmap" is currently supported)
+      --kube-resource-kind string       the k8s resource kind to be used to store stolon clusterdata (only "configmap" is currently supported; sentinel leader election uses leases)
       --kubeconfig string               path to kubeconfig file. Overrides $KUBECONFIG
       --log-level string                debug, info (default), warn or error (default "info")
       --metrics-listen-address string   metrics listen address i.e "0.0.0.0:8080" (disabled by default)

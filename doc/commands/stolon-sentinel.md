@@ -12,7 +12,7 @@ stolon-sentinel [flags]
       --cluster-name string             cluster name
   -h, --help                            help for stolon-sentinel
       --initial-cluster-spec string     a file providing the initial cluster specification, used only at cluster initialization, ignored if cluster is already initialized
-      --kube-resource-kind string       the k8s resource kind to be used to store stolon clusterdata and do sentinel leader election (only "configmap" is currently supported)
+      --kube-resource-kind string       the k8s resource kind to be used to store stolon clusterdata (only "configmap" is currently supported; sentinel leader election uses leases)
       --log-color                       enable color in log output (default if attached to a terminal)
       --log-level string                debug, info (default), warn or error (default "info")
       --metrics-listen-address string   metrics listen address i.e "0.0.0.0:8080" (disabled by default)

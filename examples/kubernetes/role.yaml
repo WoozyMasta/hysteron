@@ -3,6 +3,7 @@
 # The required permission per component should be:
 # keeper/proxy/sentinel: update their own pod annotations
 # sentinel/stolonctl: get, create, update configmaps
+# sentinel: get, create, update leases for leader election
 # sentinel/stolonctl: list components pods
 # sentinel/stolonctl: get components pods annotations
 
@@ -18,5 +19,11 @@ rules:
   - pods
   - configmaps
   - events
+  verbs:
+  - "*"
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
   verbs:
   - "*"

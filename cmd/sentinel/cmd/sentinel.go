@@ -73,7 +73,7 @@ func (s *Sentinel) electionLoop(ctx context.Context) {
 		log.Info().Msg("Trying to acquire sentinels leadership")
 		electedCh, errCh, err := s.election.RunForElection()
 		if err != nil {
-			log.Error().Err(err).Msg("election_start_failed")
+			log.Error().Err(err).Msg("failed to start sentinel election")
 			select {
 			case <-ctx.Done():
 				log.Debug().Msg("stopping election loop")
@@ -101,16 +101,16 @@ func (s *Sentinel) electionLoop(ctx context.Context) {
 
 			case err := <-errCh:
 				if err != nil {
-					log.Error().Err(err).Msg("election_loop_error")
+					log.Error().Err(err).Msg("sentinel election loop failed")
 					if err := s.election.Stop(); err != nil {
-						log.Error().Err(err).Msg("election_stop_failed")
+						log.Error().Err(err).Msg("failed to stop sentinel election")
 					}
 				}
 				break inner
 			case <-ctx.Done():
 				log.Debug().Msg("stopping election loop")
 				if err := s.election.Stop(); err != nil {
-					log.Error().Err(err).Msg("election_stop_failed")
+					log.Error().Err(err).Msg("failed to stop sentinel election")
 				}
 				return
 			}
@@ -452,7 +452,7 @@ func (s *Sentinel) setDBSpecFromClusterSpec(cd *cluster.ClusterData) {
 			log.Warn().
 				Err(err).
 				Str(slog.FieldDBUID, db.UID).
-				Msg("set_db_spec_skip_db_type")
+				Msg("skipping database spec update because database type cannot be determined")
 			continue
 		}
 		switch dt {
@@ -821,7 +821,7 @@ func (s *Sentinel) validDBsByStatus(
 				Err(err).
 				Str(slog.FieldDBUID, db.UID).
 				Str("role", logRole).
-				Msg("skip_db_classification_validity")
+				Msg("skipping database classification because validity cannot be determined")
 			continue
 		}
 		dt, err := s.dbType(cd, db.UID)
@@ -830,7 +830,7 @@ func (s *Sentinel) validDBsByStatus(
 				Err(err).
 				Str(slog.FieldDBUID, db.UID).
 				Str("role", logRole).
-				Msg("skip_db_classification_db_type")
+				Msg("skipping database classification because database type cannot be determined")
 			continue
 		}
 		if valid != dbValidityValid || dt != wantType {
@@ -842,7 +842,7 @@ func (s *Sentinel) validDBsByStatus(
 				Err(err).
 				Str(slog.FieldDBUID, db.UID).
 				Str("role", logRole).
-				Msg("skip_db_classification_status")
+				Msg("skipping database classification because database status cannot be determined")
 			continue
 		}
 		switch status {
@@ -1452,7 +1452,7 @@ func (s *Sentinel) updateCluster(
 						log.Warn().
 							Err(err).
 							Str(slog.FieldDBUID, db.UID).
-							Msg("skip_old_master_cleanup_db_type")
+							Msg("skipping old master cleanup because database type cannot be determined")
 						continue
 					}
 					if dt != dbTypeMaster {
@@ -1479,7 +1479,7 @@ func (s *Sentinel) updateCluster(
 						log.Warn().
 							Err(err).
 							Str(slog.FieldDBUID, db.UID).
-							Msg("skip_invalid_db_cleanup")
+							Msg("skipping invalid database cleanup because validity cannot be determined")
 						continue
 					}
 					if v != dbValidityInvalid {
@@ -1503,7 +1503,7 @@ func (s *Sentinel) updateCluster(
 						log.Warn().
 							Err(err).
 							Str(slog.FieldDBUID, db.UID).
-							Msg("skip_db_can_sync_check")
+							Msg("skipping database sync check")
 						continue
 					}
 					if canSync {
@@ -1858,7 +1858,7 @@ func (s *Sentinel) updateCluster(
 									"target_sync_standby_uids",
 									sortedStringSetKeys(synchronousStandbys),
 								).
-								Msg("synchronous_standbys_unchanged")
+								Msg("synchronous standbys unchanged")
 						}
 
 						// If there're not enough real synchronous standbys add a fake synchronous standby because we have to be strict and make the master block transactions until MinSynchronousStandbys real standbys are available
@@ -1923,7 +1923,7 @@ func (s *Sentinel) updateCluster(
 							log.Warn().
 								Err(err).
 								Str(slog.FieldDBUID, db.UID).
-								Msg("skip_remove_non_good_standby_db_type")
+								Msg("skipping standby cleanup because database type cannot be determined")
 							continue
 						}
 						if dt != dbTypeStandby {
@@ -2002,7 +2002,7 @@ func (s *Sentinel) updateCluster(
 						log.Warn().
 							Err(err).
 							Str(slog.FieldDBUID, db.UID).
-							Msg("skip_reconfigure_standby_db_type")
+							Msg("skipping standby reconfiguration because database type cannot be determined")
 						continue
 					}
 					if dt != dbTypeStandby {
@@ -2204,7 +2204,7 @@ func (s *Sentinel) dbConvergenceState(
 			s.dbConvergenceInfos[db.UID] = d
 			log.Debug().
 				Str(slog.FieldDBUID, db.UID).
-				Msg("db_convergence_info_recovered")
+				Msg("database convergence tracking initialized")
 		}
 		if timer.Since(d.Timer) > timeout {
 			return ConvergenceFailed
@@ -2551,7 +2551,7 @@ func (s *Sentinel) clusterSentinelCheck(pctx context.Context) {
 		firstRun,
 	)
 	if err != nil {
-		log.Error().Err(err).Msg("update_keepers_status_failed")
+		log.Error().Err(err).Msg("failed to update keeper status")
 		return
 	}
 	log.Debug().
@@ -2560,7 +2560,7 @@ func (s *Sentinel) clusterSentinelCheck(pctx context.Context) {
 
 	activeProxiesInfos, err := s.activeProxiesInfos(proxiesInfo)
 	if err != nil {
-		log.Error().Err(err).Msg("active_proxies_infos_failed")
+		log.Error().Err(err).Msg("failed to compute active proxy info")
 		return
 	}
 
@@ -2633,12 +2633,12 @@ func sentinel(_ *flags.Parser) {
 	}
 
 	if err := cmd.CheckClusterName(&cfg.CommonConfig); err != nil {
-		log.Error().Err(err).Msg("check_cluster_name_failed")
+		log.Error().Err(err).Msg("invalid cluster name")
 		closeLog()
 		os.Exit(1)
 	}
 	if err := cmd.CheckCommonConfig(&cfg.CommonConfig); err != nil {
-		log.Error().Err(err).Msg("check_common_config_failed")
+		log.Error().Err(err).Msg("invalid common configuration")
 		closeLog()
 		os.Exit(1)
 	}
@@ -2646,7 +2646,7 @@ func sentinel(_ *flags.Parser) {
 	cmd.SetMetrics(&cfg.CommonConfig, "sentinel")
 
 	uid := common.UID()
-	log.Info().Str(slog.FieldSentinelUID, uid).Msg("sentinel_uid")
+	log.Info().Str(slog.FieldSentinelUID, uid).Msg("sentinel UID assigned")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	end := make(chan bool)
@@ -2673,7 +2673,7 @@ func sentinel(_ *flags.Parser) {
 
 	s, err := NewSentinel(uid, &cfg, end)
 	if err != nil {
-		log.Fatal().Err(err).Msg("new_sentinel_failed")
+		log.Fatal().Err(err).Msg("failed to create sentinel")
 	}
 	go s.Start(ctx)
 

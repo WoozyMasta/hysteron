@@ -1,4 +1,5 @@
 // Copyright 2015 Sorint.lab
+// Copyright 2026 WoozyMasta
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,6 +34,7 @@ import (
 	"slices"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -43,7 +45,6 @@ import (
 	"github.com/sorintlab/stolon/internal/store"
 
 	"github.com/google/uuid"
-	_ "github.com/lib/pq"
 )
 
 const (
@@ -79,7 +80,7 @@ type Querier interface {
 }
 
 type ReplQuerier interface {
-	ReplQuery(query string, args ...interface{}) (*sql.Rows, error)
+	ReplConnParams() pg.ConnParams
 }
 
 func GetPGParameters(q Querier) (common.Parameters, error) {
@@ -102,25 +103,10 @@ func GetPGParameters(q Querier) (common.Parameters, error) {
 }
 
 func GetSystemData(q ReplQuerier) (*pg.SystemData, error) {
-	rows, err := q.ReplQuery("IDENTIFY_SYSTEM")
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	if rows.Next() {
-		var sd pg.SystemData
-		var xLogPosLsn string
-		var unused *string
-		if err = rows.Scan(&sd.SystemID, &sd.TimelineID, &xLogPosLsn, &unused); err != nil {
-			return nil, err
-		}
-		sd.XLogPos, err = pg.PGLsnToInt(xLogPosLsn)
-		if err != nil {
-			return nil, err
-		}
-		return &sd, nil
-	}
-	return nil, fmt.Errorf("query returned 0 rows")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	return pg.GetSystemData(ctx, q.ReplConnParams())
 }
 
 func GetXLogPos(q ReplQuerier) (uint64, error) {
@@ -484,8 +470,8 @@ func (p *Process) Wait(timeout time.Duration) error {
 	select {
 	case <-timeoutCh:
 		return fmt.Errorf("timeout waiting on process")
-	case <-endCh:
-		return nil
+	case err := <-endCh:
+		return err
 	}
 }
 
@@ -499,8 +485,8 @@ type TestKeeper struct {
 	pgSUPassword    string
 	pgReplUsername  string
 	pgReplPassword  string
+	replConnParams  pg.ConnParams
 	db              *sql.DB
-	rdb             *sql.DB
 }
 
 func NewTestKeeperWithID(t *testing.T, dir, uid, clusterName, pgSUUsername, pgSUPassword, pgReplUsername, pgReplPassword string, storeBackend store.Backend, storeEndpoints string, a ...string) (*TestKeeper, error) {
@@ -551,13 +537,7 @@ func NewTestKeeperWithID(t *testing.T, dir, uid, clusterName, pgSUUsername, pgSU
 	}
 
 	connString := connParams.ConnString()
-	db, err := sql.Open("postgres", connString)
-	if err != nil {
-		return nil, err
-	}
-
-	replConnString := replConnParams.ConnString()
-	rdb, err := sql.Open("postgres", replConnString)
+	db, err := sql.Open(pg.SQLDriverName, connString)
 	if err != nil {
 		return nil, err
 	}
@@ -582,8 +562,8 @@ func NewTestKeeperWithID(t *testing.T, dir, uid, clusterName, pgSUUsername, pgSU
 		pgSUPassword:    pgSUPassword,
 		pgReplUsername:  pgReplUsername,
 		pgReplPassword:  pgReplPassword,
+		replConnParams:  replConnParams,
 		db:              db,
-		rdb:             rdb,
 	}
 	return tk, nil
 }
@@ -650,6 +630,104 @@ func (tk *TestKeeper) Exec(query string, args ...interface{}) (sql.Result, error
 	return res, nil
 }
 
+func (tk *TestKeeper) openDB(username, password string) (*sql.DB, error) {
+	connParams := pg.ConnParams{
+		"user":     username,
+		"password": password,
+		"host":     tk.pgListenAddress,
+		"port":     tk.pgPort,
+		"dbname":   "postgres",
+		"sslmode":  "disable",
+	}
+	return sql.Open(pg.SQLDriverName, connParams.ConnString())
+}
+
+func (tk *TestKeeper) waitDBUpWithCredentials(username, password string, timeout time.Duration) error {
+	db, err := tk.openDB(username, password)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	start := time.Now()
+	for time.Now().Add(-timeout).Before(start) {
+		if _, err := db.Exec("select 1"); err == nil {
+			return nil
+		}
+		time.Sleep(sleepInterval)
+	}
+	return fmt.Errorf("timeout")
+}
+
+func (tk *TestKeeper) expectConnect(username, password string) error {
+	db, err := tk.openDB(username, password)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	_, err = db.Exec("select 1")
+	return err
+}
+
+func (tk *TestKeeper) roleAttributes(role string) (replication bool, superuser bool, err error) {
+	rows, err := tk.Query(
+		"select rolreplication, rolsuper from pg_roles where rolname = $1",
+		role,
+	)
+	if err != nil {
+		return false, false, err
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		return false, false, fmt.Errorf("role %q not found", role)
+	}
+	if err := rows.Scan(&replication, &superuser); err != nil {
+		return false, false, err
+	}
+	return replication, superuser, rows.Err()
+}
+
+func (tk *TestKeeper) waitRoleAttributes(role string, wantReplication, wantSuperuser bool, timeout time.Duration) error {
+	start := time.Now()
+	for time.Now().Add(-timeout).Before(start) {
+		replication, superuser, err := tk.roleAttributes(role)
+		if err == nil && replication == wantReplication && superuser == wantSuperuser {
+			return nil
+		}
+		time.Sleep(sleepInterval)
+	}
+	return fmt.Errorf(
+		"timeout waiting for role %q attributes replication=%t superuser=%t",
+		role,
+		wantReplication,
+		wantSuperuser,
+	)
+}
+
+func (tk *TestKeeper) waitRoleSuperuser(role string, timeout time.Duration) error {
+	start := time.Now()
+	for time.Now().Add(-timeout).Before(start) {
+		_, superuser, err := tk.roleAttributes(role)
+		if err == nil && superuser {
+			return nil
+		}
+		time.Sleep(sleepInterval)
+	}
+	return fmt.Errorf("timeout waiting for role %q to be a superuser", role)
+}
+
+func (tk *TestKeeper) waitRoleReplication(role string, timeout time.Duration) error {
+	start := time.Now()
+	for time.Now().Add(-timeout).Before(start) {
+		replication, _, err := tk.roleAttributes(role)
+		if err == nil && replication {
+			return nil
+		}
+		time.Sleep(sleepInterval)
+	}
+	return fmt.Errorf("timeout waiting for role %q to have replication privileges", role)
+}
+
 func (tk *TestKeeper) Query(query string, args ...interface{}) (*sql.Rows, error) {
 	res, err := tk.db.Query(query, args...)
 	if err != nil {
@@ -659,13 +737,8 @@ func (tk *TestKeeper) Query(query string, args ...interface{}) (*sql.Rows, error
 	return res, nil
 }
 
-func (tk *TestKeeper) ReplQuery(query string, args ...interface{}) (*sql.Rows, error) {
-	res, err := tk.rdb.Query(query, args...)
-	if err != nil {
-		return nil, err
-	}
-
-	return res, nil
+func (tk *TestKeeper) ReplConnParams() pg.ConnParams {
+	return tk.replConnParams.Copy()
 }
 
 func (tk *TestKeeper) SwitchWals(times int) error {
@@ -862,6 +935,20 @@ func (tk *TestKeeper) GetPGParameters() (common.Parameters, error) {
 	return GetPGParameters(tk)
 }
 
+func (tk *TestKeeper) waitPostgresConfParam(parameter, value string, timeout time.Duration) error {
+	expected := fmt.Sprintf("%s = '%s'", parameter, value)
+	path := filepath.Join(tk.dataDir, "postgres", "postgresql.conf")
+	start := time.Now()
+	for time.Now().Add(-timeout).Before(start) {
+		data, err := os.ReadFile(path)
+		if err == nil && strings.Contains(string(data), expected) {
+			return nil
+		}
+		time.Sleep(sleepInterval)
+	}
+	return fmt.Errorf("timeout waiting for %s in %s", expected, path)
+}
+
 /*
 // currently unused, keep for future needs
 
@@ -926,10 +1013,10 @@ func NewTestSentinel(t *testing.T, dir string, clusterName string, storeBackend 
 type TestProxy struct {
 	t *testing.T
 	Process
-	listenAddress string
-	port          string
-	db            *sql.DB
-	rdb           *sql.DB
+	listenAddress  string
+	port           string
+	replConnParams pg.ConnParams
+	db             *sql.DB
 }
 
 func NewTestProxy(t *testing.T, dir string, clusterName, pgSUUsername, pgSUPassword, pgReplUsername, pgReplPassword string, storeBackend store.Backend, storeEndpoints string, a ...string) (*TestProxy, error) {
@@ -972,13 +1059,7 @@ func NewTestProxy(t *testing.T, dir string, clusterName, pgSUUsername, pgSUPassw
 	}
 
 	connString := connParams.ConnString()
-	db, err := sql.Open("postgres", connString)
-	if err != nil {
-		return nil, err
-	}
-
-	replConnString := replConnParams.ConnString()
-	rdb, err := sql.Open("postgres", replConnString)
+	db, err := sql.Open(pg.SQLDriverName, connString)
 	if err != nil {
 		return nil, err
 	}
@@ -996,10 +1077,10 @@ func NewTestProxy(t *testing.T, dir string, clusterName, pgSUUsername, pgSUPassw
 			bin:  bin,
 			args: args,
 		},
-		listenAddress: listenAddress,
-		port:          port,
-		db:            db,
-		rdb:           rdb,
+		listenAddress:  listenAddress,
+		port:           port,
+		replConnParams: replConnParams,
+		db:             db,
 	}
 	return tp, nil
 }
@@ -1051,13 +1132,8 @@ func (tp *TestProxy) Query(query string, args ...interface{}) (*sql.Rows, error)
 	return res, nil
 }
 
-func (tp *TestProxy) ReplQuery(query string, args ...interface{}) (*sql.Rows, error) {
-	res, err := tp.rdb.Query(query, args...)
-	if err != nil {
-		return nil, err
-	}
-
-	return res, nil
+func (tp *TestProxy) ReplConnParams() pg.ConnParams {
+	return tp.replConnParams.Copy()
 }
 
 func (tp *TestProxy) GetPGParameters() (common.Parameters, error) {

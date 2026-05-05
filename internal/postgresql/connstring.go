@@ -28,7 +28,7 @@ import (
 	"github.com/sorintlab/stolon/internal/common"
 )
 
-// This is based on github.com/lib/pq
+// This parses PostgreSQL libpq-style keyword/value connection strings.
 
 // ConnParams is a map of PostgreSQL connection string parameters.
 type ConnParams map[string]string

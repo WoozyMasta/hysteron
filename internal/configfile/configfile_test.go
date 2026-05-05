@@ -14,7 +14,10 @@
 
 package configfile
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestClusterSpecExpansion(t *testing.T) {
 	t.Setenv("STOLON_TEST_LOCALE", "C.UTF-8")
@@ -53,6 +56,22 @@ func TestClusterSpecExpansionRequiredError(t *testing.T) {
 	_, err := ClusterSpec([]byte(`{"initMode":"new","newConfig":{"locale":"${STOLON_TEST_REQUIRED_LOCALE:?missing locale}"}}`))
 	if err == nil {
 		t.Fatal("expected required expansion error")
+	}
+}
+
+func TestClusterSpecDurationStrings(t *testing.T) {
+	spec, err := ClusterSpec([]byte(`{"initMode":"new","sleepInterval":"2s","failInterval":"5s","convergenceTimeout":"30s"}`))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if spec.SleepInterval.Duration != 2*time.Second {
+		t.Fatalf("got sleepInterval %s, wanted 2s", spec.SleepInterval.Duration)
+	}
+	if spec.FailInterval.Duration != 5*time.Second {
+		t.Fatalf("got failInterval %s, wanted 5s", spec.FailInterval.Duration)
+	}
+	if spec.ConvergenceTimeout.Duration != 30*time.Second {
+		t.Fatalf("got convergenceTimeout %s, wanted 30s", spec.ConvergenceTimeout.Duration)
 	}
 }
 

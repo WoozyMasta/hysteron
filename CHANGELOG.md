@@ -106,6 +106,8 @@ The format is based on [Keep a Changelog][], and this project adheres to
   `parser.AddCommand` plumbing.
 * Replace project logging with zerolog-based structured loggers, add
   command-level logging setup, and remove production-path `panic` calls.
+* Migrate PostgreSQL `database/sql` access from `github.com/lib/pq` to
+  `github.com/jackc/pgx/v5/stdlib`.
 
 ## v0.17.0
 

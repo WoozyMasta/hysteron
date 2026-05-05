@@ -33,8 +33,6 @@ import (
 	"github.com/sorintlab/stolon/internal/common"
 	slog "github.com/sorintlab/stolon/internal/log"
 
-	// Register the postgres database/sql driver.
-	_ "github.com/lib/pq"
 	"github.com/mitchellh/copystructure"
 	"github.com/rs/zerolog"
 )
@@ -465,6 +463,13 @@ func (p *Manager) Stop(fast bool) error {
 
 // IsStarted reports whether PostgreSQL is currently running.
 func (p *Manager) IsStarted() (bool, error) {
+	if _, err := os.Stat(p.dataDir); err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("cannot stat data dir: %w", err)
+	}
+
 	name := filepath.Join(p.pgBinPath, "pg_ctl")
 	cmd := exec.Command(name, "status", "-D", p.dataDir, "-o", "-c unix_socket_directories="+common.PgUnixSocketDirectories)
 	_, err := cmd.CombinedOutput()

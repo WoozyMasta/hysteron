@@ -106,7 +106,7 @@ func newElection(uid string) (store.Election, error) {
 func stderr(format string, a ...any) {
 	out := fmt.Sprintf(format, a...)
 	if _, err := fmt.Fprintln(os.Stderr, strings.TrimSuffix(out, "\n")); err != nil {
-		log.Fatal().Err(err).Msg("write_stderr_failed")
+		log.Fatal().Err(err).Msg("failed to write to stderr")
 	}
 }
 

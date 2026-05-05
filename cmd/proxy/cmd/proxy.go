@@ -289,7 +289,7 @@ func (c *ClusterChecker) Check() error {
 	}
 	log.Info().
 		Str("tcp_addr", addr.String()).
-		Msg("resolved_master_address")
+		Msg("resolved current master address")
 	if err = c.SetProxyInfo(proxy.Generation, proxyTimeout); err != nil {
 		// if we failed to update our proxy info when a master is defined we
 		// cannot ignore this error since the sentinel won't know that we exist
@@ -308,12 +308,12 @@ func (c *ClusterChecker) Check() error {
 	if slices.Contains(proxy.Spec.EnabledProxies, c.uid) {
 		log.Info().
 			Str("tcp_addr", addr.String()).
-			Msg("proxying_to_master")
+			Msg("proxying connections to current master")
 		c.setProxyDestination(addr)
 	} else {
 		log.Info().
 			Str("tcp_addr", addr.String()).
-			Msg("not_proxying_not_in_enabled_list")
+			Msg("not proxying because this proxy is not enabled in cluster data")
 		c.setProxyDestination(nil)
 	}
 
@@ -422,12 +422,12 @@ func proxy(_ *flags.Parser) {
 	}
 
 	if err := cmd.CheckClusterName(&cfg.CommonConfig); err != nil {
-		log.Error().Err(err).Msg("check_cluster_name_failed")
+		log.Error().Err(err).Msg("invalid cluster name")
 		closeLog()
 		os.Exit(1)
 	}
 	if err := cmd.CheckCommonConfig(&cfg.CommonConfig); err != nil {
-		log.Error().Err(err).Msg("check_common_config_failed")
+		log.Error().Err(err).Msg("invalid common configuration")
 		closeLog()
 		os.Exit(1)
 	}
@@ -435,7 +435,7 @@ func proxy(_ *flags.Parser) {
 	cmd.SetMetrics(&cfg.CommonConfig, "proxy")
 
 	uid := common.UID()
-	log.Info().Str(slog.FieldProxyUID, uid).Msg("proxy_uid")
+	log.Info().Str(slog.FieldProxyUID, uid).Msg("proxy UID assigned")
 
 	if cfg.MetricsListenAddress != "" {
 		http.Handle("/metrics", promhttp.Handler())
@@ -449,17 +449,17 @@ func proxy(_ *flags.Parser) {
 				log.Fatal().
 					Err(err).
 					Str("addr", cfg.MetricsListenAddress).
-					Msg("metrics_http_server_error")
+					Msg("metrics HTTP server failed")
 			}
 		}()
 	}
 
 	clusterChecker, err := NewClusterChecker(uid, cfg)
 	if err != nil {
-		log.Fatal().Err(err).Msg("new_cluster_checker_failed")
+		log.Fatal().Err(err).Msg("failed to create cluster checker")
 	}
 	if err = clusterChecker.Start(); err != nil {
-		log.Fatal().Err(err).Msg("cluster_checker_stopped")
+		log.Fatal().Err(err).Msg("cluster checker stopped")
 	}
 	closeLog()
 }

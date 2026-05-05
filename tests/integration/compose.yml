@@ -22,13 +22,14 @@ services:
         PG_MAJOR: ${PG_MAJOR:-18}
     environment:
       DEBUG: ${INTEGRATION_DEBUG:-}
+      GOCACHE: /tmp/go-build
+      GOFLAGS: -buildvcs=false -trimpath
+      GOMODCACHE: /tmp/go-mod
+      INTEGRATION_RUN: ${INTEGRATION_RUN:-}
       INTEGRATION_STORE_BACKEND: etcdv3
+      INTEGRATION_TEST_ARGS: ${INTEGRATION_TEST_ARGS:-}
+      OUTPUT_DIR: /tmp/stolon-build
+    user: postgres
     volumes:
       - ../..:/workspace
-      - go-mod:/go/pkg/mod
-      - go-build:/root/.cache/go-build
     working_dir: /workspace
-
-volumes:
-  go-build:
-  go-mod:

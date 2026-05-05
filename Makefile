@@ -17,13 +17,19 @@ GOFLAGS     ?= -buildvcs=auto -trimpath
 LDFLAGS     ?= -s -w
 GOWORK      ?= off
 GOFTAGS     ?= forceposix
+
 INTEGRATION_TAGS          ?= integration
 INTEGRATION_TIMEOUT       ?= 20m
+INTEGRATION_PARALLEL      ?= 4
+INTEGRATION_RUN           ?=
+INTEGRATION_TEST_ARGS     ?=
 INTEGRATION_STORE_BACKEND ?= etcdv3
 ETCD_BIN                  ?= etcd
+INTEGRATION_RUN_ARG       := $(if $(INTEGRATION_RUN),-run '$(INTEGRATION_RUN)',)
 
 BINARIES   := stolon-keeper stolon-sentinel stolon-proxy stolonctl
-OUTPUT_DIR := build
+OUTPUT_DIR ?= build
+OUTPUT_ABS_DIR := $(abspath $(OUTPUT_DIR))
 
 TEST_PACKAGES ?= $(shell GOWORK=off $(GO) list ./... | grep -v '/tests/integration$$')
 
@@ -177,11 +183,13 @@ bench-reset:
 integration: build
 	STOLON_TEST_STORE_BACKEND="$(INTEGRATION_STORE_BACKEND)" \
 	ETCD_BIN="$(ETCD_BIN)" \
-	STKEEPER_BIN="$(OUTPUT_DIR)/stolon-keeper$(NATIVE_EXTENSION)" \
-	STSENTINEL_BIN="$(OUTPUT_DIR)/stolon-sentinel$(NATIVE_EXTENSION)" \
-	STPROXY_BIN="$(OUTPUT_DIR)/stolon-proxy$(NATIVE_EXTENSION)" \
-	STCTL_BIN="$(OUTPUT_DIR)/stolonctl$(NATIVE_EXTENSION)" \
+	STKEEPER_BIN="$(OUTPUT_ABS_DIR)/stolon-keeper$(NATIVE_EXTENSION)" \
+	STSENTINEL_BIN="$(OUTPUT_ABS_DIR)/stolon-sentinel$(NATIVE_EXTENSION)" \
+	STPROXY_BIN="$(OUTPUT_ABS_DIR)/stolon-proxy$(NATIVE_EXTENSION)" \
+	STCTL_BIN="$(OUTPUT_ABS_DIR)/stolonctl$(NATIVE_EXTENSION)" \
 	$(GO) test -tags "$(INTEGRATION_TAGS)" -timeout "$(INTEGRATION_TIMEOUT)" \
+		-parallel "$(INTEGRATION_PARALLEL)" $(INTEGRATION_RUN_ARG) \
+		$(INTEGRATION_TEST_ARGS) \
 		-v -count 1 ./tests/integration
 
 integration-compose:

@@ -326,9 +326,8 @@ func TestInitUsers(t *testing.T) {
 	if err := tk.StartExpect(); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	defer tk.Stop()
-	if err := tk.cmd.Expect("provided superuser name and replication user name are the same but provided passwords are different"); err != nil {
-		t.Fatalf("expecting keeper reporting provided superuser name and replication user name are the same but provided passwords are different")
+	if err := tk.Wait(30 * time.Second); err == nil {
+		t.Fatal("expected keeper to exit when superuser and replication user passwords differ for the same username")
 	}
 
 	// Test pg-repl-username == pg-su-username
@@ -366,12 +365,15 @@ func TestInitUsers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if err := tk2.StartExpect(); err != nil {
+	if err := tk2.Start(); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 	defer tk2.Stop()
-	if err := tk2.cmd.ExpectTimeout("replication role added to superuser", 60*time.Second); err != nil {
-		t.Fatalf("expecting keeper reporting replication role added to superuser")
+	if err := tk2.WaitDBUp(60 * time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := tk2.waitRoleAttributes("user01", true, true, 60*time.Second); err != nil {
+		t.Fatalf("expected superuser to also have replication privileges: %v", err)
 	}
 
 	// Test pg-repl-username != pg-su-username and pg-su-password defined
@@ -397,15 +399,18 @@ func TestInitUsers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if err := tk3.StartExpect(); err != nil {
+	if err := tk3.Start(); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 	defer tk3.Stop()
-	if err := tk3.cmd.ExpectTimeout("superuser password set", 60*time.Second); err != nil {
-		t.Fatalf("expecting keeper reporting superuser password set")
+	if err := tk3.WaitDBUp(60 * time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
 	}
-	if _, err := tk3.cmd.ExpectTimeoutRegexFind(`replication role created\s+{"role": "user02"}`, 60*time.Second); err != nil {
-		t.Fatalf("expecting keeper reporting replication role user02 created")
+	if err := tk3.waitRoleSuperuser("user01", 60*time.Second); err != nil {
+		t.Fatalf("expected user01 to be a superuser: %v", err)
+	}
+	if err := tk3.waitRoleReplication("user02", 60*time.Second); err != nil {
+		t.Fatalf("expected user02 to be a replication user: %v", err)
 	}
 }
 
@@ -486,6 +491,28 @@ func TestExclusiveLock(t *testing.T) {
 	defer tstore.Stop()
 
 	clusterName := uuid.NewString()
+	storePath := filepath.Join(common.StorePrefix, clusterName)
+	sm := store.NewKVBackedStore(tstore.store, storePath)
+
+	initialClusterSpec := &cluster.ClusterSpec{
+		InitMode:           cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
+		SleepInterval:      &cluster.Duration{Duration: 2 * time.Second},
+		FailInterval:       &cluster.Duration{Duration: 5 * time.Second},
+		ConvergenceTimeout: &cluster.Duration{Duration: 30 * time.Second},
+		PGParameters:       defaultPGParameters,
+	}
+	initialClusterSpecFile, err := writeClusterSpec(dir, initialClusterSpec)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	ts, err := NewTestSentinel(t, dir, clusterName, tstore.storeBackend, storeEndpoints, fmt.Sprintf("--initial-cluster-spec=%s", initialClusterSpecFile))
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := ts.Start(); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer ts.Stop()
 
 	u := uuid.New()
 	id := fmt.Sprintf("%x", u[:4])
@@ -494,14 +521,16 @@ func TestExclusiveLock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if err := tk1.StartExpect(); err != nil {
+	if err := tk1.Start(); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 	defer tk1.Stop()
 
-	// Wait for tk1 to take exclusive lock
-	if err := tk1.cmd.ExpectTimeout("exclusive lock on data dir taken", 60*time.Second); err != nil {
-		t.Fatalf("expecting keeper reporting that exclusive lock on data dir has been taken")
+	if err := WaitClusterPhase(sm, cluster.ClusterPhaseNormal, 60*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := tk1.WaitDBUp(60 * time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
 	}
 
 	tk2, err := NewTestKeeperWithID(t, dir, id, clusterName, pgSUUsername, pgSUPassword, pgReplUsername, pgReplPassword, tstore.storeBackend, storeEndpoints)
@@ -511,11 +540,9 @@ func TestExclusiveLock(t *testing.T) {
 	if err := tk2.StartExpect(); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	defer tk2.Stop()
 
-	// Wait for tk1 to take exclusive lock
-	if err := tk2.cmd.ExpectTimeout("cannot take exclusive lock on data dir", 60*time.Second); err != nil {
-		t.Fatalf("expecting keeper reporting that failed to take an exclusive lock on data dir")
+	if err := tk2.Wait(30 * time.Second); err == nil {
+		t.Fatal("expected second keeper with the same data directory to exit")
 	}
 }
 
@@ -542,6 +569,28 @@ func TestPasswordTrailingNewLine(t *testing.T) {
 	defer tstore.Stop()
 
 	clusterName := uuid.NewString()
+	storePath := filepath.Join(common.StorePrefix, clusterName)
+	sm := store.NewKVBackedStore(tstore.store, storePath)
+
+	initialClusterSpec := &cluster.ClusterSpec{
+		InitMode:           cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
+		SleepInterval:      &cluster.Duration{Duration: 2 * time.Second},
+		FailInterval:       &cluster.Duration{Duration: 5 * time.Second},
+		ConvergenceTimeout: &cluster.Duration{Duration: 30 * time.Second},
+		PGParameters:       defaultPGParameters,
+	}
+	initialClusterSpecFile, err := writeClusterSpec(dir, initialClusterSpec)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	ts, err := NewTestSentinel(t, dir, clusterName, tstore.storeBackend, storeEndpoints, fmt.Sprintf("--initial-cluster-spec=%s", initialClusterSpecFile))
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := ts.Start(); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer ts.Stop()
 
 	u := uuid.New()
 	id := fmt.Sprintf("%x", u[:4])
@@ -553,15 +602,17 @@ func TestPasswordTrailingNewLine(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if err := tk.StartExpect(); err != nil {
+	if err := tk.Start(); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-
-	if err := tk.cmd.ExpectTimeout("superuser password contain trailing new line, removing", 30*time.Second); err != nil {
-		t.Fatalf(`expecting keeper reporting "superuser password contain trailing new line, removing"`)
+	if err := WaitClusterPhase(sm, cluster.ClusterPhaseNormal, 60*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
 	}
-	if err := tk.cmd.ExpectTimeout("replication user password contain trailing new line, removing", 30*time.Second); err != nil {
-		t.Fatalf(`expecting keeper reporting "replication user password contain trailing new line, removing"`)
+	if err := tk.waitDBUpWithCredentials(pgSUUsername, "stolon_superuserpassword", 60*time.Second); err != nil {
+		t.Fatalf("expected superuser trimmed password to work: %v", err)
+	}
+	if err := tk.expectConnect(pgReplUsername, "stolon_replpassword"); err != nil {
+		t.Fatalf("expected replication user trimmed password to work: %v", err)
 	}
 	tk.Stop()
 
@@ -575,15 +626,9 @@ func TestPasswordTrailingNewLine(t *testing.T) {
 	if err := tk.StartExpect(); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-
-	if err := tk.cmd.ExpectTimeout("replication user password contain trailing new line, removing", 30*time.Second); err != nil {
-		t.Fatalf(`expecting keeper reporting "replication user password contain trailing new line, removing"`)
+	if err := tk.Wait(30 * time.Second); err == nil {
+		t.Fatal("expected keeper to exit when replication password is empty after trimming")
 	}
-	if err := tk.cmd.ExpectTimeout("replication user password is empty after removing trailing new line", 30*time.Second); err != nil {
-		t.Fatalf(`expecting keeper reporting "replication user password is empty after removing trailing new line"`)
-	}
-
-	tk.Stop()
 
 	pgSUPassword = "\n"
 	pgReplPassword = "stolon_replpassword\n"
@@ -595,13 +640,7 @@ func TestPasswordTrailingNewLine(t *testing.T) {
 	if err := tk.StartExpect(); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-
-	if err := tk.cmd.ExpectTimeout("superuser password contain trailing new line, removing", 30*time.Second); err != nil {
-		t.Fatalf(`expecting keeper reporting "superuser password contain trailing new line, removing"`)
+	if err := tk.Wait(30 * time.Second); err == nil {
+		t.Fatal("expected keeper to exit when superuser password is empty after trimming")
 	}
-	if err := tk.cmd.ExpectTimeout("superuser password is empty after removing trailing new line", 30*time.Second); err != nil {
-		t.Fatalf(`expecting keeper reporting "superuser password is empty after removing trailing new line"`)
-	}
-
-	tk.Stop()
 }

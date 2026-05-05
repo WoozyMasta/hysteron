@@ -2055,7 +2055,7 @@ func testSyncStandbyNotInSync(t *testing.T, minSync0 bool) {
 		"sslmode":  "disable",
 	}
 	connString := connParams.ConnString()
-	user01db, err := sql.Open("postgres", connString)
+	user01db, err := sql.Open(pg.SQLDriverName, connString)
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -2102,9 +2102,9 @@ func testSyncStandbyNotInSync(t *testing.T, minSync0 bool) {
 	if !minSync0 {
 		// The normal user shouldn't be able to connect
 		if _, err := user01db.Exec("SELECT * from table01"); err != nil {
-			exp := `pq: no pg_hba.conf entry for host "127.0.0.1", user "user01", database "postgres"`
-			if !strings.HasPrefix(err.Error(), exp) {
-				t.Fatalf("expected error when connecting to db as user01 starting with %q, got err: %q", exp, err.Error())
+			exp := `no pg_hba.conf entry for host "127.0.0.1", user "user01", database "postgres"`
+			if !strings.Contains(err.Error(), exp) {
+				t.Fatalf("expected error when connecting to db as user01 containing %q, got err: %q", exp, err.Error())
 			}
 		} else {
 			t.Fatalf("expected error connecting to db as user01, got no err")

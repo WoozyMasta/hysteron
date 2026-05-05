@@ -131,7 +131,7 @@ func CloseLogging(closer io.Closer, logger *zerolog.Logger) {
 		return
 	}
 	if err := closer.Close(); err != nil && logger != nil {
-		logger.Error().Err(err).Msg("close_log_failed")
+		logger.Error().Err(err).Msg("failed to close log output")
 	}
 }
 

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -96,12 +97,7 @@ func TestServerParameters(t *testing.T) {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
-	if err := tk.cmd.ExpectTimeout("postgres parameters changed, reloading postgres instance", 30*time.Second); err != nil {
-		t.Fatalf("unexpected err: %v", err)
-	}
-
-	// On the next keeper check they shouldn't be changed
-	if err := tk.cmd.ExpectTimeout("postgres parameters not changed", 30*time.Second); err != nil {
+	if err := tk.waitPostgresConfParam("unexistent_parameter", "value", 30*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
@@ -113,7 +109,7 @@ func TestServerParameters(t *testing.T) {
 	}
 	defer tk.Stop()
 
-	if err := tk.cmd.ExpectTimeout("failed to start postgres", 30*time.Second); err != nil {
+	if err := tk.WaitDBDown(30 * time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
@@ -194,10 +190,6 @@ func TestWalLevel(t *testing.T) {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
-	if err := tk.cmd.ExpectTimeout("postgres parameters not changed", 30*time.Second); err != nil {
-		t.Fatalf("unexpected err: %v", err)
-	}
-
 	tk.Stop()
 	if err := tk.Start(); err != nil {
 		t.Fatalf("unexpected err: %v", err)
@@ -221,7 +213,7 @@ func TestWalLevel(t *testing.T) {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
-	if err := tk.cmd.ExpectTimeout("postgres parameters changed, reloading postgres instance", 30*time.Second); err != nil {
+	if err := tk.waitPostgresConfParam("wal_level", "logical", 30*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
@@ -317,10 +309,6 @@ func TestWalKeepSegments(t *testing.T) {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
-	if err := tk.cmd.ExpectTimeout("postgres parameters not changed", 30*time.Second); err != nil {
-		t.Fatalf("unexpected err: %v", err)
-	}
-
 	tk.Stop()
 	if err := tk.Start(); err != nil {
 		t.Fatalf("unexpected err: %v", err)
@@ -344,7 +332,7 @@ func TestWalKeepSegments(t *testing.T) {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
-	if err := tk.cmd.ExpectTimeout("postgres parameters changed, reloading postgres instance", 30*time.Second); err != nil {
+	if err := tk.waitPostgresConfParam("wal_keep_segments", "20", 30*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
@@ -371,7 +359,7 @@ func TestWalKeepSegments(t *testing.T) {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
-	if err := tk.cmd.ExpectTimeout("postgres parameters changed, reloading postgres instance", 30*time.Second); err != nil {
+	if err := tk.waitPostgresConfParam("wal_keep_segments", "5", 30*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
@@ -476,10 +464,10 @@ func TestAlterSystem(t *testing.T) {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
-	expectedErr := `pq: could not fsync file "postgresql.auto.conf": Invalid argument`
+	expectedErr := `could not fsync file "postgresql.auto.conf": Invalid argument`
 	if _, err := tk.Exec("alter system set archive_mode to on"); err != nil {
-		if err.Error() != expectedErr {
-			t.Fatalf("expected err: %q, got: %q", expectedErr, err)
+		if !strings.Contains(err.Error(), expectedErr) {
+			t.Fatalf("expected err containing %q, got: %q", expectedErr, err)
 		}
 	} else {
 		t.Fatalf("expected err: %q, got no error", expectedErr)

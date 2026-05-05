@@ -1,4 +1,5 @@
 // Copyright 2015 Sorint.lab
+// Copyright 2026 WoozyMasta
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -191,10 +192,19 @@ func (d Duration) MarshalJSON() ([]byte, error) {
 	return json.Marshal(d.String())
 }
 
+// MarshalText encodes Duration as a Go duration string.
+func (d Duration) MarshalText() ([]byte, error) {
+	return []byte(d.String()), nil
+}
+
 // UnmarshalJSON decodes Duration from a Go duration string.
 func (d *Duration) UnmarshalJSON(b []byte) error {
-	s := strings.Trim(string(b), `"`)
-	du, err := time.ParseDuration(s)
+	return d.UnmarshalText([]byte(strings.Trim(string(b), `"`)))
+}
+
+// UnmarshalText decodes Duration from a Go duration string.
+func (d *Duration) UnmarshalText(text []byte) error {
+	du, err := time.ParseDuration(string(text))
 	if err != nil {
 		return err
 	}

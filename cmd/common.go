@@ -20,18 +20,19 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"os"
+	"io"
 	"path/filepath"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/rs/zerolog"
 	"github.com/sorintlab/stolon/internal/buildflags"
 	"github.com/sorintlab/stolon/internal/common"
+	stlog "github.com/sorintlab/stolon/internal/log"
 	"github.com/sorintlab/stolon/internal/store"
 	"github.com/sorintlab/stolon/internal/util"
 	"github.com/woozymasta/flags"
 
-	"github.com/mattn/go-isatty"
 	"k8s.io/client-go/kubernetes"
 
 	// Register optional Kubernetes auth plugins.
@@ -45,13 +46,13 @@ import (
 // `kube`/`KUBE`) from a single declaration. Defaults are expressed via
 // `default:` tags; we never mutate the struct before parse.
 type CommonConfig struct {
-	Kube                 KubeOptions  `group:"Kubernetes" namespace:"kube" env-namespace:"KUBE"`
-	ClusterName          string       `short:"c" long:"cluster-name" env:"CLUSTER_NAME" description:"cluster name"`
-	MetricsListenAddress string       `long:"metrics-listen-address" env:"METRICS_LISTEN_ADDRESS" description:"metrics listen address i.e \"0.0.0.0:8080\" (disabled by default)"`
-	KubeConfig           string       `long:"kubeconfig" env:"KUBECONFIG" description:"path to kubeconfig file. Overrides $KUBECONFIG"`
-	Log                  LogOptions   `group:"Logging" namespace:"log" env-namespace:"LOG"`
-	Store                StoreOptions `group:"Store" namespace:"store" env-namespace:"STORE"`
-	Debug                bool         `long:"debug" env:"DEBUG" hidden:"true" description:"deprecated: forces debug logging"`
+	Kube                 KubeOptions     `group:"Kubernetes" namespace:"kube" env-namespace:"KUBE"`
+	ClusterName          string          `short:"c" long:"cluster-name" env:"CLUSTER_NAME" description:"cluster name"`
+	MetricsListenAddress string          `long:"metrics-listen-address" env:"METRICS_LISTEN_ADDRESS" description:"metrics listen address i.e \"0.0.0.0:8080\" (disabled by default)"`
+	KubeConfig           string          `long:"kubeconfig" env:"KUBECONFIG" description:"path to kubeconfig file. Overrides $KUBECONFIG"`
+	Log                  stlog.FlagGroup `group:"Logging" namespace:"log" env-namespace:"LOG"`
+	Store                StoreOptions    `group:"Store" namespace:"store" env-namespace:"STORE"`
+	Debug                bool            `long:"debug" env:"DEBUG" hidden:"true" description:"deprecated: forces debug logging"`
 }
 
 // StoreOptions configures the cluster data store backend (etcd v3 or
@@ -66,14 +67,6 @@ type StoreOptions struct {
 	CAFile        string        `long:"ca-file" env:"CA_FILE" description:"verify certificates of HTTPS-enabled store servers using this CA bundle"`
 	Timeout       time.Duration `long:"timeout" env:"TIMEOUT" default:"5s" description:"store request timeout"`
 	SkipTLSVerify bool          `long:"skip-tls-verify" env:"SKIP_TLS_VERIFY" description:"skip store certificate verification (insecure!!!)"`
-}
-
-// LogOptions controls log formatting. The `log`/`LOG` namespace yields
-// public flags `--log-level`, `--log-color` and env vars `LOG_LEVEL`,
-// `LOG_COLOR`.
-type LogOptions struct {
-	Level string `long:"level" env:"LEVEL" choices:"debug;info;warn;error" default:"info" description:"log verbosity"`
-	Color bool   `long:"color" env:"COLOR" description:"enable color in log output (default if attached to a terminal)"`
 }
 
 // KubeOptions configures the kubernetes-backed store. KubeConfig is
@@ -111,14 +104,35 @@ func NewParser(name, envPrefix string, data any, opts flags.Options) *flags.Pars
 	parser.SetVersionURL(buildflags.URL)
 	parser.SetVersionFields(flags.VersionFieldsAll)
 	if err := parser.SetMaxLongNameLength(64); err != nil {
-		panic(err)
+		common.MustNot(err, "set maximum CLI long option length")
 	}
 	if data != nil {
 		if _, err := parser.AddGroup("Application Options", "", data); err != nil {
-			panic(err)
+			common.MustNot(err, "add root CLI option group")
 		}
 	}
 	return parser
+}
+
+// InitLogging configures the shared zerolog root from CLI options. Defer the
+// returned closer on long-running daemons; one-shot CLIs may ignore it.
+func InitLogging(cfg *CommonConfig) (io.Closer, error) {
+	opts := cfg.Log.ToOptions()
+	if cfg.Debug {
+		opts.Level = "debug"
+	}
+	return stlog.Configure(opts)
+}
+
+// CloseLogging closes the logging output and reports close failures when a
+// logger is available.
+func CloseLogging(closer io.Closer, logger *zerolog.Logger) {
+	if closer == nil {
+		return
+	}
+	if err := closer.Close(); err != nil && logger != nil {
+		logger.Error().Err(err).Msg("close_log_failed")
+	}
 }
 
 // ParseErrorExitCode maps flags parser errors to process exit codes.
@@ -129,16 +143,6 @@ func ParseErrorExitCode(err error) int {
 		return 0
 	}
 	return 1
-}
-
-// IsLogColorRequested reports whether color logging should be enabled.
-// It honors an explicit user choice on the parsed log-color option and
-// falls back to terminal detection on stderr.
-func IsLogColorRequested(parser *flags.Parser, cfg *CommonConfig) bool {
-	if option := parser.FindOptionByLongName("log-color"); option != nil && option.IsSet() {
-		return cfg.Log.Color
-	}
-	return isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())
 }
 
 var clusterIdentifier = prometheus.NewGaugeVec(

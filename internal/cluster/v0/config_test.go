@@ -21,7 +21,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestParseConfig(t *testing.T) {
@@ -108,8 +108,8 @@ func TestParseConfig(t *testing.T) {
 			if tt.err != nil {
 				t.Errorf("#%d: got no error, wanted error: %v", i, tt.err)
 			}
-			if !reflect.DeepEqual(cfg, tt.cfg) {
-				t.Errorf("%s", spew.Sprintf("#%d: wrong config: got: %#v, want: %#v", i, cfg, tt.cfg))
+			if diff := cmp.Diff(tt.cfg, cfg); diff != "" {
+				t.Errorf("#%d: wrong config (-want +got):\n%s", i, diff)
 			}
 		}
 

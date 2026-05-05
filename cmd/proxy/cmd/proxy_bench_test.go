@@ -24,7 +24,7 @@ import (
 	slog "github.com/sorintlab/stolon/internal/log"
 	"github.com/sorintlab/stolon/internal/store"
 
-	"go.uber.org/zap"
+	"github.com/rs/zerolog"
 )
 
 func BenchmarkProxyCheckEnabledMaster(b *testing.B) {
@@ -71,7 +71,8 @@ func BenchmarkProxySetProxyInfo(b *testing.B) {
 }
 
 func init() {
-	slog.SetLevel(zap.ErrorLevel)
+	slog.SetLevel(zerolog.ErrorLevel)
+	log = slog.WithComponent("proxy")
 }
 
 func benchmarkProxyChecker(cd *cluster.ClusterData) *ClusterChecker {

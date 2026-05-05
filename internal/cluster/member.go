@@ -15,7 +15,6 @@
 package cluster
 
 import (
-	"reflect"
 	"time"
 
 	"github.com/sorintlab/stolon/internal/common"
@@ -32,12 +31,7 @@ func (k KeepersInfo) DeepCopy() KeepersInfo {
 		return nil
 	}
 	nk, err := copystructure.Copy(k)
-	if err != nil {
-		panic(err)
-	}
-	if !reflect.DeepEqual(k, nk) {
-		panic("not equal")
-	}
+	common.MustNot(err, "keepers info deep copy")
 	return nk.(KeepersInfo)
 }
 
@@ -68,12 +62,7 @@ func (k *KeeperInfo) DeepCopy() *KeeperInfo {
 		return nil
 	}
 	nk, err := copystructure.Copy(k)
-	if err != nil {
-		panic(err)
-	}
-	if !reflect.DeepEqual(k, nk) {
-		panic("not equal")
-	}
+	common.MustNot(err, "keeper info deep copy")
 	return nk.(*KeeperInfo)
 }
 
@@ -134,12 +123,7 @@ func (p *PostgresState) DeepCopy() *PostgresState {
 		return nil
 	}
 	np, err := copystructure.Copy(p)
-	if err != nil {
-		panic(err)
-	}
-	if !reflect.DeepEqual(p, np) {
-		panic("not equal")
-	}
+	common.MustNot(err, "postgres state deep copy")
 	return np.(*PostgresState)
 }
 
@@ -183,12 +167,7 @@ func (p ProxiesInfo) DeepCopy() ProxiesInfo {
 		return nil
 	}
 	np, err := copystructure.Copy(p)
-	if err != nil {
-		panic(err)
-	}
-	if !reflect.DeepEqual(p, np) {
-		panic("not equal")
-	}
+	common.MustNot(err, "proxies info deep copy")
 	return np.(ProxiesInfo)
 }
 

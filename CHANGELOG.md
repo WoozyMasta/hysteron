@@ -22,10 +22,10 @@ The format is based on [Keep a Changelog][], and this project adheres to
   and allow native Windows builds without CGO.
 * Replace the legacy Makefile with loop-based native
   and release builds for all Stolon binaries.
-* Add the first coverage baseline plus cluster contract
-  and PostgreSQL connection string regression tests.
+* Add the first cluster contract and PostgreSQL connection string regression
+  tests.
 * Add initial sentinel, proxy, store, keeper, cluster data, and PostgreSQL
-  helper benchmarks plus benchmark baseline notes.
+  helper benchmarks.
 * Fix atomic file writes with absolute paths on Windows.
 * Raise the Go module baseline to Go 1.25 and fix stricter format-string vet
   findings.
@@ -104,6 +104,8 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Define stolonctl subcommands declaratively through `command:` struct tags
   on a single root, dropping the previous programmatic
   `parser.AddCommand` plumbing.
+* Replace project logging with zerolog-based structured loggers, add
+  command-level logging setup, and remove production-path `panic` calls.
 
 ## v0.17.0
 

@@ -24,6 +24,8 @@ import (
 	"sort"
 	"strings"
 	"unicode"
+
+	"github.com/sorintlab/stolon/internal/common"
 )
 
 // This is based on github.com/lib/pq
@@ -227,4 +229,59 @@ func (cp ConnParams) ConnString() string {
 	}
 	sort.Strings(kvs)
 	return strings.Join(kvs, " ")
+}
+
+// LogSummaryConnParams returns allow-listed libpq connection fields for structured logs.
+// Password values are never included; password_set is true when a password key is present.
+func LogSummaryConnParams(cp ConnParams) map[string]any {
+	if len(cp) == 0 {
+		return nil
+	}
+	allow := []string{
+		"host", "hostaddr", "port", "user", "dbname", "database",
+		"application_name", "sslmode", "connect_timeout", "replication",
+		"fallback_application_name", "target_session_attrs",
+	}
+	out := make(map[string]any)
+	for _, k := range allow {
+		if v := cp[k]; v != "" {
+			out[k] = v
+		}
+	}
+	if _, ok := cp["password"]; ok {
+		out["password_set"] = true
+	}
+	return out
+}
+
+// LogSummaryRecoveryParameters returns PostgreSQL recovery parameters safe for logs.
+// primary_conninfo is parsed and summarized without secrets.
+func LogSummaryRecoveryParameters(p common.Parameters) map[string]any {
+	if len(p) == 0 {
+		return nil
+	}
+	out := make(map[string]any)
+	for k, v := range p {
+		lk := strings.ToLower(k)
+		if strings.Contains(lk, "password") || lk == "passfile" {
+			if v != "" {
+				out[k] = "[redacted]"
+			}
+			continue
+		}
+		if k == "primary_conninfo" {
+			if v == "" {
+				continue
+			}
+			cp, err := ParseConnString(v)
+			if err != nil {
+				out[k] = map[string]any{"parse_error": err.Error()}
+			} else {
+				out[k] = LogSummaryConnParams(cp)
+			}
+			continue
+		}
+		out[k] = v
+	}
+	return out
 }

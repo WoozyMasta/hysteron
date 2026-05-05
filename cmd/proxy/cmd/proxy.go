@@ -34,28 +34,32 @@ import (
 	"github.com/sorintlab/stolon/internal/store"
 	"github.com/sorintlab/stolon/internal/tcpproxy"
 
-	"github.com/davecgh/go-spew/spew"
+	"github.com/rs/zerolog"
 	"github.com/woozymasta/flags"
-	"go.uber.org/zap"
 )
 
-var log = slog.S()
+// log is the proxy component logger; refreshed after logging is configured.
+var log zerolog.Logger
+
+func init() {
+	log = slog.WithComponent("proxy")
+}
 
 type config struct {
 	ListenAddress string `short:"l" long:"listen-address" env:"LISTEN_ADDRESS" default:"127.0.0.1" description:"proxy listening address"`
-	Port          string `short:"p" long:"port" env:"PORT" default:"5432" description:"proxy listening port"`
+	Port          string `short:"p" long:"port"           env:"PORT"           default:"5432"      description:"proxy listening port"`
 	cmd.CommonConfig
 
 	KeepAlive     tcpKeepAliveOptions `group:"TCP Keep-Alive" namespace:"tcp-keepalive" env-namespace:"TCP_KEEPALIVE"`
-	StopListening bool                `long:"stop-listening" env:"STOP_LISTENING" description:"stop listening on store error (default true)"`
+	StopListening bool                `                                                                               long:"stop-listening" env:"STOP_LISTENING" description:"stop listening on store error (default true)"`
 }
 
 // tcpKeepAliveOptions tunes TCP keep-alive settings on accepted client
 // connections. Long names and env keys are derived from the enclosing
 // `tcp-keepalive`/`TCP_KEEPALIVE` namespace.
 type tcpKeepAliveOptions struct {
-	Idle     int `long:"idle" env:"IDLE" default:"0" validate-min:"0" description:"set tcp keepalive idle (seconds)"`
-	Count    int `long:"count" env:"COUNT" default:"0" validate-min:"0" description:"set tcp keepalive probe count number"`
+	Idle     int `long:"idle"     env:"IDLE"     default:"0" validate-min:"0" description:"set tcp keepalive idle (seconds)"`
+	Count    int `long:"count"    env:"COUNT"    default:"0" validate-min:"0" description:"set tcp keepalive probe count number"`
 	Interval int `long:"interval" env:"INTERVAL" default:"0" validate-min:"0" description:"set tcp keepalive interval (seconds)"`
 }
 
@@ -88,7 +92,10 @@ type ClusterChecker struct {
 }
 
 // NewClusterChecker creates a ClusterChecker from proxy configuration.
-func NewClusterChecker(uid string, cfg config) (*ClusterChecker, error) {
+func NewClusterChecker(
+	uid string,
+	cfg config,
+) (*ClusterChecker, error) {
 	e, err := cmd.NewStore(&cfg.CommonConfig, true)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create store: %v", err)
@@ -114,23 +121,35 @@ func (c *ClusterChecker) startTCPProxy() error {
 		return nil
 	}
 
-	log.Infow("Starting proxying")
+	log.Info().Msg("Starting proxying")
 	listenAddr := net.JoinHostPort(c.listenAddress, c.port)
 	addr, err := net.ResolveTCPAddr("tcp", listenAddr)
 	if err != nil {
-		return fmt.Errorf("error resolving tcp addr %q: %v", listenAddr, err)
+		return fmt.Errorf(
+			"error resolving tcp addr %q: %v",
+			listenAddr,
+			err,
+		)
 	}
 
 	listener, err := net.ListenTCP("tcp", addr)
 	if err != nil {
-		return fmt.Errorf("error listening on tcp addr %q: %v", addr.String(), err)
+		return fmt.Errorf(
+			"error listening on tcp addr %q: %v",
+			addr.String(),
+			err,
+		)
 	}
 
 	pp := tcpproxy.New(listener, tcpproxy.Options{
-		KeepAlive:         true,
-		KeepAliveIdle:     time.Duration(cfg.KeepAlive.Idle) * time.Second,
-		KeepAliveCount:    cfg.KeepAlive.Count,
-		KeepAliveInterval: time.Duration(cfg.KeepAlive.Interval) * time.Second,
+		KeepAlive: true,
+		KeepAliveIdle: time.Duration(
+			cfg.KeepAlive.Idle,
+		) * time.Second,
+		KeepAliveCount: cfg.KeepAlive.Count,
+		KeepAliveInterval: time.Duration(
+			cfg.KeepAlive.Interval,
+		) * time.Second,
 	})
 
 	c.tcpProxy = pp
@@ -145,7 +164,7 @@ func (c *ClusterChecker) stopTCPProxy() {
 	c.tcpProxyMutex.Lock()
 	defer c.tcpProxyMutex.Unlock()
 	if c.tcpProxy != nil {
-		log.Infow("Stopping listening")
+		log.Info().Msg("Stopping listening")
 		c.tcpProxy.Stop()
 		c.tcpProxy = nil
 	}
@@ -160,14 +179,19 @@ func (c *ClusterChecker) setProxyDestination(addr *net.TCPAddr) {
 }
 
 // SetProxyInfo updates this proxy's liveness and generation information.
-func (c *ClusterChecker) SetProxyInfo(generation int64, proxyTimeout time.Duration) error {
+func (c *ClusterChecker) SetProxyInfo(
+	generation int64,
+	proxyTimeout time.Duration,
+) error {
 	proxyInfo := &cluster.ProxyInfo{
 		InfoUID:      common.UID(),
 		UID:          c.uid,
 		Generation:   generation,
 		ProxyTimeout: proxyTimeout,
 	}
-	log.Debugf("proxyInfo dump: %s", spew.Sdump(proxyInfo))
+	log.Debug().
+		Fields(cluster.LogSummaryProxyInfo(proxyInfo)).
+		Msg("proxy registration payload before write to store")
 
 	if err := c.e.SetProxyInfo(context.TODO(), proxyInfo, 2*proxyTimeout); err != nil {
 		return err
@@ -187,15 +211,21 @@ func (c *ClusterChecker) Check() error {
 		return fmt.Errorf("failed to start proxy: %v", err)
 	}
 
-	log.Debugf("cd dump: %s", spew.Sdump(cd))
+	log.Debug().
+		Fields(cluster.LogSummaryClusterData(cd)).
+		Msg("cluster data snapshot after store read")
 	if cd == nil {
-		log.Infow("no clusterdata available, closing connections to master")
+		log.Info().
+			Msg("no clusterdata available, closing connections to master")
 		c.setProxyDestination(nil)
 		return nil
 	}
 	if cd.FormatVersion != cluster.CurrentCDFormatVersion {
 		c.setProxyDestination(nil)
-		return fmt.Errorf("unsupported clusterdata format version: %d", cd.FormatVersion)
+		return fmt.Errorf(
+			"unsupported clusterdata format version: %d",
+			cd.FormatVersion,
+		)
 	}
 	if err = cd.Cluster.Spec.Validate(); err != nil {
 		c.setProxyDestination(nil)
@@ -213,11 +243,12 @@ func (c *ClusterChecker) Check() error {
 
 	proxy := cd.Proxy
 	if proxy == nil {
-		log.Infow("no proxy object available, closing connections to master")
+		log.Info().
+			Msg("no proxy object available, closing connections to master")
 		c.setProxyDestination(nil)
 		// ignore errors on setting proxy info
 		if err = c.SetProxyInfo(cluster.NoGeneration, proxyTimeout); err != nil {
-			log.Errorw("failed to update proxyInfo", zap.Error(err))
+			log.Error().Err(err).Msg("failed to update proxyInfo")
 		} else {
 			// update proxyCheckinterval and proxyTimeout only if we successfully updated our proxy info
 			c.configMutex.Lock()
@@ -230,11 +261,13 @@ func (c *ClusterChecker) Check() error {
 
 	db, ok := cd.DBs[proxy.Spec.MasterDBUID]
 	if !ok {
-		log.Infow("no db object available, closing connections to master", "db", proxy.Spec.MasterDBUID)
+		log.Info().
+			Str(slog.FieldDBUID, proxy.Spec.MasterDBUID).
+			Msg("no db object for master uid, closing connections to master")
 		c.setProxyDestination(nil)
 		// ignore errors on setting proxy info
 		if err = c.SetProxyInfo(proxy.Generation, proxyTimeout); err != nil {
-			log.Errorw("failed to update proxyInfo", zap.Error(err))
+			log.Error().Err(err).Msg("failed to update proxyInfo")
 		} else {
 			// update proxyCheckinterval and proxyTimeout only if we successfully updated our proxy info
 			c.configMutex.Lock()
@@ -245,13 +278,18 @@ func (c *ClusterChecker) Check() error {
 		return nil
 	}
 
-	addr, err := net.ResolveTCPAddr("tcp", net.JoinHostPort(db.Status.ListenAddress, db.Status.Port))
+	addr, err := net.ResolveTCPAddr(
+		"tcp",
+		net.JoinHostPort(db.Status.ListenAddress, db.Status.Port),
+	)
 	if err != nil {
-		log.Errorw("cannot resolve db address", zap.Error(err))
+		log.Error().Err(err).Msg("cannot resolve db address")
 		c.setProxyDestination(nil)
 		return nil
 	}
-	log.Infow("master address", "address", addr)
+	log.Info().
+		Str("tcp_addr", addr.String()).
+		Msg("resolved_master_address")
 	if err = c.SetProxyInfo(proxy.Generation, proxyTimeout); err != nil {
 		// if we failed to update our proxy info when a master is defined we
 		// cannot ignore this error since the sentinel won't know that we exist
@@ -268,10 +306,14 @@ func (c *ClusterChecker) Check() error {
 	// start proxing only if we are inside enabledProxies, this ensures that the
 	// sentinel has read our proxyinfo and knows we are alive
 	if slices.Contains(proxy.Spec.EnabledProxies, c.uid) {
-		log.Infow("proxying to master address", "address", addr)
+		log.Info().
+			Str("tcp_addr", addr.String()).
+			Msg("proxying_to_master")
 		c.setProxyDestination(addr)
 	} else {
-		log.Infow("not proxying to master address since we aren't in the enabled proxies list", "address", addr)
+		log.Info().
+			Str("tcp_addr", addr.String()).
+			Msg("not_proxying_not_in_enabled_list")
 		c.setProxyDestination(nil)
 	}
 
@@ -287,7 +329,7 @@ func (c *ClusterChecker) TimeoutChecker(checkOkCh chan struct{}) {
 	for {
 		select {
 		case <-timeoutTimer.C:
-			log.Infow("check timeout timer fired")
+			log.Info().Msg("check timeout timer fired")
 			// if the check timeouts close all connections and stop listening
 			// (for example to avoid load balancers forward connections to us
 			// since we aren't ready or in a bad state)
@@ -297,7 +339,7 @@ func (c *ClusterChecker) TimeoutChecker(checkOkCh chan struct{}) {
 			}
 
 		case <-checkOkCh:
-			log.Debugw("check ok message received")
+			log.Debug().Msg("check ok message received")
 
 			// ignore if stop succeeded or not due to timer already expired
 			timeoutTimer.Stop()
@@ -330,7 +372,9 @@ func (c *ClusterChecker) Start() error {
 		case err := <-checkCh:
 			if err != nil {
 				// don't report check ok since it returned an error
-				log.Infow("check function error", zap.Error(err))
+				log.Error().
+					Err(err).
+					Msg("cluster check failed")
 			} else {
 				// report that check was ok
 				checkOkCh <- struct{}{}
@@ -365,44 +409,33 @@ func NewParser() *flags.Parser {
 	return parser
 }
 
-func proxy(parser *flags.Parser) {
-	switch cfg.Log.Level {
-	case "error":
-		slog.SetLevel(zap.ErrorLevel)
-	case "warn":
-		slog.SetLevel(zap.WarnLevel)
-	case "info":
-		slog.SetLevel(zap.InfoLevel)
-	case "debug":
-		slog.SetLevel(zap.DebugLevel)
+func proxy(_ *flags.Parser) {
+	closer, err := cmd.InitLogging(&cfg.CommonConfig)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "logging: %v\n", err)
+		os.Exit(1)
 	}
-	if cfg.Debug {
-		slog.SetDebug()
-	}
-	if cmd.IsLogColorRequested(parser, &cfg.CommonConfig) {
-		log = slog.SColor()
-	}
-	if slog.IsDebug() {
-		if cmd.IsLogColorRequested(parser, &cfg.CommonConfig) {
-			stdlog := slog.StdLogColor()
-			tcpproxy.SetLogger(stdlog)
-		} else {
-			stdlog := slog.StdLog()
-			tcpproxy.SetLogger(stdlog)
-		}
+	log = slog.WithComponent("proxy")
+	tcpproxy.SetLogger(slog.Std())
+	closeLog := func() {
+		cmd.CloseLogging(closer, &log)
 	}
 
 	if err := cmd.CheckClusterName(&cfg.CommonConfig); err != nil {
-		log.Fatalf(err.Error())
+		log.Error().Err(err).Msg("check_cluster_name_failed")
+		closeLog()
+		os.Exit(1)
 	}
 	if err := cmd.CheckCommonConfig(&cfg.CommonConfig); err != nil {
-		log.Fatalf(err.Error())
+		log.Error().Err(err).Msg("check_common_config_failed")
+		closeLog()
+		os.Exit(1)
 	}
 
 	cmd.SetMetrics(&cfg.CommonConfig, "proxy")
 
 	uid := common.UID()
-	log.Infow("proxy uid", "uid", uid)
+	log.Info().Str(slog.FieldProxyUID, uid).Msg("proxy_uid")
 
 	if cfg.MetricsListenAddress != "" {
 		http.Handle("/metrics", promhttp.Handler())
@@ -413,16 +446,20 @@ func proxy(parser *flags.Parser) {
 			}
 			err := server.ListenAndServe()
 			if err != nil {
-				log.Fatalf("metrics http server error", zap.Error(err))
+				log.Fatal().
+					Err(err).
+					Str("addr", cfg.MetricsListenAddress).
+					Msg("metrics_http_server_error")
 			}
 		}()
 	}
 
 	clusterChecker, err := NewClusterChecker(uid, cfg)
 	if err != nil {
-		log.Fatalf("cannot create cluster checker: %v", err)
+		log.Fatal().Err(err).Msg("new_cluster_checker_failed")
 	}
 	if err = clusterChecker.Start(); err != nil {
-		log.Fatalf("cluster checker ended with error: %v", err)
+		log.Fatal().Err(err).Msg("cluster_checker_stopped")
 	}
+	closeLog()
 }

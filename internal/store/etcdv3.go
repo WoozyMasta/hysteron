@@ -180,9 +180,9 @@ type etcdv3Election struct {
 	running        bool
 }
 
-func (e *etcdv3Election) RunForElection() (<-chan bool, <-chan error) {
+func (e *etcdv3Election) RunForElection() (<-chan bool, <-chan error, error) {
 	if e.running {
-		panic("already running")
+		return nil, nil, ErrElectionAlreadyRunning
 	}
 
 	e.electedCh = make(chan bool)
@@ -192,15 +192,16 @@ func (e *etcdv3Election) RunForElection() (<-chan bool, <-chan error) {
 	e.running = true
 	go e.campaign()
 
-	return e.electedCh, e.errCh
+	return e.electedCh, e.errCh, nil
 }
 
-func (e *etcdv3Election) Stop() {
+func (e *etcdv3Election) Stop() error {
 	if !e.running {
-		panic("not running")
+		return ErrElectionNotRunning
 	}
 	e.cancel()
 	e.running = false
+	return nil
 }
 
 func (e *etcdv3Election) Leader() (string, error) {

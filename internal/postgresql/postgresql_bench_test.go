@@ -22,7 +22,7 @@ import (
 	"github.com/sorintlab/stolon/internal/common"
 	slog "github.com/sorintlab/stolon/internal/log"
 
-	"go.uber.org/zap"
+	"github.com/rs/zerolog"
 )
 
 var benchmarkConnParams = ConnParams{
@@ -36,7 +36,7 @@ var benchmarkConnParams = ConnParams{
 }
 
 func init() {
-	slog.SetLevel(zap.ErrorLevel)
+	slog.SetLevel(zerolog.ErrorLevel)
 }
 
 func BenchmarkParseConnString(b *testing.B) {

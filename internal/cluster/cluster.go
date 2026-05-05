@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -389,24 +388,14 @@ type Cluster struct {
 // DeepCopy returns an independent copy of the cluster.
 func (c *Cluster) DeepCopy() *Cluster {
 	nc, err := copystructure.Copy(c)
-	if err != nil {
-		panic(err)
-	}
-	if !reflect.DeepEqual(c, nc) {
-		panic("not equal")
-	}
+	common.MustNot(err, "cluster deep copy")
 	return nc.(*Cluster)
 }
 
 // DeepCopy returns an independent copy of the cluster spec.
 func (c *ClusterSpec) DeepCopy() *ClusterSpec {
 	nc, err := copystructure.Copy(c)
-	if err != nil {
-		panic(err)
-	}
-	if !reflect.DeepEqual(c, nc) {
-		panic("not equal")
-	}
+	common.MustNot(err, "cluster spec deep copy")
 	return nc.(*ClusterSpec)
 }
 
@@ -888,12 +877,7 @@ func NewClusterData(c *Cluster) *ClusterData {
 // DeepCopy returns an independent copy of cluster data.
 func (c *ClusterData) DeepCopy() *ClusterData {
 	nc, err := copystructure.Copy(c)
-	if err != nil {
-		panic(err)
-	}
-	if !reflect.DeepEqual(c, nc) {
-		panic("not equal")
-	}
+	common.MustNot(err, "cluster data deep copy")
 	return nc.(*ClusterData)
 }
 

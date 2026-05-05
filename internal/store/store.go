@@ -31,6 +31,10 @@ var (
 	ErrKeyModified = errors.New("unable to complete atomic operation, key modified")
 	// ErrElectionNoLeader reports missing election leader.
 	ErrElectionNoLeader = errors.New("election: no leader")
+	// ErrElectionAlreadyRunning reports a duplicate RunForElection call.
+	ErrElectionAlreadyRunning = errors.New("election: already running")
+	// ErrElectionNotRunning reports Stop when no election is active.
+	ErrElectionNotRunning = errors.New("election: not running")
 )
 
 // Store stores and retrieves cluster state and component heartbeats.
@@ -52,7 +56,7 @@ type Election interface {
 	// the consuming code calls election.Stop(). Failure to do so can cause
 	// subsequent elections to hang indefinitely across all participants of an
 	// election.
-	RunForElection() (<-chan bool, <-chan error)
+	RunForElection() (electedCh <-chan bool, errCh <-chan error, err error)
 	Leader() (string, error)
-	Stop()
+	Stop() error
 }

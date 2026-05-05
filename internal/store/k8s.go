@@ -418,9 +418,9 @@ func NewKubeElection(kubecli kubernetes.Interface, podName, namespace, clusterNa
 }
 
 // RunForElection starts campaigning and returns election and error channels.
-func (e *KubeElection) RunForElection() (<-chan bool, <-chan error) {
+func (e *KubeElection) RunForElection() (<-chan bool, <-chan error, error) {
 	if e.running {
-		panic("already running")
+		return nil, nil, ErrElectionAlreadyRunning
 	}
 
 	e.electedCh = make(chan bool)
@@ -430,16 +430,17 @@ func (e *KubeElection) RunForElection() (<-chan bool, <-chan error) {
 	e.running = true
 	go e.campaign()
 
-	return e.electedCh, e.errCh
+	return e.electedCh, e.errCh, nil
 }
 
 // Stop stops election campaigning.
-func (e *KubeElection) Stop() {
+func (e *KubeElection) Stop() error {
 	if !e.running {
-		panic("not running")
+		return ErrElectionNotRunning
 	}
 	e.cancel()
 	e.running = false
+	return nil
 }
 
 // Leader returns the current leader identity.

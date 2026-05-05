@@ -174,11 +174,12 @@ func (m *MockElection) EXPECT() *MockElectionMockRecorder {
 }
 
 // RunForElection mocks base method
-func (m *MockElection) RunForElection() (<-chan bool, <-chan error) {
+func (m *MockElection) RunForElection() (<-chan bool, <-chan error, error) {
 	ret := m.ctrl.Call(m, "RunForElection")
 	ret0, _ := ret[0].(<-chan bool)
 	ret1, _ := ret[1].(<-chan error)
-	return ret0, ret1
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
 }
 
 // RunForElection indicates an expected call of RunForElection
@@ -200,8 +201,10 @@ func (mr *MockElectionMockRecorder) Leader() *gomock.Call {
 }
 
 // Stop mocks base method
-func (m *MockElection) Stop() {
-	m.ctrl.Call(m, "Stop")
+func (m *MockElection) Stop() error {
+	ret := m.ctrl.Call(m, "Stop")
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // Stop indicates an expected call of Stop

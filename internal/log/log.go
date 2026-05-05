@@ -1,4 +1,4 @@
-// Copyright 2017 Sorint.lab
+// Copyright 2026 WoozyMasta
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,82 +12,40 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package log provides shared Stolon logging helpers.
+// Package log provides shared Stolon logging helpers backed by zerolog.
+//
+// The process-wide root is the same global described in zerolog's log subpackage:
+// import zlog "github.com/rs/zerolog/log" -- see zlog.Logger and zlog.Info() etc.
+// Configure replaces that root (default from zlog would be stderr; here we start
+// from discard until Configure). API that needs *zerolog.Logger can use L(),
+// which returns &zlog.Logger.
 package log
 
 import (
-	"fmt"
-	"log"
+	stdlog "log"
 
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
+	"github.com/rs/zerolog"
+	zlog "github.com/rs/zerolog/log"
 )
 
-var (
-	s      *zap.SugaredLogger
-	sColor *zap.SugaredLogger
-)
-
-// default info level
-var level = zap.NewAtomicLevelAt(zapcore.InfoLevel)
+// stdLogger forwards to the shared root via zerolog.Logger's io.Writer
+// implementation (see zerolog docs: stdlog.SetOutput(logger)).
+var stdLogger *stdlog.Logger
 
 func init() {
-	config := zap.Config{
-		Level:             level,
-		Development:       false,
-		DisableStacktrace: true,
-		Encoding:          "console",
-		EncoderConfig:     zap.NewDevelopmentEncoderConfig(),
-		OutputPaths:       []string{"stderr"},
-		ErrorOutputPaths:  []string{"stderr"},
-	}
-
-	logger, err := config.Build()
-	if err != nil {
-		panic(fmt.Errorf("failed to initialize logger: %v", err))
-	}
-	s = logger.Sugar()
-
-	config.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
-
-	logger, err = config.Build()
-	if err != nil {
-		panic(fmt.Errorf("failed to initialize color logger: %v", err))
-	}
-	sColor = logger.Sugar()
+	zlog.Logger = zerolog.Nop()
+	stdLogger = stdlog.New(&zlog.Logger, "", 0)
 }
 
-// SetDebug sets the global log level to debug.
-func SetDebug() {
-	level.SetLevel(zapcore.DebugLevel)
+// L returns &zlog.Logger, the shared root. Safe to pass where a *zerolog.Logger
+// is required; for new code you can also import zlog "github.com/rs/zerolog/log"
+// and use zlog.Logger (value) or zlog.Info() directly after Configure.
+func L() *zerolog.Logger {
+	return &zlog.Logger
 }
 
-// SetLevel sets the global log level.
-func SetLevel(lvl zapcore.Level) {
-	level.SetLevel(lvl)
-}
-
-// IsDebug reports whether the global log level is debug.
-func IsDebug() bool {
-	return level.Level() == zapcore.DebugLevel
-}
-
-// S returns the shared sugared logger.
-func S() *zap.SugaredLogger {
-	return s
-}
-
-// StdLog returns the shared logger as a standard library logger.
-func StdLog() *log.Logger {
-	return zap.NewStdLog(s.Desugar())
-}
-
-// SColor returns the shared colorized sugared logger.
-func SColor() *zap.SugaredLogger {
-	return sColor
-}
-
-// StdLogColor returns the colorized logger as a standard library logger.
-func StdLogColor() *log.Logger {
-	return zap.NewStdLog(sColor.Desugar())
+// Std returns a standard library logger writing through the shared root's
+// zerolog Write method (same semantics as upstream zerolog, not a custom level).
+func Std() *stdlog.Logger {
+	return stdLogger
 }

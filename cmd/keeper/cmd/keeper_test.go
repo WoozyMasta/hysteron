@@ -30,6 +30,7 @@ import (
 
 	"github.com/sorintlab/stolon/internal/cluster"
 	"github.com/sorintlab/stolon/internal/common"
+	slog "github.com/sorintlab/stolon/internal/log"
 )
 
 func parseSynchronousStandbyNames(s string) ([]string, error) {
@@ -317,7 +318,7 @@ func TestGetTimeLinesHistory(t *testing.T) {
 			TimelineID: 1,
 		}
 
-		ctlsh, err := getTimeLinesHistory(pgState, nil, 3)
+		ctlsh, err := getTimeLinesHistory(pgState, nil, 3, slog.L())
 
 		if err != nil {
 			t.Errorf("err should be nil, but got %v", err)
@@ -338,7 +339,7 @@ func TestGetTimeLinesHistory(t *testing.T) {
 
 		pgm := pgmocks.NewMockPGManager(ctrl)
 		pgm.EXPECT().GetTimelinesHistory(timelineID).Return([]*pg.TimelineHistory{}, fmt.Errorf("failed to get timeline history"))
-		ctlsh, err := getTimeLinesHistory(pgState, pgm, 3)
+		ctlsh, err := getTimeLinesHistory(pgState, pgm, 3, slog.L())
 
 		if err == nil {
 			t.Errorf("err should be not be nil")
@@ -374,7 +375,7 @@ func TestGetTimeLinesHistory(t *testing.T) {
 			},
 		}
 		pgm.EXPECT().GetTimelinesHistory(timelineID).Return(timelineHistories, nil)
-		ctlsh, err := getTimeLinesHistory(pgState, pgm, 3)
+		ctlsh, err := getTimeLinesHistory(pgState, pgm, 3, slog.L())
 
 		if err != nil {
 			t.Errorf("err should be not be nil")
@@ -436,7 +437,7 @@ func TestGetTimeLinesHistory(t *testing.T) {
 			},
 		}
 		pgm.EXPECT().GetTimelinesHistory(timelineID).Return(timelineHistories, nil)
-		ctlsh, err := getTimeLinesHistory(pgState, pgm, 2)
+		ctlsh, err := getTimeLinesHistory(pgState, pgm, 2, slog.L())
 
 		if err != nil {
 			t.Errorf("err should be not be nil")

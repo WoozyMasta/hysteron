@@ -43,13 +43,25 @@ import (
 	"github.com/sorintlab/stolon/internal/store"
 	"github.com/sorintlab/stolon/internal/util"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/rs/zerolog"
 	"github.com/woozymasta/flags"
-	"go.uber.org/zap"
 )
 
-var log = slog.S()
+// keeperRootLog is for helpers before a PostgresKeeper exists.
+// Call only after cmd.InitLogging so the root output/level are configured.
+func keeperRootLog(cfg *config) *zerolog.Logger {
+	var l zerolog.Logger
+	if cfg == nil {
+		l = slog.WithComponent("keeper")
+	} else {
+		l = slog.WithComponent("keeper").With().
+			Str(slog.FieldClusterName, cfg.ClusterName).
+			Str(slog.FieldKeeperUID, cfg.UID).
+			Logger()
+	}
+	return &l
+}
 
 const (
 	maxPostgresTimelinesHistory = 2
@@ -84,26 +96,20 @@ func (s *DBLocalState) DeepCopy() *DBLocalState {
 		return nil
 	}
 	ns, err := copystructure.Copy(s)
-	if err != nil {
-		panic(err)
-	}
-	// paranoid test
-	if !reflect.DeepEqual(s, ns) {
-		panic("not equal")
-	}
+	common.MustNot(err, "keeper DBLocalState deep copy failed")
 	return ns.(*DBLocalState)
 }
 
 type config struct {
 	PG postgresOptions `group:"PostgreSQL" namespace:"pg" env-namespace:"PG"`
 
-	UID     string `short:"i" long:"uid" env:"UID" long-alias:"id" description:"keeper uid (must be unique in the cluster and can contain only lower-case letters, numbers and the underscore character). If not provided a random uid will be generated."`
-	DataDir string `short:"d" long:"data-dir" env:"DATA_DIR" description:"data directory"`
+	UID     string `short:"i" long:"uid"      env:"UID"      long-alias:"id" description:"keeper uid (must be unique in the cluster and can contain only lower-case letters, numbers and the underscore character). If not provided a random uid will be generated."`
+	DataDir string `short:"d" long:"data-dir" env:"DATA_DIR"                 description:"data directory"`
 	cmd.CommonConfig
 
-	CanBeMaster             bool `long:"can-be-master" env:"CAN_BE_MASTER" description:"allow keeper to be elected as master (default true)"`
-	CanBeSynchronousReplica bool `long:"can-be-synchronous-replica" env:"CAN_BE_SYNCHRONOUS_REPLICA" description:"allow keeper to be chosen as synchronous replica (default true)"`
-	DisableDataDirLocking   bool `long:"disable-data-dir-locking" env:"DISABLE_DATA_DIR_LOCKING" description:"disable locking on data dir. Warning! It'll cause data corruptions if two keepers are concurrently running with the same data dir."`
+	CanBeMaster             bool `long:"can-be-master"                      env:"CAN_BE_MASTER"                      description:"allow keeper to be elected as master (default true)"`
+	CanBeSynchronousReplica bool `long:"can-be-synchronous-replica"         env:"CAN_BE_SYNCHRONOUS_REPLICA"         description:"allow keeper to be chosen as synchronous replica (default true)"`
+	DisableDataDirLocking   bool `long:"disable-data-dir-locking"           env:"DISABLE_DATA_DIR_LOCKING"           description:"disable locking on data dir. Warning! It'll cause data corruptions if two keepers are concurrently running with the same data dir."`
 	AllowUnsupportedPG      bool `long:"allow-unsupported-postgres-version" env:"ALLOW_UNSUPPORTED_POSTGRES_VERSION" description:"allow running with PostgreSQL versions outside the default supported major versions. This is best-effort and may break recovery, replication slots, configuration rendering, or file layout handling."`
 }
 
@@ -111,11 +117,11 @@ type config struct {
 // keeper. The group namespaces produce flags like `--pg-listen-address`
 // and env vars like `PG_LISTEN_ADDRESS`.
 type postgresOptions struct {
-	ListenAddress    string `long:"listen-address" env:"LISTEN_ADDRESS" description:"postgresql instance listening address, local address used for the postgres instance. For all network interface, you can set the value to '*'."`
+	ListenAddress    string `long:"listen-address"    env:"LISTEN_ADDRESS"    description:"postgresql instance listening address, local address used for the postgres instance. For all network interface, you can set the value to '*'."`
 	AdvertiseAddress string `long:"advertise-address" env:"ADVERTISE_ADDRESS" description:"postgresql instance address from outside. Use it to expose ip different than local ip with a NAT networking config"`
-	Port             string `short:"p" long:"port" env:"PORT" default:"5432" description:"postgresql instance listening port"`
-	AdvertisePort    string `long:"advertise-port" env:"ADVERTISE_PORT" description:"postgresql instance port from outside. Use it to expose port different than local port with a PAT networking config"`
-	BinPath          string `long:"bin-path" env:"BIN_PATH" description:"absolute path to postgresql binaries. If empty they will be searched in the current PATH"`
+	Port             string `long:"port"              env:"PORT"              description:"postgresql instance listening port"                                                                                                            short:"p" default:"5432"`
+	AdvertisePort    string `long:"advertise-port"    env:"ADVERTISE_PORT"    description:"postgresql instance port from outside. Use it to expose port different than local port with a PAT networking config"`
+	BinPath          string `long:"bin-path"          env:"BIN_PATH"          description:"absolute path to postgresql binaries. If empty they will be searched in the current PATH"`
 
 	Repl postgresReplOptions `group:"PostgreSQL Replication User" namespace:"repl" env-namespace:"REPL"`
 	SU   postgresSUOptions   `group:"PostgreSQL Superuser"        namespace:"su"   env-namespace:"SU"`
@@ -123,18 +129,18 @@ type postgresOptions struct {
 
 // postgresReplOptions configures the postgres replication user.
 type postgresReplOptions struct {
-	AuthMethod   string `long:"auth-method" env:"AUTH_METHOD" choices:"md5;trust" default:"md5" description:"postgres replication user auth method"`
-	Username     string `long:"username" env:"USERNAME" description:"postgres replication user name. Required. It'll be created on db initialization. Must be the same for all keepers."`
-	Password     string `long:"password" env:"PASSWORD" xor:"pg-repl-secret" description:"postgres replication user password. Mutually exclusive with --pg-repl-passwordfile. Must be the same for all keepers."`
-	PasswordFile string `long:"passwordfile" env:"PASSWORDFILE" xor:"pg-repl-secret" description:"postgres replication user password file. Mutually exclusive with --pg-repl-password. Must be the same for all keepers."`
+	AuthMethod   string `long:"auth-method"  env:"AUTH_METHOD"  choices:"md5;trust" default:"md5" description:"postgres replication user auth method"`
+	Username     string `long:"username"     env:"USERNAME"                                       description:"postgres replication user name. Required. It'll be created on db initialization. Must be the same for all keepers."`
+	Password     string `long:"password"     env:"PASSWORD"                                       description:"postgres replication user password. Mutually exclusive with --pg-repl-passwordfile. Must be the same for all keepers."  xor:"pg-repl-secret"`
+	PasswordFile string `long:"passwordfile" env:"PASSWORDFILE"                                   description:"postgres replication user password file. Mutually exclusive with --pg-repl-password. Must be the same for all keepers." xor:"pg-repl-secret"`
 }
 
 // postgresSUOptions configures the postgres superuser.
 type postgresSUOptions struct {
-	AuthMethod   string `long:"auth-method" env:"AUTH_METHOD" choices:"md5;trust" default:"md5" description:"postgres superuser auth method"`
-	Username     string `long:"username" env:"USERNAME" description:"postgres superuser user name. Defaults to the effective user running stolon-keeper. Must be the same for all keepers."`
-	Password     string `long:"password" env:"PASSWORD" xor:"pg-su-secret" description:"postgres superuser password. Mutually exclusive with --pg-su-passwordfile. Must be the same for all keepers."`
-	PasswordFile string `long:"passwordfile" env:"PASSWORDFILE" xor:"pg-su-secret" description:"postgres superuser password file. Mutually exclusive with --pg-su-password. Must be the same for all keepers."`
+	AuthMethod   string `long:"auth-method"  env:"AUTH_METHOD"  choices:"md5;trust" default:"md5" description:"postgres superuser auth method"`
+	Username     string `long:"username"     env:"USERNAME"                                       description:"postgres superuser user name. Defaults to the effective user running stolon-keeper. Must be the same for all keepers."`
+	Password     string `long:"password"     env:"PASSWORD"                                       description:"postgres superuser password. Mutually exclusive with --pg-su-passwordfile. Must be the same for all keepers."          xor:"pg-su-secret"`
+	PasswordFile string `long:"passwordfile" env:"PASSWORDFILE"                                   description:"postgres superuser password file. Mutually exclusive with --pg-su-password. Must be the same for all keepers."         xor:"pg-su-secret"`
 }
 
 // Defaults that cannot be expressed as struct tags (booleans default to
@@ -174,17 +180,28 @@ var managedPGParameters = []string{
 func readPasswordFromFile(filepath string) (string, error) {
 	fi, err := os.Lstat(filepath)
 	if err != nil {
-		return "", fmt.Errorf("unable to read password from file %s: %v", filepath, err)
+		return "", fmt.Errorf(
+			"unable to read password from file %s: %v",
+			filepath,
+			err,
+		)
 	}
 
 	if fi.Mode() > 0600 {
 		//TODO: enforce this by exiting with an error. Kubernetes makes this file too open today.
-		log.Warnw("password file permissions are too open. This file should only be readable to the user executing stolon! Continuing...", "file", filepath, "mode", fmt.Sprintf("%#o", fi.Mode()))
+		keeperRootLog(nil).Warn().
+			Str("file", filepath).
+			Str("mode", fmt.Sprintf("%#o", fi.Mode())).
+			Msg("password file mode is more permissive than 0600; tighten permissions in production")
 	}
 
 	pwBytes, err := os.ReadFile(filepath)
 	if err != nil {
-		return "", fmt.Errorf("unable to read password from file %s: %v", filepath, err)
+		return "", fmt.Errorf(
+			"unable to read password from file %s: %v",
+			filepath,
+			err,
+		)
 	}
 	return string(pwBytes), nil
 }
@@ -201,7 +218,10 @@ func (p *PostgresKeeper) walLevel(db *cluster.DB) string {
 	major, minor, err := p.binaryVersion()
 	if err != nil {
 		// in case we fail to parse the binary version then log it and just use "hot_standby" that works for all versions
-		log.Warnf("failed to get postgres binary version: %v", err)
+		p.baseLog().
+			Warn().
+			Err(err).
+			Msg("could not read PostgreSQL binary version from installation")
 		return "hot_standby"
 	}
 
@@ -264,7 +284,9 @@ func (p *PostgresKeeper) binaryVersion() (int, int, error) {
 	return p.pgm.BinaryVersion()
 }
 
-func (p *PostgresKeeper) mandatoryPGParameters(db *cluster.DB) common.Parameters {
+func (p *PostgresKeeper) mandatoryPGParameters(
+	db *cluster.DB,
+) common.Parameters {
 	params := common.Parameters{
 		"unix_socket_directories": common.PgUnixSocketDirectories,
 		"wal_level":               p.walLevel(db),
@@ -274,7 +296,10 @@ func (p *PostgresKeeper) mandatoryPGParameters(db *cluster.DB) common.Parameters
 	maj, _, err := p.binaryVersion()
 	if err != nil {
 		// in case we fail to parse the binary version don't return any wal_keep_segments or wal_keep_size
-		log.Warnf("failed to get postgres binary version: %v", err)
+		p.baseLog().
+			Warn().
+			Err(err).
+			Msg("could not read PostgreSQL binary version from installation")
 		return params
 	}
 
@@ -287,7 +312,9 @@ func (p *PostgresKeeper) mandatoryPGParameters(db *cluster.DB) common.Parameters
 	return params
 }
 
-func (p *PostgresKeeper) getSUConnParams(db, followedDB *cluster.DB) pg.ConnParams {
+func (p *PostgresKeeper) getSUConnParams(
+	db, followedDB *cluster.DB,
+) pg.ConnParams {
 	cp := pg.ConnParams{
 		"user":             p.pgSUUsername,
 		"host":             followedDB.Status.ListenAddress,
@@ -303,7 +330,9 @@ func (p *PostgresKeeper) getSUConnParams(db, followedDB *cluster.DB) pg.ConnPara
 	return cp
 }
 
-func (p *PostgresKeeper) getReplConnParams(db, followedDB *cluster.DB) pg.ConnParams {
+func (p *PostgresKeeper) getReplConnParams(
+	db, followedDB *cluster.DB,
+) pg.ConnParams {
 	cp := pg.ConnParams{
 		"user":             p.pgReplUsername,
 		"host":             followedDB.Status.ListenAddress,
@@ -346,7 +375,9 @@ func (p *PostgresKeeper) getLocalReplConnParams() pg.ConnParams {
 	return cp
 }
 
-func (p *PostgresKeeper) createPGParameters(db *cluster.DB) common.Parameters {
+func (p *PostgresKeeper) createPGParameters(
+	db *cluster.DB,
+) common.Parameters {
 	parameters := common.Parameters{}
 
 	// Include init parameters if include config is required
@@ -369,10 +400,16 @@ func (p *PostgresKeeper) createPGParameters(db *cluster.DB) common.Parameters {
 	// fail.
 	// TODO(sgotti) changing max_replication_slots requires an
 	// instance restart.
-	parameters["max_replication_slots"] = strconv.FormatUint(uint64(db.Spec.MaxStandbys), 10)
+	parameters["max_replication_slots"] = strconv.FormatUint(
+		uint64(db.Spec.MaxStandbys),
+		10,
+	)
 	// Add some more wal senders, since also the keeper will use them
 	// TODO(sgotti) changing max_wal_senders requires an instance restart.
-	parameters["max_wal_senders"] = strconv.FormatUint(uint64((db.Spec.MaxStandbys*2)+2+db.Spec.AdditionalWalSenders), 10)
+	parameters["max_wal_senders"] = strconv.FormatUint(
+		uint64((db.Spec.MaxStandbys*2)+2+db.Spec.AdditionalWalSenders),
+		10,
+	)
 
 	// required by pg_rewind (if data checksum is enabled it's ignored)
 	if db.Spec.UsePgrewind {
@@ -380,12 +417,26 @@ func (p *PostgresKeeper) createPGParameters(db *cluster.DB) common.Parameters {
 	}
 
 	// Setup synchronous replication
-	if db.Spec.SynchronousReplication && (len(db.Spec.SynchronousStandbys) > 0 || len(db.Spec.ExternalSynchronousStandbys) > 0) {
-		synchronousStandbys := make([]string, 0, len(db.Spec.SynchronousStandbys)+len(db.Spec.ExternalSynchronousStandbys))
+	if db.Spec.SynchronousReplication &&
+		(len(db.Spec.SynchronousStandbys) > 0 || len(db.Spec.ExternalSynchronousStandbys) > 0) {
+		synchronousStandbys := make(
+			[]string,
+			0,
+			len(
+				db.Spec.SynchronousStandbys,
+			)+len(
+				db.Spec.ExternalSynchronousStandbys,
+			),
+		)
 		for _, synchronousStandby := range db.Spec.SynchronousStandbys {
-			synchronousStandbys = append(synchronousStandbys, common.StolonName(synchronousStandby))
+			synchronousStandbys = append(
+				synchronousStandbys,
+				common.StolonName(synchronousStandby),
+			)
 		}
-		synchronousStandbys = append(synchronousStandbys, db.Spec.ExternalSynchronousStandbys...)
+		synchronousStandbys = append(
+			synchronousStandbys,
+			db.Spec.ExternalSynchronousStandbys...)
 
 		// We deliberately don't use postgres FIRST or ANY methods with N
 		// different than len(synchronousStandbys) because we need that all the
@@ -397,7 +448,11 @@ func (p *PostgresKeeper) createPGParameters(db *cluster.DB) common.Parameters {
 		// master. And choosing the non synchronous one will cause the loss of
 		// the transactions contained in the wal records not transmitted.
 		if len(synchronousStandbys) > 1 {
-			parameters["synchronous_standby_names"] = fmt.Sprintf("%d (%s)", len(synchronousStandbys), strings.Join(synchronousStandbys, ","))
+			parameters["synchronous_standby_names"] = fmt.Sprintf(
+				"%d (%s)",
+				len(synchronousStandbys),
+				strings.Join(synchronousStandbys, ","),
+			)
 		} else {
 			parameters["synchronous_standby_names"] = strings.Join(synchronousStandbys, ",")
 		}
@@ -408,7 +463,12 @@ func (p *PostgresKeeper) createPGParameters(db *cluster.DB) common.Parameters {
 	return parameters
 }
 
-func (p *PostgresKeeper) createRecoveryOptions(recoveryMode pg.RecoveryMode, standbySettings *cluster.StandbySettings, archiveRecoverySettings *cluster.ArchiveRecoverySettings, recoveryTargetSettings *cluster.RecoveryTargetSettings) *pg.RecoveryOptions {
+func (p *PostgresKeeper) createRecoveryOptions(
+	recoveryMode pg.RecoveryMode,
+	standbySettings *cluster.StandbySettings,
+	archiveRecoverySettings *cluster.ArchiveRecoverySettings,
+	recoveryTargetSettings *cluster.RecoveryTargetSettings,
+) *pg.RecoveryOptions {
 	parameters := common.Parameters{}
 
 	if standbySettings != nil {
@@ -526,8 +586,27 @@ type PostgresKeeper struct {
 	waitSyncStandbysSynced bool
 }
 
+// baseLog is the structured logger with stable keeper identity (use for all
+// PostgresKeeper events).
+func (p *PostgresKeeper) baseLog() *zerolog.Logger {
+	uid := ""
+	if p.keeperLocalState != nil {
+		uid = p.keeperLocalState.UID
+	}
+	l := slog.L().With().
+		Str(slog.FieldComponent, "keeper").
+		Str(slog.FieldClusterName, p.cfg.ClusterName).
+		Str(slog.FieldKeeperUID, uid).
+		Str("boot_uuid", p.bootUUID).
+		Logger()
+	return &l
+}
+
 // NewPostgresKeeper creates a PostgreSQL keeper from command configuration.
-func NewPostgresKeeper(cfg *config, end chan error) (*PostgresKeeper, error) {
+func NewPostgresKeeper(
+	cfg *config,
+	end chan error,
+) (*PostgresKeeper, error) {
 	e, err := cmd.NewStore(&cfg.CommonConfig, true)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create store: %v", err)
@@ -536,7 +615,11 @@ func NewPostgresKeeper(cfg *config, end chan error) (*PostgresKeeper, error) {
 	// Clean and get absolute datadir path
 	dataDir, err := filepath.Abs(cfg.DataDir)
 	if err != nil {
-		return nil, fmt.Errorf("cannot get absolute datadir path for %q: %v", cfg.DataDir, err)
+		return nil, fmt.Errorf(
+			"cannot get absolute datadir path for %q: %v",
+			cfg.DataDir,
+			err,
+		)
 	}
 
 	p := &PostgresKeeper{
@@ -573,27 +656,46 @@ func NewPostgresKeeper(cfg *config, end chan error) (*PostgresKeeper, error) {
 
 	err = p.loadKeeperLocalState()
 	if err != nil && !os.IsNotExist(err) {
-		return nil, fmt.Errorf("failed to load keeper local state file: %v", err)
+		return nil, fmt.Errorf(
+			"failed to load keeper local state file: %v",
+			err,
+		)
 	}
-	if p.keeperLocalState.UID != "" && p.cfg.UID != "" && p.keeperLocalState.UID != p.cfg.UID {
-		log.Fatalf("saved uid %q differs from configuration uid: %q", p.keeperLocalState.UID, cfg.UID)
+	if p.keeperLocalState.UID != "" && p.cfg.UID != "" &&
+		p.keeperLocalState.UID != p.cfg.UID {
+		p.baseLog().Fatal().
+			Str("saved_keeper_uid", p.keeperLocalState.UID).
+			Str("config_keeper_uid", cfg.UID).
+			Msg("refusing to start: UID in local state file does not match --uid from the command line")
 	}
 	if p.keeperLocalState.UID == "" {
 		p.keeperLocalState.UID = cfg.UID
 		if cfg.UID == "" {
 			p.keeperLocalState.UID = common.UID()
-			log.Infow("uid generated", "uid", p.keeperLocalState.UID)
+			p.baseLog().
+				Info().
+				Str(slog.FieldKeeperUID, p.keeperLocalState.UID).
+				Msg("generated a new keeper UID (none was configured on the command line)")
 		}
 		if err = p.saveKeeperLocalState(); err != nil {
-			log.Fatalf("error: %v", err)
+			p.baseLog().
+				Fatal().
+				Err(err).
+				Msg("could not write keeper local state file")
 		}
 	}
 
-	log.Infow("keeper uid", "uid", p.keeperLocalState.UID)
+	p.baseLog().
+		Info().
+		Str(slog.FieldKeeperUID, p.keeperLocalState.UID).
+		Msg("keeper identity loaded; continuing startup")
 
 	err = p.loadDBLocalState()
 	if err != nil && !os.IsNotExist(err) {
-		return nil, fmt.Errorf("failed to load db local state file: %v", err)
+		return nil, fmt.Errorf(
+			"failed to load db local state file: %v",
+			err,
+		)
 	}
 	return p, nil
 }
@@ -605,7 +707,8 @@ func (p *PostgresKeeper) dbLocalStateCopy() *DBLocalState {
 }
 
 func (p *PostgresKeeper) usePgrewind(db *cluster.DB) bool {
-	return p.pgSUUsername != "" && p.pgSUPassword != "" && db.Spec.UsePgrewind
+	return p.pgSUUsername != "" && p.pgSUPassword != "" &&
+		db.Spec.UsePgrewind
 }
 
 func (p *PostgresKeeper) updateKeeperInfo() error {
@@ -621,7 +724,10 @@ func (p *PostgresKeeper) updateKeeperInfo() error {
 	major, minor, err := p.binaryVersion()
 	if err != nil {
 		// in case we fail to parse the binary version then log it and just report maj and min as 0
-		log.Warnf("failed to get postgres binary version: %v", err)
+		p.baseLog().
+			Warn().
+			Err(err).
+			Msg("could not read PostgreSQL binary version from installation")
 	}
 
 	keeperInfo := &cluster.KeeperInfo{
@@ -652,7 +758,7 @@ func (p *PostgresKeeper) updatePGState(pctx context.Context) {
 	defer p.pgStateMutex.Unlock()
 	pgState, err := p.GetPGState(pctx)
 	if err != nil {
-		log.Errorw("failed to get pg state", zap.Error(err))
+		p.baseLog().Error().Err(err).Msg("failed to get pg state")
 	}
 	p.lastPGState = pgState
 }
@@ -660,20 +766,28 @@ func (p *PostgresKeeper) updatePGState(pctx context.Context) {
 func (p *PostgresKeeper) validatePostgresVersion() error {
 	major, minor, err := p.binaryVersion()
 	if err != nil {
-		return fmt.Errorf("failed to get postgres binary version: %w", err)
+		return fmt.Errorf(
+			"failed to get postgres binary version: %w",
+			err,
+		)
 	}
 	if err := pg.ValidateSupportedMajorVersion(major); err != nil {
 		if p.cfg.AllowUnsupportedPG {
-			log.Warnw(
-				"running with unsupported PostgreSQL version",
-				"version", fmt.Sprintf("%d.%d", major, minor),
-				"supportedMajorVersions", pg.SupportedMajorVersionsString(),
-			)
+			p.baseLog().Warn().
+				Str("pg_version", fmt.Sprintf("%d.%d", major, minor)).
+				Str("supported_major_versions", pg.SupportedMajorVersionsString()).
+				Msg("unsupported_postgres_version_allowed")
 			return nil
 		}
-		return fmt.Errorf("%w; use --allow-unsupported-postgres-version to bypass this check at your own risk", err)
+		return fmt.Errorf(
+			"%w; use --allow-unsupported-postgres-version to bypass this check at your own risk",
+			err,
+		)
 	}
-	log.Infow("PostgreSQL version supported", "version", fmt.Sprintf("%d.%d", major, minor))
+	p.baseLog().
+		Info().
+		Str("pg_version", fmt.Sprintf("%d.%d", major, minor)).
+		Msg("postgres_version_supported")
 	return nil
 }
 
@@ -681,13 +795,19 @@ func (p *PostgresKeeper) validatePostgresVersion() error {
 func (p *PostgresKeeper) GetInSyncStandbys() ([]string, error) {
 	inSyncStandbysFullName, err := p.pgm.GetSyncStandbys()
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve current sync standbys status from instance: %v", err)
+		return nil, fmt.Errorf(
+			"failed to retrieve current sync standbys status from instance: %v",
+			err,
+		)
 	}
 
 	inSyncStandbys := []string{}
 	for _, s := range inSyncStandbysFullName {
 		if common.IsStolonName(s) {
-			inSyncStandbys = append(inSyncStandbys, common.NameFromStolonName(s))
+			inSyncStandbys = append(
+				inSyncStandbys,
+				common.NameFromStolonName(s),
+			)
 		}
 	}
 
@@ -695,7 +815,9 @@ func (p *PostgresKeeper) GetInSyncStandbys() ([]string, error) {
 }
 
 // GetPGState returns the current PostgreSQL state observed by the keeper.
-func (p *PostgresKeeper) GetPGState(_ context.Context) (*cluster.PostgresState, error) {
+func (p *PostgresKeeper) GetPGState(
+	_ context.Context,
+) (*cluster.PostgresState, error) {
 	p.getPGStateMutex.Lock()
 	defer p.getPGStateMutex.Unlock()
 	// Just get one pgstate at a time to avoid exausting available connections
@@ -715,22 +837,36 @@ func (p *PostgresKeeper) GetPGState(_ context.Context) (*cluster.PostgresState, 
 	if initialized {
 		pgParameters, err := p.pgm.GetConfigFilePGParameters()
 		if err != nil {
-			log.Errorw("cannot get configured pg parameters", zap.Error(err))
+			p.baseLog().
+				Error().
+				Err(err).
+				Msg("cannot get configured pg parameters")
 			return pgState, nil
 		}
-		log.Debugw("got configured pg parameters", "pgParameters", pgParameters)
 		filteredPGParameters := common.Parameters{}
 		for k, v := range pgParameters {
 			if !slices.Contains(managedPGParameters, k) {
 				filteredPGParameters[k] = v
 			}
 		}
-		log.Debugw("filtered out managed pg parameters", "filteredPGParameters", filteredPGParameters)
+		pgnames := make([]string, 0, len(filteredPGParameters))
+		for k := range filteredPGParameters {
+			pgnames = append(pgnames, k)
+		}
+		sort.Strings(pgnames)
+		p.baseLog().Debug().
+			Int("total_parameter_count", len(pgParameters)).
+			Int("user_parameter_count", len(filteredPGParameters)).
+			Strs("user_parameter_names", pgnames).
+			Msg("PostgreSQL parameters from instance config (names only)")
 		pgState.PGParameters = filteredPGParameters
 
 		inSyncStandbys, err := p.GetInSyncStandbys()
 		if err != nil {
-			log.Errorw("failed to retrieve current in sync standbys from instance", zap.Error(err))
+			p.baseLog().
+				Error().
+				Err(err).
+				Msg("failed to retrieve current in sync standbys from instance")
 			return pgState, nil
 		}
 
@@ -738,25 +874,36 @@ func (p *PostgresKeeper) GetPGState(_ context.Context) (*cluster.PostgresState, 
 
 		sd, err := p.pgm.GetSystemData()
 		if err != nil {
-			log.Errorw("error getting pg state", zap.Error(err))
+			p.baseLog().Error().Err(err).Msg("error getting pg state")
 			return pgState, nil
 		}
 		pgState.SystemID = sd.SystemID
 		pgState.TimelineID = sd.TimelineID
 		pgState.XLogPos = sd.XLogPos
 
-		ctlsh, err := getTimeLinesHistory(pgState, p.pgm, maxPostgresTimelinesHistory)
+		ctlsh, err := getTimeLinesHistory(
+			pgState,
+			p.pgm,
+			maxPostgresTimelinesHistory,
+			p.baseLog(),
+		)
 		if err != nil {
-			log.Errorw("error getting timeline history", zap.Error(err))
+			p.baseLog().
+				Error().
+				Err(err).
+				Msg("error getting timeline history")
 			return pgState, nil
 		}
 		pgState.TimelinesHistory = ctlsh
 
 		ow, err := p.pgm.OlderWalFile()
 		if err != nil {
-			log.Warnw("error getting older wal file", zap.Error(err))
+			p.baseLog().
+				Warn().
+				Err(err).
+				Msg("error getting older wal file")
 		} else {
-			log.Debugw("older wal file", "filename", ow)
+			p.baseLog().Debug().Str("filename", ow).Msg("older wal file")
 			pgState.OlderWalFile = ow
 		}
 		pgState.Healthy = true
@@ -765,14 +912,22 @@ func (p *PostgresKeeper) GetPGState(_ context.Context) (*cluster.PostgresState, 
 	return pgState, nil
 }
 
-func getTimeLinesHistory(pgState *cluster.PostgresState, pgm pg.PGManager, maxPostgresTimelinesHistory int) (cluster.PostgresTimelinesHistory, error) {
+func getTimeLinesHistory(
+	pgState *cluster.PostgresState,
+	pgm pg.PGManager,
+	maxPostgresTimelinesHistory int,
+	lg *zerolog.Logger,
+) (cluster.PostgresTimelinesHistory, error) {
 	ctlsh := cluster.PostgresTimelinesHistory{}
 	// if timeline <= 1 then no timeline history file exists.
 	if pgState.TimelineID > 1 {
 		var tlsh []*pg.TimelineHistory
 		tlsh, err := pgm.GetTimelinesHistory(pgState.TimelineID)
 		if err != nil {
-			log.Errorw("error getting timeline history", zap.Error(err))
+			lg.Error().
+				Err(err).
+				Uint64("timeline_id", pgState.TimelineID).
+				Msg("could not read timeline history from PostgreSQL")
 			return ctlsh, err
 		}
 		if len(tlsh) > maxPostgresTimelinesHistory {
@@ -794,7 +949,10 @@ func (p *PostgresKeeper) getLastPGState() *cluster.PostgresState {
 	p.pgStateMutex.Lock()
 	pgState := p.lastPGState.DeepCopy()
 	p.pgStateMutex.Unlock()
-	log.Debugf("pgstate dump: %s", spew.Sdump(pgState))
+	p.baseLog().
+		Debug().
+		Fields(cluster.LogSummaryPostgresState(pgState)).
+		Msg("PostgreSQL state snapshot from last publish")
 	return pgState
 }
 
@@ -808,21 +966,42 @@ func (p *PostgresKeeper) Start(ctx context.Context) {
 	var cd *cluster.ClusterData
 	cd, _, err = p.e.GetClusterData(context.TODO())
 	if err != nil {
-		log.Errorw("error retrieving cluster data", zap.Error(err))
+		p.baseLog().
+			Error().
+			Err(err).
+			Msg("error retrieving cluster data")
 	} else if cd != nil {
 		if cd.FormatVersion != cluster.CurrentCDFormatVersion {
-			log.Errorw("unsupported clusterdata format version", "version", cd.FormatVersion)
+			p.baseLog().
+				Error().
+				Uint64("version", cd.FormatVersion).
+				Msg("unsupported clusterdata format version")
 		} else if cd.Cluster != nil {
 			p.sleepInterval = cd.Cluster.DefSpec().SleepInterval.Duration
 			p.requestTimeout = cd.Cluster.DefSpec().RequestTimeout.Duration
 		}
 	}
 
-	log.Debugf("cd dump: %s", spew.Sdump(cd))
+	p.baseLog().
+		Debug().
+		Fields(cluster.LogSummaryClusterData(cd)).
+		Msg("cluster data snapshot at keeper start")
 
 	// TODO(sgotti) reconfigure the various configurations options
 	// (RequestTimeout) after a changed cluster config
-	pgm := pg.NewManager(p.pgBinPath, p.dataDir, p.getLocalConnParams(), p.getLocalReplConnParams(), p.pgSUAuthMethod, p.pgSUUsername, p.pgSUPassword, p.pgReplAuthMethod, p.pgReplUsername, p.pgReplPassword, p.requestTimeout)
+	pgm := pg.NewManager(
+		p.pgBinPath,
+		p.dataDir,
+		p.getLocalConnParams(),
+		p.getLocalReplConnParams(),
+		p.pgSUAuthMethod,
+		p.pgSUUsername,
+		p.pgSUPassword,
+		p.pgReplAuthMethod,
+		p.pgReplUsername,
+		p.pgReplPassword,
+		p.requestTimeout,
+	)
 	p.pgm = pgm
 	p.pgBinaryVersion = pgm.BinaryVersion
 
@@ -843,9 +1022,12 @@ func (p *PostgresKeeper) Start(ctx context.Context) {
 
 		select {
 		case <-ctx.Done():
-			log.Debugw("stopping stolon keeper")
+			p.baseLog().Debug().Msg("shutting down stolon-keeper")
 			if err = p.pgm.StopIfStarted(true); err != nil {
-				log.Errorw("failed to stop pg instance", zap.Error(err))
+				p.baseLog().
+					Error().
+					Err(err).
+					Msg("failed to stop pg instance")
 			}
 			p.end <- nil
 			return
@@ -873,7 +1055,10 @@ func (p *PostgresKeeper) Start(ctx context.Context) {
 		case <-updateKeeperInfoTimerCh:
 			go func() {
 				if err := p.updateKeeperInfo(); err != nil {
-					log.Errorw("failed to update keeper info", zap.Error(err))
+					p.baseLog().
+						Error().
+						Err(err).
+						Msg("failed to update keeper info")
 				}
 				endUpdateKeeperInfo <- struct{}{}
 			}()
@@ -884,10 +1069,16 @@ func (p *PostgresKeeper) Start(ctx context.Context) {
 	}
 }
 
-func (p *PostgresKeeper) resync(db, masterDB, followedDB *cluster.DB, tryPgrewind bool) error {
+func (p *PostgresKeeper) resync(
+	db, masterDB, followedDB *cluster.DB,
+	tryPgrewind bool,
+) error {
 	pgm := p.pgm
 	replConnParams := p.getReplConnParams(db, followedDB)
-	standbySettings := &cluster.StandbySettings{PrimaryConninfo: replConnParams.ConnString(), PrimarySlotName: common.StolonName(db.UID)}
+	standbySettings := &cluster.StandbySettings{
+		PrimaryConninfo: replConnParams.ConnString(),
+		PrimarySlotName: common.StolonName(db.UID),
+	}
 
 	// TODO(sgotti) Actually we don't check if pg_rewind is installed or if
 	// postgresql version is > 9.5 since someone can also use an externally
@@ -901,10 +1092,16 @@ func (p *PostgresKeeper) resync(db, masterDB, followedDB *cluster.DB, tryPgrewin
 		// rewind that it targets the current primary, rather than whatever database we
 		// follow.
 		connParams := p.getSUConnParams(db, masterDB)
-		log.Infow("syncing using pg_rewind", "masterDB", masterDB.UID, "keeper", followedDB.Spec.KeeperUID)
+		p.baseLog().Info().
+			Str(slog.FieldDBUID, masterDB.UID).
+			Str(slog.FieldKeeperUID, followedDB.Spec.KeeperUID).
+			Msg("attempting pg_rewind against current primary to sync data directory")
 		if err := pgm.SyncFromFollowedPGRewind(connParams, p.pgSUPassword); err != nil {
 			// log pg_rewind error and fallback to pg_basebackup
-			log.Errorw("error syncing with pg_rewind", zap.Error(err))
+			p.baseLog().
+				Error().
+				Err(err).
+				Msg("error syncing with pg_rewind")
 		} else {
 			pgm.SetRecoveryOptions(p.createRecoveryOptions(pg.RecoveryModeStandby, standbySettings, nil, nil))
 			return nil
@@ -914,7 +1111,10 @@ func (p *PostgresKeeper) resync(db, masterDB, followedDB *cluster.DB, tryPgrewin
 	major, minor, err := p.binaryVersion()
 	if err != nil {
 		// in case we fail to parse the binary version then log it and just don't use replSlot
-		log.Warnf("failed to get postgres binary version: %v", err)
+		p.baseLog().
+			Warn().
+			Err(err).
+			Msg("could not read PostgreSQL binary version from installation")
 	}
 	replSlot := ""
 	if (major == 9 && minor >= 6) || major > 10 {
@@ -922,28 +1122,45 @@ func (p *PostgresKeeper) resync(db, masterDB, followedDB *cluster.DB, tryPgrewin
 	}
 
 	if err := pgm.RemoveAll(); err != nil {
-		return fmt.Errorf("failed to remove the postgres data dir: %v", err)
+		return fmt.Errorf(
+			"failed to remove the postgres data dir: %v",
+			err,
+		)
 	}
 	if slog.IsDebug() {
-		log.Debugw("syncing from followed db", "followedDB", followedDB.UID, "keeper", followedDB.Spec.KeeperUID, "replConnParams", fmt.Sprintf("%v", replConnParams))
+		p.baseLog().Debug().
+			Str(slog.FieldDBUID, followedDB.UID).
+			Str(slog.FieldKeeperUID, followedDB.Spec.KeeperUID).
+			Str("repl_conn_params", fmt.Sprintf("%v", replConnParams)).
+			Msg("starting base backup / clone from followed PostgreSQL instance")
 	} else {
-		log.Infow("syncing from followed db", "followedDB", followedDB.UID, "keeper", followedDB.Spec.KeeperUID)
+		p.baseLog().Info().
+			Str(slog.FieldDBUID, followedDB.UID).
+			Str(slog.FieldKeeperUID, followedDB.Spec.KeeperUID).
+			Msg("starting base backup / clone from followed PostgreSQL instance")
 	}
 
 	if err := pgm.SyncFromFollowed(replConnParams, replSlot); err != nil {
 		return fmt.Errorf("sync error: %v", err)
 	}
-	log.Infow("sync succeeded")
-
-	pgm.SetRecoveryOptions(p.createRecoveryOptions(pg.RecoveryModeStandby, standbySettings, nil, nil))
+	p.baseLog().
+		Info().
+		Str(slog.FieldDBUID, followedDB.UID).
+		Msg("successfully cloned data directory from followed instance")
 
 	return nil
 }
 
 // TODO(sgotti) unify this with the sentinel one. They have the same logic but one uses *cluster.PostgresState while the other *cluster.DB
-func (p *PostgresKeeper) isDifferentTimelineBranch(followedDB *cluster.DB, pgState *cluster.PostgresState) bool {
+func (p *PostgresKeeper) isDifferentTimelineBranch(
+	followedDB *cluster.DB,
+	pgState *cluster.PostgresState,
+) bool {
 	if followedDB.Status.TimelineID < pgState.TimelineID {
-		log.Infow("followed instance timeline < than our timeline", "followedTimeline", followedDB.Status.TimelineID, "timeline", pgState.TimelineID)
+		p.baseLog().Info().
+			Interface("followedTimeline", followedDB.Status.TimelineID).
+			Interface("timeline", pgState.TimelineID).
+			Msg("followed instance timeline < than our timeline")
 		return true
 	}
 
@@ -953,8 +1170,12 @@ func (p *PostgresKeeper) isDifferentTimelineBranch(followedDB *cluster.DB, pgSta
 			// if timeline <= 1 then no timeline history file exists.
 			return false
 		}
-		ftlh := followedDB.Status.TimelinesHistory.GetTimelineHistory(pgState.TimelineID - 1)
-		tlh := pgState.TimelinesHistory.GetTimelineHistory(pgState.TimelineID - 1)
+		ftlh := followedDB.Status.TimelinesHistory.GetTimelineHistory(
+			pgState.TimelineID - 1,
+		)
+		tlh := pgState.TimelinesHistory.GetTimelineHistory(
+			pgState.TimelineID - 1,
+		)
 		if ftlh == nil || tlh == nil {
 			// No timeline history to check
 			return false
@@ -962,22 +1183,38 @@ func (p *PostgresKeeper) isDifferentTimelineBranch(followedDB *cluster.DB, pgSta
 		if ftlh.SwitchPoint == tlh.SwitchPoint {
 			return false
 		}
-		log.Infow("followed instance timeline forked at a different xlog pos than our timeline", "followedTimeline", followedDB.Status.TimelineID, "followedXlogpos", ftlh.SwitchPoint, "timeline", pgState.TimelineID, "xlogpos", tlh.SwitchPoint)
+		p.baseLog().Info().
+			Interface("followedTimeline", followedDB.Status.TimelineID).
+			Interface("followedXlogpos", ftlh.SwitchPoint).
+			Interface("timeline", pgState.TimelineID).
+			Interface("xlogpos", tlh.SwitchPoint).
+			Msg("followed instance timeline forked at a different xlog pos than our timeline")
 		return true
 	}
 
 	// followedDB.Status.TimelineID > pgState.TimelineID
-	ftlh := followedDB.Status.TimelinesHistory.GetTimelineHistory(pgState.TimelineID)
+	ftlh := followedDB.Status.TimelinesHistory.GetTimelineHistory(
+		pgState.TimelineID,
+	)
 	if ftlh != nil {
 		if ftlh.SwitchPoint < pgState.XLogPos {
-			log.Infow("followed instance timeline forked before our current state", "followedTimeline", followedDB.Status.TimelineID, "followedXlogpos", ftlh.SwitchPoint, "timeline", pgState.TimelineID, "xlogpos", pgState.XLogPos)
+			p.baseLog().Info().
+				Interface("followedTimeline", followedDB.Status.TimelineID).
+				Interface("followedXlogpos", ftlh.SwitchPoint).
+				Interface("timeline", pgState.TimelineID).
+				Interface("xlogpos", pgState.XLogPos).
+				Msg("followed instance timeline forked before our current state")
 			return true
 		}
 	}
 	return false
 }
 
-func (p *PostgresKeeper) updateReplSlots(curReplSlots []string, uid string, followersUIDs, additionalReplSlots []string) error {
+func (p *PostgresKeeper) updateReplSlots(
+	curReplSlots []string,
+	uid string,
+	followersUIDs, additionalReplSlots []string,
+) error {
 	internalReplSlots := map[string]struct{}{}
 
 	// Create a list of the wanted internal replication slots
@@ -999,9 +1236,17 @@ func (p *PostgresKeeper) updateReplSlots(curReplSlots []string, uid string, foll
 			continue
 		}
 		if _, ok := internalReplSlots[slot]; !ok {
-			log.Infow("dropping replication slot", "slot", slot)
+			p.baseLog().
+				Info().
+				Str("slot", slot).
+				Msg("dropping replication slot")
 			if err := p.pgm.DropReplicationSlot(slot); err != nil {
-				log.Errorw("failed to drop replication slot", "slot", slot, "err", err)
+				p.baseLog().
+					Error().
+					Str("slot", slot).
+					Err(err).
+					Msg("failed to drop replication slot")
+
 				// don't return the error but continue also if drop failed (standby still connected)
 			}
 		}
@@ -1010,9 +1255,16 @@ func (p *PostgresKeeper) updateReplSlots(curReplSlots []string, uid string, foll
 	// Create internal replication slots
 	for slot := range internalReplSlots {
 		if !slices.Contains(curReplSlots, slot) {
-			log.Infow("creating replication slot", "slot", slot)
+			p.baseLog().
+				Info().
+				Str("slot", slot).
+				Msg("creating replication slot")
 			if err := p.pgm.CreateReplicationSlot(slot); err != nil {
-				log.Errorw("failed to create replication slot", "slot", slot, zap.Error(err))
+				p.baseLog().
+					Error().
+					Str("slot", slot).
+					Err(err).
+					Msg("failed to create replication slot")
 				return err
 			}
 		}
@@ -1024,14 +1276,20 @@ func (p *PostgresKeeper) refreshReplicationSlots(db *cluster.DB) error {
 	var currentReplicationSlots []string
 	currentReplicationSlots, err := p.pgm.GetReplicationSlots()
 	if err != nil {
-		log.Errorw("failed to get replication slots", zap.Error(err))
+		p.baseLog().
+			Error().
+			Err(err).
+			Msg("failed to get replication slots")
 		return err
 	}
 
 	followersUIDs := db.Spec.Followers
 
 	if err = p.updateReplSlots(currentReplicationSlots, db.UID, followersUIDs, db.Spec.AdditionalReplicationSlots); err != nil {
-		log.Errorw("error updating replication slots", zap.Error(err))
+		p.baseLog().
+			Error().
+			Err(err).
+			Msg("error updating replication slots")
 		return err
 	}
 
@@ -1044,21 +1302,36 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 
 	cd, _, err := e.GetClusterData(pctx)
 	if err != nil {
-		log.Errorw("error retrieving cluster data", zap.Error(err))
+		p.baseLog().
+			Error().
+			Err(err).
+			Msg("error retrieving cluster data")
 		return
 	}
-	log.Debugf("cd dump: %s", spew.Sdump(cd))
+	p.baseLog().
+		Debug().
+		Fields(cluster.LogSummaryClusterData(cd)).
+		Msg("cluster data snapshot before state machine step")
 
 	if cd == nil {
-		log.Infow("no cluster data available, waiting for it to appear")
+		p.baseLog().
+			Info().
+			Str("store_backend", p.cfg.Store.Backend).
+			Msg("cluster data not in store yet; waiting before managing PostgreSQL")
 		return
 	}
 	if cd.FormatVersion != cluster.CurrentCDFormatVersion {
-		log.Errorw("unsupported clusterdata format version", "version", cd.FormatVersion)
+		p.baseLog().
+			Error().
+			Uint64("version", cd.FormatVersion).
+			Msg("unsupported clusterdata format version")
 		return
 	}
 	if err = cd.Cluster.Spec.Validate(); err != nil {
-		log.Errorw("clusterdata validation failed", zap.Error(err))
+		p.baseLog().
+			Error().
+			Err(err).
+			Msg("clusterdata validation failed")
 		return
 	}
 
@@ -1074,7 +1347,10 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 		if p.keeperLocalState.ClusterUID != cd.Cluster.UID {
 			p.keeperLocalState.ClusterUID = cd.Cluster.UID
 			if err = p.saveKeeperLocalState(); err != nil {
-				log.Errorw("failed to save keeper local state", zap.Error(err))
+				p.baseLog().
+					Error().
+					Err(err).
+					Msg("failed to save keeper local state")
 				return
 			}
 		}
@@ -1082,23 +1358,38 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 
 	k, ok := cd.Keepers[p.keeperLocalState.UID]
 	if !ok {
-		log.Infow("our keeper data is not available, waiting for it to appear")
+		p.baseLog().
+			Info().
+			Str(slog.FieldKeeperUID, p.keeperLocalState.UID).
+			Msg("this keeper is not listed in cluster data yet; waiting")
 		return
 	}
 
 	db := cd.FindDB(k)
 	if db == nil {
-		log.Infow("no db assigned")
+		p.baseLog().
+			Info().
+			Str(slog.FieldKeeperUID, k.UID).
+			Msg("no database is assigned to this keeper yet; stopping PostgreSQL if it is running")
 		if err = pgm.StopIfStarted(true); err != nil {
-			log.Errorw("failed to stop pg instance", zap.Error(err))
+			p.baseLog().
+				Error().
+				Err(err).
+				Msg("failed to stop pg instance")
 		}
 		return
 	}
 
 	if p.bootUUID != k.Status.BootUUID {
-		log.Infow("our db boot UID is different than the cluster data one, waiting for it to be updated", "bootUUID", p.bootUUID, "clusterBootUUID", k.Status.BootUUID)
+		p.baseLog().Info().
+			Str("local_boot_uuid", p.bootUUID).
+			Str("cluster_boot_uuid", k.Status.BootUUID).
+			Msg("boot UID from local process differs from cluster data; stopping PostgreSQL until sentinel updates cluster state")
 		if err = pgm.StopIfStarted(true); err != nil {
-			log.Errorw("failed to stop pg instance", zap.Error(err))
+			p.baseLog().
+				Error().
+				Err(err).
+				Msg("failed to stop pg instance")
 		}
 		return
 	}
@@ -1106,22 +1397,36 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 	// Generate hba auth from clusterData
 	pgm.SetHba(p.generateHBA(cd, db, p.waitSyncStandbysSynced))
 
+	p.baseLog().Debug().
+		Str(slog.FieldDBUID, db.UID).
+		Int64("db_generation", db.Generation).
+		Int64("db_status_generation", db.Status.CurrentGeneration).
+		Str("db_role", string(db.Spec.Role)).
+		Str("db_init_mode", string(db.Spec.InitMode)).
+		Msg("reconciling assigned database: applying cluster specification to local PostgreSQL (state machine tick)")
+
 	var pgParameters common.Parameters
 
 	dbls := p.dbLocalStateCopy()
 	if dbls.Initializing {
 		// If we are here this means that the db initialization or
 		// resync has failed so we have to clean up stale data
-		log.Errorw("db failed to initialize or resync")
+		p.baseLog().Error().Msg("db failed to initialize or resync")
 
 		if err = pgm.StopIfStarted(true); err != nil {
-			log.Errorw("failed to stop pg instance", zap.Error(err))
+			p.baseLog().
+				Error().
+				Err(err).
+				Msg("failed to stop pg instance")
 			return
 		}
 
 		// Clean up cluster db datadir
 		if err = pgm.RemoveAll(); err != nil {
-			log.Errorw("failed to remove the postgres data dir", zap.Error(err))
+			p.baseLog().
+				Error().
+				Err(err).
+				Msg("failed to remove the postgres data dir")
 			return
 		}
 		// Reset current db local state since it's not valid anymore
@@ -1131,7 +1436,10 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 			Initializing: false,
 		}
 		if err = p.saveDBLocalState(ndbls); err != nil {
-			log.Errorw("failed to save db local state", zap.Error(err))
+			p.baseLog().
+				Error().
+				Err(err).
+				Msg("failed to save db local state")
 			return
 		}
 	}
@@ -1140,17 +1448,23 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 		var initialized bool
 		initialized, err = pgm.IsInitialized()
 		if err != nil {
-			log.Errorw("failed to detect if instance is initialized", zap.Error(err))
+			p.baseLog().
+				Error().
+				Err(err).
+				Msg("failed to detect if instance is initialized")
 			return
 		}
-		log.Infow("current db UID different than cluster data db UID", "db", p.dbLocalState.UID, "cdDB", db.UID)
+		p.baseLog().Info().
+			Str("local_db_uid", p.dbLocalState.UID).
+			Str(slog.FieldDBUID, db.UID).
+			Msg("local database UID does not match cluster assignment; will re-initialize or resync as required")
 
 		pgm.SetRecoveryOptions(nil)
 		p.waitSyncStandbysSynced = false
 
 		switch db.Spec.InitMode {
 		case cluster.DBInitModeNew:
-			log.Infow("initializing the database cluster")
+			p.baseLog().Info().Msg("initializing the database cluster")
 			ndbls := &DBLocalState{
 				UID: db.UID,
 				// Set a no generation since we aren't already converged.
@@ -1158,7 +1472,10 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 				Initializing: true,
 			}
 			if err = p.saveDBLocalState(ndbls); err != nil {
-				log.Errorw("failed to save db local state", zap.Error(err))
+				p.baseLog().
+					Error().
+					Err(err).
+					Msg("failed to save db local state")
 				return
 			}
 
@@ -1176,51 +1493,82 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 			}
 
 			if err = pgm.StopIfStarted(true); err != nil {
-				log.Errorw("failed to stop pg instance", zap.Error(err))
+				p.baseLog().
+					Error().
+					Err(err).
+					Msg("failed to stop pg instance")
 				return
 			}
 			if err = pgm.RemoveAll(); err != nil {
-				log.Errorw("failed to remove the postgres data dir", zap.Error(err))
+				p.baseLog().
+					Error().
+					Err(err).
+					Msg("failed to remove the postgres data dir")
 				return
 			}
 			if err = pgm.Init(initConfig); err != nil {
-				log.Errorw("failed to initialize postgres database cluster", zap.Error(err))
+				p.baseLog().
+					Error().
+					Err(err).
+					Msg("failed to initialize postgres database cluster")
 				return
 			}
 
 			if err = pgm.StartTmpMerged(); err != nil {
-				log.Errorw("failed to start instance", zap.Error(err))
+				p.baseLog().
+					Error().
+					Err(err).
+					Msg("failed to start instance")
 				return
 			}
 			if err = pgm.WaitReady(cd.Cluster.DefSpec().DBWaitReadyTimeout.Duration); err != nil {
-				log.Errorw("timeout waiting for instance to be ready", zap.Error(err))
+				p.baseLog().
+					Error().
+					Err(err).
+					Msg("timeout waiting for instance to be ready")
 				return
 			}
 			if db.Spec.IncludeConfig {
 				pgParameters, err = pgm.GetConfigFilePGParameters()
 				if err != nil {
-					log.Errorw("failed to retrieve postgres parameters", zap.Error(err))
+					p.baseLog().
+						Error().
+						Err(err).
+						Msg("failed to retrieve postgres parameters")
 					return
 				}
 				ndbls.InitPGParameters = pgParameters
 				if err = p.saveDBLocalState(ndbls); err != nil {
-					log.Errorw("failed to save db local state", zap.Error(err))
+					p.baseLog().
+						Error().
+						Err(err).
+						Msg("failed to save db local state")
 					return
 				}
 			}
 
-			log.Infow("setting roles")
+			p.baseLog().
+				Info().
+				Msg("database files created; creating replication and application roles")
 			if err = pgm.SetupRoles(); err != nil {
-				log.Errorw("failed to setup roles", zap.Error(err))
+				p.baseLog().
+					Error().
+					Err(err).
+					Msg("failed to setup roles")
 				return
 			}
 
 			if err = pgm.StopIfStarted(true); err != nil {
-				log.Errorw("failed to stop pg instance", zap.Error(err))
+				p.baseLog().
+					Error().
+					Err(err).
+					Msg("failed to stop pg instance")
 				return
 			}
 		case cluster.DBInitModePITR:
-			log.Infow("restoring the database cluster")
+			p.baseLog().
+				Info().
+				Msg("starting point-in-time recovery / restore into new data directory")
 			ndbls := &DBLocalState{
 				UID: db.UID,
 				// Set a no generation since we aren't already converged.
@@ -1228,7 +1576,10 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 				Initializing: true,
 			}
 			if err = p.saveDBLocalState(ndbls); err != nil {
-				log.Errorw("failed to save db local state", zap.Error(err))
+				p.baseLog().
+					Error().
+					Err(err).
+					Msg("failed to save db local state")
 				return
 			}
 
@@ -1238,67 +1589,111 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 			pgm.SetParameters(pgParameters)
 
 			if err = pgm.StopIfStarted(true); err != nil {
-				log.Errorw("failed to stop pg instance", zap.Error(err))
+				p.baseLog().
+					Error().
+					Err(err).
+					Msg("failed to stop pg instance")
 				return
 			}
 			if err = pgm.RemoveAll(); err != nil {
-				log.Errorw("failed to remove the postgres data dir", zap.Error(err))
+				p.baseLog().
+					Error().
+					Err(err).
+					Msg("failed to remove the postgres data dir")
 				return
 			}
-			log.Infow("executing DataRestoreCommand")
+			p.baseLog().
+				Info().
+				Msg("running archive restore command from cluster specification")
 			if err = pgm.Restore(db.Spec.PITRConfig.DataRestoreCommand); err != nil {
-				log.Errorw("failed to restore postgres database cluster", zap.Error(err))
+				p.baseLog().
+					Error().
+					Err(err).
+					Msg("failed to restore postgres database cluster")
 				return
 			}
 
 			recoveryMode := pg.RecoveryModeRecovery
 			var standbySettings *cluster.StandbySettings
-			if db.Spec.FollowConfig != nil && db.Spec.FollowConfig.Type == cluster.FollowTypeExternal {
+			if db.Spec.FollowConfig != nil &&
+				db.Spec.FollowConfig.Type == cluster.FollowTypeExternal {
 				recoveryMode = pg.RecoveryModeStandby
 				standbySettings = db.Spec.FollowConfig.StandbySettings
 			}
 
-			pgm.SetRecoveryOptions(p.createRecoveryOptions(recoveryMode, standbySettings, db.Spec.PITRConfig.ArchiveRecoverySettings, db.Spec.PITRConfig.RecoveryTargetSettings))
+			pgm.SetRecoveryOptions(
+				p.createRecoveryOptions(
+					recoveryMode,
+					standbySettings,
+					db.Spec.PITRConfig.ArchiveRecoverySettings,
+					db.Spec.PITRConfig.RecoveryTargetSettings,
+				),
+			)
 
 			if err = pgm.StartTmpMerged(); err != nil {
-				log.Errorw("failed to start instance", zap.Error(err))
+				p.baseLog().
+					Error().
+					Err(err).
+					Msg("failed to start instance")
 				return
 			}
 
 			if recoveryMode == pg.RecoveryModeRecovery {
 				// wait for the db having replyed all the wals
-				log.Infof("waiting for recovery to be completed")
+				p.baseLog().
+					Info().
+					Str(slog.FieldDBUID, db.UID).
+					Msg("waiting for PostgreSQL to finish replaying WAL (PITR)")
 				if err = pgm.WaitRecoveryDone(cd.Cluster.DefSpec().SyncTimeout.Duration); err != nil {
-					log.Errorw("recovery not finished", zap.Error(err))
+					p.baseLog().
+						Error().
+						Err(err).
+						Str(slog.FieldDBUID, db.UID).
+						Msg("point-in-time recovery did not finish within the configured timeout")
 					return
 				}
-				log.Infof("recovery completed")
+				p.baseLog().
+					Info().
+					Str(slog.FieldDBUID, db.UID).
+					Msg("pitr_recovery_replay_complete")
 			}
 			if err = pgm.WaitReady(cd.Cluster.DefSpec().SyncTimeout.Duration); err != nil {
-				log.Errorw("timeout waiting for instance to be ready", zap.Error(err))
+				p.baseLog().
+					Error().
+					Err(err).
+					Msg("timeout waiting for instance to be ready")
 				return
 			}
 
 			if db.Spec.IncludeConfig {
 				pgParameters, err = pgm.GetConfigFilePGParameters()
 				if err != nil {
-					log.Errorw("failed to retrieve postgres parameters", zap.Error(err))
+					p.baseLog().
+						Error().
+						Err(err).
+						Msg("failed to retrieve postgres parameters")
 					return
 				}
 				ndbls.InitPGParameters = pgParameters
 				if err = p.saveDBLocalState(ndbls); err != nil {
-					log.Errorw("failed to save db local state", zap.Error(err))
+					p.baseLog().
+						Error().
+						Err(err).
+						Msg("failed to save db local state")
 					return
 				}
 			}
 
 			if err = pgm.StopIfStarted(true); err != nil {
-				log.Errorw("failed to stop pg instance", zap.Error(err))
+				p.baseLog().
+					Error().
+					Err(err).
+					Msg("failed to stop pg instance")
 				return
 			}
 
 		case cluster.DBInitModeResync:
-			log.Infow("resyncing the database cluster")
+			p.baseLog().Info().Msg("db_resync_begin")
 			ndbls := &DBLocalState{
 				// replace our current db uid with the required one.
 				UID: db.UID,
@@ -1307,12 +1702,18 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 				Initializing: true,
 			}
 			if err = p.saveDBLocalState(ndbls); err != nil {
-				log.Errorw("failed to save db local state", zap.Error(err))
+				p.baseLog().
+					Error().
+					Err(err).
+					Msg("failed to save db local state")
 				return
 			}
 
 			if err = pgm.StopIfStarted(true); err != nil {
-				log.Errorw("failed to stop pg instance", zap.Error(err))
+				p.baseLog().
+					Error().
+					Err(err).
+					Msg("failed to stop pg instance")
 				return
 			}
 
@@ -1323,11 +1724,11 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 
 			var systemID string
 			if !initialized {
-				log.Infow("database cluster not initialized")
+				p.baseLog().Info().Msg("db_cluster_uninitialized")
 			} else {
 				systemID, err = pgm.GetSystemdID()
 				if err != nil {
-					log.Errorw("error retrieving systemd ID", zap.Error(err))
+					p.baseLog().Error().Err(err).Msg("error retrieving systemd ID")
 					return
 				}
 			}
@@ -1335,7 +1736,10 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 			followedUID := db.Spec.FollowConfig.DBUID
 			followedDB, ok := cd.DBs[followedUID]
 			if !ok {
-				log.Errorw("no db data available for followed db", "followedDB", followedUID)
+				p.baseLog().
+					Error().
+					Str("followed_db", followedUID).
+					Msg("followed_db_data_missing")
 				return
 			}
 
@@ -1349,7 +1753,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 
 			masterDB, ok := cd.DBs[cd.Cluster.Status.Master]
 			if tryPgrewind && !ok {
-				log.Warn("no current master, disabling pg_rewind for this resync")
+				p.baseLog().Warn().Msg("pg_rewind_disabled_no_master")
 				tryPgrewind = false
 			}
 
@@ -1367,11 +1771,17 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 			// We have to find a better way to detect if a standby is waiting
 			// for unavailable wals.
 			if err = p.resync(db, masterDB, followedDB, tryPgrewind); err != nil {
-				log.Errorw("failed to resync from followed instance", zap.Error(err))
+				p.baseLog().
+					Error().
+					Err(err).
+					Msg("failed to resync from followed instance")
 				return
 			}
 			if err = pgm.Start(); err != nil {
-				log.Errorw("failed to start instance", zap.Error(err))
+				p.baseLog().
+					Error().
+					Err(err).
+					Msg("failed to start instance")
 				return
 			}
 
@@ -1380,14 +1790,16 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 				// if not accepting connection assume that it's blocked waiting for missing wal
 				// (see above TODO), so do a full resync using pg_basebackup.
 				if err = pgm.WaitReady(cd.Cluster.DefSpec().DBWaitReadyTimeout.Duration); err != nil {
-					log.Errorw("pg_rewinded standby is not accepting connection. it's probably waiting for unavailable wals. Forcing a full resync")
+					p.baseLog().
+						Error().
+						Msg("pg_rewind_standby_not_connecting_force_resync")
 					fullResync = true
 				} else {
 					// Check again if it was really synced
 					var pgState *cluster.PostgresState
 					pgState, err = p.GetPGState(pctx)
 					if err != nil {
-						log.Errorw("cannot get current pgstate", zap.Error(err))
+						p.baseLog().Error().Err(err).Msg("cannot get current pgstate")
 						return
 					}
 					if p.isDifferentTimelineBranch(followedDB, pgState) {
@@ -1397,11 +1809,17 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 
 				if fullResync {
 					if err = pgm.StopIfStarted(true); err != nil {
-						log.Errorw("failed to stop pg instance", zap.Error(err))
+						p.baseLog().
+							Error().
+							Err(err).
+							Msg("failed to stop pg instance")
 						return
 					}
 					if err = p.resync(db, masterDB, followedDB, false); err != nil {
-						log.Errorw("failed to resync from followed instance", zap.Error(err))
+						p.baseLog().
+							Error().
+							Err(err).
+							Msg("failed to resync from followed instance")
 						return
 					}
 				}
@@ -1416,7 +1834,10 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 				Initializing: false,
 			}
 			if err = p.saveDBLocalState(ndbls); err != nil {
-				log.Errorw("failed to save db local state", zap.Error(err))
+				p.baseLog().
+					Error().
+					Err(err).
+					Msg("failed to save db local state")
 				return
 			}
 
@@ -1426,45 +1847,71 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 			pgm.SetParameters(pgParameters)
 
 			if err = pgm.StopIfStarted(true); err != nil {
-				log.Errorw("failed to stop pg instance", zap.Error(err))
+				p.baseLog().
+					Error().
+					Err(err).
+					Msg("failed to stop pg instance")
 				return
 			}
 			if err = pgm.StartTmpMerged(); err != nil {
-				log.Errorw("failed to start instance", zap.Error(err))
+				p.baseLog().
+					Error().
+					Err(err).
+					Msg("failed to start instance")
 				return
 			}
 			if err = pgm.WaitReady(cd.Cluster.DefSpec().DBWaitReadyTimeout.Duration); err != nil {
-				log.Errorw("timeout waiting for instance to be ready", zap.Error(err))
+				p.baseLog().
+					Error().
+					Err(err).
+					Msg("timeout waiting for instance to be ready")
 				return
 			}
 			if db.Spec.IncludeConfig {
 				pgParameters, err = pgm.GetConfigFilePGParameters()
 				if err != nil {
-					log.Errorw("failed to retrieve postgres parameters", zap.Error(err))
+					p.baseLog().
+						Error().
+						Err(err).
+						Msg("failed to retrieve postgres parameters")
 					return
 				}
 				ndbls.InitPGParameters = pgParameters
 				if err = p.saveDBLocalState(ndbls); err != nil {
-					log.Errorw("failed to save db local state", zap.Error(err))
+					p.baseLog().
+						Error().
+						Err(err).
+						Msg("failed to save db local state")
 					return
 				}
 			}
 			if err = pgm.StopIfStarted(true); err != nil {
-				log.Errorw("failed to stop pg instance", zap.Error(err))
+				p.baseLog().
+					Error().
+					Err(err).
+					Msg("failed to stop pg instance")
 				return
 			}
 		case cluster.DBInitModeNone:
-			log.Errorw("different local dbUID but init mode is none, this shouldn't happen. Something bad happened to the keeper data. Check that keeper data is on a persistent volume and that the keeper state files weren't removed")
+			p.baseLog().
+				Error().
+				Msg("local_db_state_invariant_broken_init_mode_none")
 			return
 		default:
-			log.Errorw("unknown db init mode", "initMode", string(db.Spec.InitMode))
+			p.baseLog().
+				Error().
+				Str("db_init_mode", string(db.Spec.InitMode)).
+				Msg("unknown_db_init_mode")
 			return
 		}
 	}
 
 	initialized, err := pgm.IsInitialized()
 	if err != nil {
-		log.Errorw("failed to detect if instance is initialized", zap.Error(err))
+		p.baseLog().
+			Error().
+			Err(err).
+			Msg("failed to detect if instance is initialized")
 		return
 	}
 
@@ -1473,11 +1920,22 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 		started, err = pgm.IsStarted()
 		if err != nil {
 			// log error getting instance state but go ahead.
-			log.Errorw("failed to retrieve instance status", zap.Error(err))
+			p.baseLog().
+				Error().
+				Err(err).
+				Msg("failed to retrieve instance status")
 		}
-		log.Debugw("db status", "initialized", true, "started", started)
+		p.baseLog().
+			Debug().
+			Bool("initialized", true).
+			Bool("pg_started", started).
+			Msg("db_instance_status")
 	} else {
-		log.Debugw("db status", "initialized", false, "started", false)
+		p.baseLog().
+			Debug().
+			Bool("initialized", false).
+			Bool("pg_started", false).
+			Msg("db_instance_status")
 	}
 
 	// create postgres parameters
@@ -1487,18 +1945,21 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 
 	var localRole common.Role
 	if !initialized {
-		log.Infow("database cluster not initialized")
+		p.baseLog().Info().Msg("db_cluster_uninitialized_check")
 		localRole = common.RoleUndefined
 	} else {
 		localRole, err = pgm.GetRole()
 		if err != nil {
-			log.Errorw("error retrieving current pg role", zap.Error(err))
+			p.baseLog().Error().Err(err).Msg("error retrieving current pg role")
 			return
 		}
 	}
 
 	targetRole := db.Spec.Role
-	log.Debugw("target role", "targetRole", string(targetRole))
+	p.baseLog().
+		Debug().
+		Str("target_role", string(targetRole)).
+		Msg("postgres_apply_target_role")
 
 	// Set metrics to power alerts about mismatched roles
 	setRole(localRoleGauge, &localRole)
@@ -1507,9 +1968,11 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 	switch targetRole {
 	case common.RoleMaster:
 		// We are the elected master
-		log.Infow("our db requested role is master")
+		p.baseLog().Info().Msg("apply_role_master_requested")
 		if localRole == common.RoleUndefined {
-			log.Errorw("database cluster not initialized but requested role is master. This shouldn't happen!")
+			p.baseLog().
+				Error().
+				Msg("master_requested_but_data_dir_uninitialized")
 			return
 		}
 
@@ -1517,39 +1980,56 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 
 		started, err := pgm.IsStarted()
 		if err != nil {
-			log.Errorw("failed to retrieve instance status", zap.Error(err))
+			p.baseLog().
+				Error().
+				Err(err).
+				Msg("failed to retrieve instance status")
 			return
 		}
 		if !started {
 			// if we have syncrepl enabled and the postgres instance is stopped, before opening connections to normal users wait for having the defined synchronousStandbys in sync state.
 			if db.Spec.SynchronousReplication {
 				p.waitSyncStandbysSynced = true
-				log.Infow("not allowing connection as normal users since synchronous replication is enabled and instance was down")
+				p.baseLog().
+					Info().
+					Msg("hba_restrict_normal_users_sync_repl_instance_was_down")
 				pgm.SetHba(p.generateHBA(cd, db, true))
 			}
 
 			if err = pgm.Start(); err != nil {
-				log.Errorw("failed to start postgres", zap.Error(err))
+				p.baseLog().
+					Error().
+					Err(err).
+					Msg("failed to start postgres")
 				return
 			}
 			if err = pgm.WaitReady(cd.Cluster.DefSpec().DBWaitReadyTimeout.Duration); err != nil {
-				log.Errorw("timeout waiting for instance to be ready", zap.Error(err))
+				p.baseLog().
+					Error().
+					Err(err).
+					Msg("timeout waiting for instance to be ready")
 				return
 			}
 		}
 
 		if localRole == common.RoleStandby {
-			log.Infow("promoting to master")
+			p.baseLog().Info().Msg("promotion_execute")
 			if err = pgm.Promote(); err != nil {
-				log.Errorw("failed to promote instance", zap.Error(err))
+				p.baseLog().
+					Error().
+					Err(err).
+					Msg("failed to promote instance")
 				return
 			}
 		} else {
-			log.Infow("already master")
+			p.baseLog().Info().Msg("already_primary")
 		}
 
 		if err := p.refreshReplicationSlots(db); err != nil {
-			log.Errorw("error updating replication slots", zap.Error(err))
+			p.baseLog().
+				Error().
+				Err(err).
+				Msg("error updating replication slots")
 			return
 		}
 
@@ -1559,35 +2039,62 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 		switch db.Spec.FollowConfig.Type {
 		case cluster.FollowTypeInternal:
 			followedUID := db.Spec.FollowConfig.DBUID
-			log.Infow("our db requested role is standby", "followedDB", followedUID)
+			p.baseLog().
+				Info().
+				Str("followed_db", followedUID).
+				Msg("apply_role_standby_requested")
 			followedDB, ok := cd.DBs[followedUID]
 			if !ok {
-				log.Errorw("no db data available for followed db", "followedDB", followedUID)
+				p.baseLog().
+					Error().
+					Str("followed_db", followedUID).
+					Msg("followed_db_data_missing")
 				return
 			}
 			replConnParams := p.getReplConnParams(db, followedDB)
-			standbySettings = &cluster.StandbySettings{PrimaryConninfo: replConnParams.ConnString(), PrimarySlotName: common.StolonName(db.UID)}
+			standbySettings = &cluster.StandbySettings{
+				PrimaryConninfo: replConnParams.ConnString(),
+				PrimarySlotName: common.StolonName(db.UID),
+			}
 		case cluster.FollowTypeExternal:
 			standbySettings = db.Spec.FollowConfig.StandbySettings
 		default:
-			log.Errorw("unknown follow type", "followType", string(db.Spec.FollowConfig.Type))
+			p.baseLog().
+				Error().
+				Str("follow_type", string(db.Spec.FollowConfig.Type)).
+				Msg("unknown_follow_type")
 			return
 		}
 		switch localRole {
 		case common.RoleMaster:
-			log.Errorw("cannot move from master role to standby role")
+			p.baseLog().
+				Error().
+				Msg("invalid_transition_master_to_standby")
 			return
 		case common.RoleStandby:
-			log.Infow("already standby")
+			p.baseLog().Info().Msg("already_standby")
 			started, err := pgm.IsStarted()
 			if err != nil {
-				log.Errorw("failed to retrieve instance status", zap.Error(err))
+				p.baseLog().
+					Error().
+					Err(err).
+					Msg("failed to retrieve instance status")
 				return
 			}
 			if !started {
-				pgm.SetRecoveryOptions(p.createRecoveryOptions(pg.RecoveryModeStandby, standbySettings, nil, nil))
+				pgm.SetRecoveryOptions(
+					p.createRecoveryOptions(
+						pg.RecoveryModeStandby,
+						standbySettings,
+						nil,
+						nil,
+					),
+				)
 				if err = pgm.Start(); err != nil {
-					log.Errorw("failed to start postgres", zap.Error(err))
+					p.baseLog().
+						Error().
+						Err(err).
+						Msg("failed to start postgres")
 					return
 				}
 			}
@@ -1598,58 +2105,99 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 				followedUID := db.Spec.FollowConfig.DBUID
 				followedDB, ok := cd.DBs[followedUID]
 				if !ok {
-					log.Errorw("no db data available for followed db", "followedDB", followedUID)
+					p.baseLog().
+						Error().
+						Str("followed_db", followedUID).
+						Msg("followed_db_data_missing")
 					return
 				}
 				newReplConnParams := p.getReplConnParams(db, followedDB)
-				log.Debugw("newReplConnParams", "newReplConnParams", newReplConnParams)
+				p.baseLog().
+					Debug().
+					Fields(pg.LogSummaryConnParams(newReplConnParams)).
+					Msg("standby replication connection parameters updated")
 
-				standbySettings := &cluster.StandbySettings{PrimaryConninfo: newReplConnParams.ConnString(), PrimarySlotName: common.StolonName(db.UID)}
+				standbySettings := &cluster.StandbySettings{
+					PrimaryConninfo: newReplConnParams.ConnString(),
+					PrimarySlotName: common.StolonName(db.UID),
+				}
 
 				curRecoveryOptions := pgm.CurRecoveryOptions()
-				newRecoveryOptions := p.createRecoveryOptions(pg.RecoveryModeStandby, standbySettings, nil, nil)
+				newRecoveryOptions := p.createRecoveryOptions(
+					pg.RecoveryModeStandby,
+					standbySettings,
+					nil,
+					nil,
+				)
 
 				// Update recovery conf if parameters has changed
-				if !curRecoveryOptions.RecoveryParameters.Equals(newRecoveryOptions.RecoveryParameters) {
-					log.Infow("recovery parameters changed, restarting postgres instance", "curRecoveryParameters", curRecoveryOptions.RecoveryParameters, "newRecoveryParameters", newRecoveryOptions.RecoveryParameters)
+				if !curRecoveryOptions.RecoveryParameters.Equals(
+					newRecoveryOptions.RecoveryParameters,
+				) {
+					p.baseLog().Info().
+						Interface("recovery_prev", pg.LogSummaryRecoveryParameters(curRecoveryOptions.RecoveryParameters)).
+						Interface("recovery_new", pg.LogSummaryRecoveryParameters(newRecoveryOptions.RecoveryParameters)).
+						Msg("recovery parameters changed; restarting PostgreSQL")
 					pgm.SetRecoveryOptions(newRecoveryOptions)
 
 					if err = pgm.Restart(true); err != nil {
-						log.Errorw("failed to restart postgres instance", zap.Error(err))
+						p.baseLog().
+							Error().
+							Err(err).
+							Msg("failed to restart postgres instance")
 						return
 					}
 				}
 
 				if err = p.refreshReplicationSlots(db); err != nil {
-					log.Errorw("error updating replication slots", zap.Error(err))
+					p.baseLog().
+						Error().
+						Err(err).
+						Msg("error updating replication slots")
 				}
 
 			case cluster.FollowTypeExternal:
 				curRecoveryOptions := pgm.CurRecoveryOptions()
-				newRecoveryOptions := p.createRecoveryOptions(pg.RecoveryModeStandby, db.Spec.FollowConfig.StandbySettings, db.Spec.FollowConfig.ArchiveRecoverySettings, nil)
+				newRecoveryOptions := p.createRecoveryOptions(
+					pg.RecoveryModeStandby,
+					db.Spec.FollowConfig.StandbySettings,
+					db.Spec.FollowConfig.ArchiveRecoverySettings,
+					nil,
+				)
 
 				// Update recovery conf if parameters has changed
-				if !curRecoveryOptions.RecoveryParameters.Equals(newRecoveryOptions.RecoveryParameters) {
-					log.Infow("recovery parameters changed, restarting postgres instance", "curRecoveryParameters", curRecoveryOptions.RecoveryParameters, "newRecoveryParameters", newRecoveryOptions.RecoveryParameters)
+				if !curRecoveryOptions.RecoveryParameters.Equals(
+					newRecoveryOptions.RecoveryParameters,
+				) {
+					p.baseLog().Info().
+						Interface("recovery_prev", pg.LogSummaryRecoveryParameters(curRecoveryOptions.RecoveryParameters)).
+						Interface("recovery_new", pg.LogSummaryRecoveryParameters(newRecoveryOptions.RecoveryParameters)).
+						Msg("recovery parameters changed; restarting PostgreSQL")
 					pgm.SetRecoveryOptions(newRecoveryOptions)
 
 					if err = pgm.Restart(true); err != nil {
-						log.Errorw("failed to restart postgres instance", zap.Error(err))
+						p.baseLog().
+							Error().
+							Err(err).
+							Msg("failed to restart postgres instance")
 						return
 					}
 				}
 
 				if err = p.refreshReplicationSlots(db); err != nil {
-					log.Errorw("error updating replication slots", zap.Error(err))
+					p.baseLog().
+						Error().
+						Err(err).
+						Msg("error updating replication slots")
 				}
 			}
 
 		case common.RoleUndefined:
-			log.Infow("our db role is none")
+			p.baseLog().Info().Msg("db_role_none_current")
 			return
 		}
 	case common.RoleUndefined:
-		log.Infow("our db requested role is none")
+		p.baseLog().Info().Msg("db_target_role_none")
 		return
 	}
 
@@ -1661,11 +2209,16 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 	syncStandbyNames := pgParameters["synchronous_standby_names"]
 	if db.Spec.SynchronousReplication {
 		if prevSyncStandbyNames != syncStandbyNames {
-			log.Infow("needed synchronous_standby_names changed", "prevSyncStandbyNames", prevSyncStandbyNames, "syncStandbyNames", syncStandbyNames)
+			p.baseLog().Info().
+				Str("sync_standby_names_prev", prevSyncStandbyNames).
+				Str("sync_standby_names_new", syncStandbyNames).
+				Msg("synchronous_standby_names_changed")
 		}
 	} else {
 		if prevSyncStandbyNames != "" {
-			log.Infow("sync replication disabled, removing current synchronous_standby_names", "syncStandbyNames", prevSyncStandbyNames)
+			p.baseLog().Info().
+				Str("sync_standby_names_cleared", prevSyncStandbyNames).
+				Msg("sync_replication_disabled_clear_standbys")
 		}
 	}
 
@@ -1673,12 +2226,12 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 	changedParams := pgParameters.Diff(pgm.CurParameters())
 
 	if !pgParameters.Equals(pgm.CurParameters()) {
-		log.Infow("postgres parameters changed, reloading postgres instance")
+		p.baseLog().Info().Msg("postgres_reload_for_parameters")
 		pgm.SetParameters(pgParameters)
 		needsReload = true
 	} else {
 		// for tests
-		log.Infow("postgres parameters not changed")
+		p.baseLog().Debug().Msg("postgres_parameters_unchanged")
 	}
 
 	// Generate hba auth from clusterData
@@ -1687,11 +2240,19 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 	if db.Spec.SynchronousReplication && p.waitSyncStandbysSynced {
 		inSyncStandbys, err := p.GetInSyncStandbys()
 		if err != nil {
-			log.Errorw("failed to retrieve current in sync standbys from instance", zap.Error(err))
+			p.baseLog().
+				Error().
+				Err(err).
+				Msg("failed to retrieve current in sync standbys from instance")
 			return
 		}
-		if !util.CompareStringSliceNoOrder(inSyncStandbys, db.Spec.SynchronousStandbys) {
-			log.Infow("not allowing connection as normal users since synchronous replication is enabled, instance was down and not all sync standbys are synced")
+		if !util.CompareStringSliceNoOrder(
+			inSyncStandbys,
+			db.Spec.SynchronousStandbys,
+		) {
+			p.baseLog().
+				Info().
+				Msg("hba_restrict_normal_users_sync_pending")
 		} else {
 			p.waitSyncStandbysSynced = false
 		}
@@ -1700,18 +2261,18 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 	}
 	newHBA := p.generateHBA(cd, db, p.waitSyncStandbysSynced)
 	if !reflect.DeepEqual(newHBA, pgm.CurHba()) {
-		log.Infow("postgres hba entries changed, reloading postgres instance")
+		p.baseLog().Info().Msg("postgres_reload_for_hba")
 		pgm.SetHba(newHBA)
 		needsReload = true
 	} else {
 		// for tests
-		log.Infow("postgres hba entries not changed")
+		p.baseLog().Debug().Msg("postgres_hba_unchanged")
 	}
 
 	if needsReload {
 		needsReloadGauge.Set(1) // mark as reload needed
 		if err := pgm.Reload(); err != nil {
-			log.Errorw("failed to reload postgres instance", err)
+			p.baseLog().Error().Err(err).Msg("postgres_reload_failed")
 		} else {
 			needsReloadGauge.Set(0) // successful reload implies no longer required
 		}
@@ -1723,15 +2284,21 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 
 		needsRestart, err := pgm.IsRestartRequired(changedParams)
 		if err != nil {
-			log.Errorw("failed to check if restart is required", zap.Error(err))
+			p.baseLog().
+				Error().
+				Err(err).
+				Msg("failed to check if restart is required")
 		}
 
 		if needsRestart {
 			needsRestartGauge.Set(1) // mark as restart needed
 			if automaticPgRestartEnabled {
-				log.Infow("restarting postgres")
+				p.baseLog().Info().Msg("postgres_restart_scheduled")
 				if err := pgm.Restart(true); err != nil {
-					log.Errorw("failed to restart postgres instance", zap.Error(err))
+					p.baseLog().
+						Error().
+						Err(err).
+						Msg("failed to restart postgres instance")
 				} else {
 					needsRestartGauge.Set(0) // successful restart implies no longer required
 				}
@@ -1744,7 +2311,10 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 	ndbls.Generation = db.Generation
 	ndbls.Initializing = false
 	if err := p.saveDBLocalState(ndbls); err != nil {
-		log.Errorw("failed to save db local state", zap.Error(err))
+		p.baseLog().
+			Error().
+			Err(err).
+			Msg("failed to save db local state")
 		return
 	}
 
@@ -1775,7 +2345,11 @@ func (p *PostgresKeeper) saveKeeperLocalState() error {
 	if err != nil {
 		return err
 	}
-	return common.WriteFileAtomic(p.keeperLocalStateFilePath(), 0600, sj)
+	return common.WriteFileAtomic(
+		p.keeperLocalStateFilePath(),
+		0600,
+		sj,
+	)
 }
 
 func (p *PostgresKeeper) dbLocalStateFilePath() string {
@@ -1828,7 +2402,8 @@ func IsMaster(db *cluster.DB) bool {
 		}
 		return false
 	default:
-		panic("invalid db role in db Spec")
+		common.MustNotMsg(true, "invalid db role in db Spec")
+		return false
 	}
 }
 
@@ -1837,13 +2412,25 @@ func IsMaster(db *cluster.DB) bool {
 // When onlyInternal is true only rules needed for replication will be setup
 // and the traffic should be permitted only for pgSUUsername standard
 // connections and pgReplUsername replication connections.
-func (p *PostgresKeeper) generateHBA(cd *cluster.ClusterData, db *cluster.DB, onlyInternal bool) []string {
+func (p *PostgresKeeper) generateHBA(
+	cd *cluster.ClusterData,
+	db *cluster.DB,
+	onlyInternal bool,
+) []string {
 	// Minimal entries for local normal and replication connections needed by the stolon keeper
 	// Matched local connections are for postgres database and suUsername user with md5 auth
 	// Matched local replication connections are for replUsername user with md5 auth
 	computedHBA := []string{
-		fmt.Sprintf("local postgres %s %s", p.pgSUUsername, p.pgSUAuthMethod),
-		fmt.Sprintf("local replication %s %s", p.pgReplUsername, p.pgReplAuthMethod),
+		fmt.Sprintf(
+			"local postgres %s %s",
+			p.pgSUUsername,
+			p.pgSUAuthMethod,
+		),
+		fmt.Sprintf(
+			"local replication %s %s",
+			p.pgReplUsername,
+			p.pgReplAuthMethod,
+		),
 	}
 
 	switch *cd.Cluster.DefSpec().DefaultSUReplAccessMode {
@@ -1851,10 +2438,30 @@ func (p *PostgresKeeper) generateHBA(cd *cluster.ClusterData, db *cluster.DB, on
 		// all the keepers will accept connections from every host
 		computedHBA = append(
 			computedHBA,
-			fmt.Sprintf("host all %s %s %s", p.pgSUUsername, "0.0.0.0/0", p.pgSUAuthMethod),
-			fmt.Sprintf("host all %s %s %s", p.pgSUUsername, "::0/0", p.pgSUAuthMethod),
-			fmt.Sprintf("host replication %s %s %s", p.pgReplUsername, "0.0.0.0/0", p.pgReplAuthMethod),
-			fmt.Sprintf("host replication %s %s %s", p.pgReplUsername, "::0/0", p.pgReplAuthMethod),
+			fmt.Sprintf(
+				"host all %s %s %s",
+				p.pgSUUsername,
+				"0.0.0.0/0",
+				p.pgSUAuthMethod,
+			),
+			fmt.Sprintf(
+				"host all %s %s %s",
+				p.pgSUUsername,
+				"::0/0",
+				p.pgSUAuthMethod,
+			),
+			fmt.Sprintf(
+				"host replication %s %s %s",
+				p.pgReplUsername,
+				"0.0.0.0/0",
+				p.pgReplAuthMethod,
+			),
+			fmt.Sprintf(
+				"host replication %s %s %s",
+				p.pgReplUsername,
+				"::0/0",
+				p.pgReplAuthMethod,
+			),
 		)
 	case cluster.SUReplAccessStrict:
 		// only the master keeper (primary instance or standby of a remote primary when in standby cluster mode) will accept connections only from the other standby keepers IPs
@@ -1862,15 +2469,28 @@ func (p *PostgresKeeper) generateHBA(cd *cluster.ClusterData, db *cluster.DB, on
 			addresses := []string{}
 			for _, dbElt := range cd.DBs {
 				if dbElt.UID != db.UID {
-					addresses = append(addresses, dbElt.Status.ListenAddress)
+					addresses = append(
+						addresses,
+						dbElt.Status.ListenAddress,
+					)
 				}
 			}
 			sort.Strings(addresses)
 			for _, address := range addresses {
 				computedHBA = append(
 					computedHBA,
-					fmt.Sprintf("host all %s %s/32 %s", p.pgSUUsername, address, p.pgReplAuthMethod),
-					fmt.Sprintf("host replication %s %s/32 %s", p.pgReplUsername, address, p.pgReplAuthMethod),
+					fmt.Sprintf(
+						"host all %s %s/32 %s",
+						p.pgSUUsername,
+						address,
+						p.pgReplAuthMethod,
+					),
+					fmt.Sprintf(
+						"host replication %s %s/32 %s",
+						p.pgReplUsername,
+						address,
+						p.pgReplAuthMethod,
+					),
 				)
 			}
 		}
@@ -1896,7 +2516,11 @@ func (p *PostgresKeeper) generateHBA(cd *cluster.ClusterData, db *cluster.DB, on
 
 func sigHandler(sigs chan os.Signal, cancel context.CancelFunc) {
 	s := <-sigs
-	log.Debugw("got signal", "signal", s)
+	keeperRootLog(
+		nil,
+	).Debug().
+		Str("signal", s.String()).
+		Msg("shutdown signal received")
 	shutdownSeconds.SetToCurrentTime()
 	cancel()
 }
@@ -1921,58 +2545,53 @@ func NewParser() *flags.Parser {
 }
 
 func keeper(parser *flags.Parser) {
+	closer, err := cmd.InitLogging(&cfg.CommonConfig)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "logging: %v\n", err)
+		os.Exit(1)
+	}
+
+	kl := keeperRootLog(&cfg)
+	defer cmd.CloseLogging(closer, kl)
+	pg.SetLogger(slog.L())
+
 	var (
-		err           error
 		listenAddFlag = "pg-advertise-address"
 	)
 
-	if option := parser.FindOptionByLongName("pg-su-username"); option == nil || !option.IsSet() {
+	if option := parser.FindOptionByLongName("pg-su-username"); option == nil ||
+		!option.IsSet() {
 		// set the pgSuUsername to the current user
 		var user string
 		user, err = util.GetUser()
 		if err != nil {
-			log.Fatalf("cannot get current user: %v", err)
+			kl.Fatal().Err(err).Msg("get_current_user_failed")
 		}
 		cfg.PG.SU.Username = user
 	}
 
-	switch cfg.Log.Level {
-	case "error":
-		slog.SetLevel(zap.ErrorLevel)
-	case "warn":
-		slog.SetLevel(zap.WarnLevel)
-	case "info":
-		slog.SetLevel(zap.InfoLevel)
-	case "debug":
-		slog.SetLevel(zap.DebugLevel)
-	}
-	if cfg.Debug {
-		slog.SetDebug()
-	}
-	if cmd.IsLogColorRequested(parser, &cfg.CommonConfig) {
-		log = slog.SColor()
-		pg.SetLogger(log)
-	}
-
 	if cfg.DataDir == "" {
-		log.Fatalf("data dir required")
+		kl.Fatal().Msg("data_dir_required")
 	}
 
 	if err = cmd.CheckClusterName(&cfg.CommonConfig); err != nil {
-		log.Fatalf(err.Error())
+		kl.Fatal().Err(err).Msg("check_cluster_name_failed")
 	}
 	if err = cmd.CheckCommonConfig(&cfg.CommonConfig); err != nil {
-		log.Fatalf(err.Error())
+		kl.Fatal().Err(err).Msg("check_common_config_failed")
 	}
 
 	cmd.SetMetrics(&cfg.CommonConfig, "keeper")
 
 	if err = os.MkdirAll(cfg.DataDir, 0700); err != nil {
-		log.Fatalf("cannot create data dir: %v", err)
+		kl.Fatal().
+			Err(err).
+			Str("data_dir", cfg.DataDir).
+			Msg("mkdir_data_dir_failed")
 	}
 
 	if cfg.PG.ListenAddress == "" {
-		log.Fatalf("--pg-listen-address is required")
+		kl.Fatal().Msg("pg_listen_address_required")
 	}
 
 	if cfg.PG.AdvertiseAddress == "" {
@@ -1986,101 +2605,131 @@ func keeper(parser *flags.Parser) {
 
 	ip := net.ParseIP(cfg.PG.AdvertiseAddress)
 	if ip == nil {
-		log.Warnf("provided --%s %q: is not an ip address but a hostname. This will be advertized to the other components and may have undefined behaviors if resolved differently by other hosts", listenAddFlag, cfg.PG.AdvertiseAddress)
+		kl.Warn().
+			Str("listen_flag", listenAddFlag).
+			Str("advertise_address", cfg.PG.AdvertiseAddress).
+			Msg("advertise_address_not_ip")
 	}
 
 	ipAddr, err := net.ResolveIPAddr("ip", cfg.PG.AdvertiseAddress)
 	if err != nil {
-		log.Warnf("cannot resolve provided --%s %q: %v", listenAddFlag, cfg.PG.AdvertiseAddress, err)
+		kl.Warn().
+			Err(err).
+			Str("listen_flag", listenAddFlag).
+			Str("advertise_address", cfg.PG.AdvertiseAddress).
+			Msg("advertise_address_resolve_failed")
 	} else if ipAddr.IP.IsLoopback() {
-		log.Warnf("provided --%s %q is a loopback ip. This will be advertized to the other components and communication will fail if they are on different hosts", listenAddFlag, cfg.PG.AdvertiseAddress)
+		kl.Warn().
+			Str("listen_flag", listenAddFlag).
+			Str("advertise_address", cfg.PG.AdvertiseAddress).
+			Msg("advertise_address_loopback")
 	}
 
 	if cfg.PG.Repl.Username == "" {
-		log.Fatalf("--pg-repl-username is required")
+		kl.Fatal().Msg("pg_repl_username_required")
 	}
 	if cfg.PG.Repl.AuthMethod == "trust" {
-		log.Warn("not utilizing a password for replication between hosts is extremely dangerous")
-		// xor:"pg-repl-secret" already prevents both being set; only need
-		// to make sure neither is set when auth is trust.
-		if cfg.PG.Repl.Password != "" || cfg.PG.Repl.PasswordFile != "" {
-			log.Fatalf("can not utilize --pg-repl-auth-method trust together with --pg-repl-password or --pg-repl-passwordfile")
+		kl.Warn().Msg("pg_repl_trust_insecure")
+		if cfg.PG.Repl.Password != "" ||
+			cfg.PG.Repl.PasswordFile != "" {
+			kl.Fatal().Msg("pg_repl_trust_xor_password")
 		}
 	} else if cfg.PG.Repl.Password == "" && cfg.PG.Repl.PasswordFile == "" {
-		log.Fatalf("one of --pg-repl-password or --pg-repl-passwordfile is required")
+		kl.Fatal().Msg("pg_repl_password_required")
 	}
 	if cfg.PG.SU.AuthMethod == "trust" {
-		log.Warn("not utilizing a password for superuser is extremely dangerous")
+		kl.Warn().Msg("pg_su_trust_insecure")
 		if cfg.PG.SU.Password != "" || cfg.PG.SU.PasswordFile != "" {
-			log.Fatalf("can not utilize --pg-su-auth-method trust together with --pg-su-password or --pg-su-passwordfile")
+			kl.Fatal().Msg("pg_su_trust_xor_password")
 		}
 	} else if cfg.PG.SU.Password == "" && cfg.PG.SU.PasswordFile == "" {
-		log.Fatalf("one of --pg-su-password or --pg-su-passwordfile is required")
+		kl.Fatal().Msg("pg_su_password_required")
 	}
 
 	if cfg.PG.Repl.PasswordFile != "" {
-		cfg.PG.Repl.Password, err = readPasswordFromFile(cfg.PG.Repl.PasswordFile)
+		cfg.PG.Repl.Password, err = readPasswordFromFile(
+			cfg.PG.Repl.PasswordFile,
+		)
 		if err != nil {
-			log.Fatalf("cannot read pg replication user password: %v", err)
+			kl.Fatal().Err(err).Msg("read_pg_repl_password_failed")
 		}
 	}
 	if cfg.PG.SU.PasswordFile != "" {
-		cfg.PG.SU.Password, err = readPasswordFromFile(cfg.PG.SU.PasswordFile)
+		cfg.PG.SU.Password, err = readPasswordFromFile(
+			cfg.PG.SU.PasswordFile,
+		)
 		if err != nil {
-			log.Fatalf("cannot read pg superuser password: %v", err)
+			kl.Fatal().Err(err).Msg("read_pg_su_password_failed")
 		}
 	}
 
 	// Trim trailing new lines from passwords
 	tp := strings.TrimRight(cfg.PG.SU.Password, "\r\n")
 	if cfg.PG.SU.Password != tp {
-		log.Warn("superuser password contain trailing new line, removing")
+		kl.Warn().Msg("pg_su_password_trimmed_trailing_newline")
 		if tp == "" {
-			log.Fatalf("superuser password is empty after removing trailing new line")
+			kl.Fatal().Msg("pg_su_password_empty_after_trim")
 		}
 		cfg.PG.SU.Password = tp
 	}
 
 	tp = strings.TrimRight(cfg.PG.Repl.Password, "\r\n")
 	if cfg.PG.Repl.Password != tp {
-		log.Warn("replication user password contain trailing new line, removing")
+		kl.Warn().Msg("pg_repl_password_trimmed_trailing_newline")
 		if tp == "" {
-			log.Fatalf("replication user password is empty after removing trailing new line")
+			kl.Fatal().Msg("pg_repl_password_empty_after_trim")
 		}
 		cfg.PG.Repl.Password = tp
 	}
 
 	if cfg.PG.SU.Username == cfg.PG.Repl.Username {
-		log.Warn("superuser name and replication user name are the same. Different users are suggested.")
+		kl.Warn().Msg("pg_su_same_as_repl_user")
 		if cfg.PG.Repl.AuthMethod != cfg.PG.SU.AuthMethod {
-			log.Fatalf("do not support different auth methods when utilizing superuser for replication.")
+			kl.Fatal().Msg("pg_su_repl_same_user_auth_mismatch")
 		}
-		if cfg.PG.SU.Password != cfg.PG.Repl.Password && cfg.PG.SU.AuthMethod != "trust" && cfg.PG.Repl.AuthMethod != "trust" {
-			log.Fatalf("provided superuser name and replication user name are the same but provided passwords are different")
+		if cfg.PG.SU.Password != cfg.PG.Repl.Password &&
+			cfg.PG.SU.AuthMethod != "trust" &&
+			cfg.PG.Repl.AuthMethod != "trust" {
+			kl.Fatal().Msg("pg_su_repl_same_user_password_mismatch")
 		}
 	}
 
 	// Open (and create if needed) the lock file.
-	// There is no need to clean up this file since we don't use the file as an actual lock. We get a lock
-	// on the file. So the lock get released when our process stops (or log.Fatalfs).
+	// There is no need to clean up this file since we don't use the file as an
+	// actual lock. We get a lock on the file. So the lock get released when
+	// our process stops (or log.Fatalfs).
 	var lockFile *os.File
 	if !cfg.DisableDataDirLocking {
 		lockFileName := filepath.Join(cfg.DataDir, "lock")
-		lockFile, err = os.OpenFile(lockFileName, os.O_RDWR|os.O_CREATE, 0600)
+		lockFile, err = os.OpenFile(
+			lockFileName,
+			os.O_RDWR|os.O_CREATE,
+			0600,
+		)
 		if err != nil {
-			log.Fatalf("cannot take exclusive lock on data dir %q: %v", lockFileName, err)
+			kl.Fatal().
+				Err(err).
+				Str("lock_path", lockFileName).
+				Msg("open_data_dir_lock_file_failed")
 		}
 
 		if err := takeDataDirLock(lockFile); err != nil {
-			log.Fatalf("cannot take exclusive lock on data dir %q: %v", lockFileName, err)
+			kl.Fatal().
+				Err(err).
+				Str("lock_path", lockFileName).
+				Msg("take_data_dir_lock_failed")
 		}
 
-		log.Infow("exclusive lock on data dir taken")
+		kl.Info().
+			Str("data_dir", cfg.DataDir).
+			Msg("data_dir_lock_acquired")
 	}
 
 	if cfg.UID != "" {
 		if !pg.IsValidReplSlotName(cfg.UID) {
-			log.Fatalf("keeper uid %q not valid. It can contain only lower-case letters, numbers and the underscore character", cfg.UID)
+			kl.Fatal().
+				Str("keeper_uid", cfg.UID).
+				Msg("keeper_uid_invalid")
 		}
 	}
 
@@ -2101,7 +2750,10 @@ func keeper(parser *flags.Parser) {
 		go func() {
 			err = metricsServer.ListenAndServe()
 			if err != nil {
-				log.Errorw("metrics http server error", zap.Error(err))
+				kl.Error().
+					Err(err).
+					Str("addr", cfg.MetricsListenAddress).
+					Msg("metrics_listen_failed")
 				cancel()
 			}
 		}()
@@ -2109,17 +2761,20 @@ func keeper(parser *flags.Parser) {
 
 	p, err := NewPostgresKeeper(&cfg, end)
 	if err != nil {
-		log.Fatalf("cannot create keeper: %v", err)
+		kl.Fatal().Err(err).Msg("new_postgres_keeper_failed")
 	}
 	go p.Start(ctx)
 
 	if err := <-end; err != nil {
-		log.Errorw("keeper stopped with error", zap.Error(err))
+		p.baseLog().Error().Err(err).Msg("keeper_run_failed")
 	}
 
 	if !cfg.DisableDataDirLocking {
 		if err := lockFile.Close(); err != nil {
-			log.Errorw("failed to close data dir lock file", zap.Error(err))
+			p.baseLog().
+				Error().
+				Err(err).
+				Msg("close_data_dir_lock_failed")
 		}
 	}
 }

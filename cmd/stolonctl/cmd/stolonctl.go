@@ -56,7 +56,7 @@ type stolonCtl struct {
 // to construct the store/election clients without explicit plumbing.
 var (
 	cfg stolonCtl
-	log = slog.S()
+	log = slog.WithComponent("stolonctl")
 )
 
 // NewParser returns the configured stolonctl parser. Used by the docs
@@ -80,6 +80,12 @@ func Execute() {
 // only piece of glue between the `flags.Commander` interface and the
 // existing handlers.
 func runStolonCtl(fn func() error) error {
+	closer, err := cmd.InitLogging(&cfg.CommonConfig)
+	if err != nil {
+		return fmt.Errorf("logging: %w", err)
+	}
+	log = slog.WithComponent("stolonctl")
+	defer cmd.CloseLogging(closer, &log)
 	if err := cmd.CheckClusterName(&cfg.CommonConfig); err != nil {
 		return err
 	}
@@ -100,7 +106,7 @@ func newElection(uid string) (store.Election, error) {
 func stderr(format string, a ...any) {
 	out := fmt.Sprintf(format, a...)
 	if _, err := fmt.Fprintln(os.Stderr, strings.TrimSuffix(out, "\n")); err != nil {
-		log.Fatal(err)
+		log.Fatal().Err(err).Msg("write_stderr_failed")
 	}
 }
 

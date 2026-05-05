@@ -24,7 +24,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -37,7 +36,7 @@ import (
 	// Register the postgres database/sql driver.
 	_ "github.com/lib/pq"
 	"github.com/mitchellh/copystructure"
-	"go.uber.org/zap"
+	"github.com/rs/zerolog"
 )
 
 //go:generate mockgen -destination=../mock/postgresql/postgresql.go -package=mocks -source=$GOFILE
@@ -59,7 +58,14 @@ var (
 	ErrUnknownState = errors.New("unknown postgres state")
 )
 
-var log = slog.S()
+var pgLog *zerolog.Logger
+
+func zl() *zerolog.Logger {
+	if pgLog != nil {
+		return pgLog
+	}
+	return slog.L()
+}
 
 // PGManager exposes PostgreSQL manager methods required by other packages.
 type PGManager interface {
@@ -130,12 +136,7 @@ func NewRecoveryOptions() *RecoveryOptions {
 // DeepCopy returns an independent copy of recovery options.
 func (r *RecoveryOptions) DeepCopy() *RecoveryOptions {
 	nr, err := copystructure.Copy(r)
-	if err != nil {
-		panic(err)
-	}
-	if !reflect.DeepEqual(r, nr) {
-		panic("not equal")
-	}
+	common.MustNot(err, "recovery options deep copy")
 	return nr.(*RecoveryOptions)
 }
 
@@ -161,8 +162,8 @@ type InitConfig struct {
 }
 
 // SetLogger sets the package logger used by PostgreSQL helpers.
-func SetLogger(l *zap.SugaredLogger) {
-	log = l
+func SetLogger(l *zerolog.Logger) {
+	pgLog = l
 }
 
 // NewManager creates a PostgreSQL manager bound to one data directory.
@@ -222,12 +223,13 @@ func (p *Manager) CurHba() []string {
 }
 
 // UpdateCurParameters snapshots desired parameters as current parameters.
-func (p *Manager) UpdateCurParameters() {
+func (p *Manager) UpdateCurParameters() error {
 	n, err := copystructure.Copy(p.parameters)
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("snapshot pg parameters: %w", err)
 	}
 	p.curParameters = n.(common.Parameters)
+	return nil
 }
 
 // UpdateCurRecoveryOptions snapshots desired recovery options.
@@ -236,12 +238,13 @@ func (p *Manager) UpdateCurRecoveryOptions() {
 }
 
 // UpdateCurHba snapshots desired pg_hba entries.
-func (p *Manager) UpdateCurHba() {
+func (p *Manager) UpdateCurHba() error {
 	n, err := copystructure.Copy(p.hba)
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("snapshot pg_hba: %w", err)
 	}
 	p.curHba = n.([]string)
+	return nil
 }
 
 // Init initializes a new PostgreSQL data directory via initdb.
@@ -263,7 +266,7 @@ func (p *Manager) Init(initConfig *InitConfig) error {
 	if p.suAuthMethod == "md5" {
 		cmd.Args = append(cmd.Args, "--pwfile", pwfile.Name())
 	}
-	log.Debugw("execing cmd", "cmd", cmd)
+	zl().Debug().Str("path", name).Strs("args", cmd.Args).Msg("execing cmd")
 
 	if initConfig.Locale != "" {
 		cmd.Args = append(cmd.Args, "--locale", initConfig.Locale)
@@ -303,7 +306,7 @@ func (p *Manager) Restore(command string) error {
 		goto out
 	}
 	cmd = exec.Command("/bin/sh", "-c", command)
-	log.Debugw("execing cmd", "cmd", cmd)
+	zl().Debug().Str("path", cmd.Path).Strs("args", cmd.Args).Msg("execing cmd")
 
 	// Pipe command's std[err|out] to parent.
 	cmd.Stdout = os.Stdout
@@ -366,11 +369,11 @@ func (p *Manager) start(args ...string) error {
 		return err
 	}
 
-	log.Infow("starting database")
+	zl().Info().Msg("starting database")
 	name := filepath.Join(p.pgBinPath, "postgres")
 	args = append([]string{"-D", p.dataDir, "-c", "unix_socket_directories=" + common.PgUnixSocketDirectories}, args...)
 	cmd := exec.Command(name, args...)
-	log.Debugw("execing cmd", "cmd", cmd)
+	zl().Debug().Str("path", name).Strs("args", cmd.Args).Msg("execing cmd")
 	// Pipe command's std[err|out] to parent.
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -428,9 +431,13 @@ func (p *Manager) start(args ...string) error {
 		return errors.New("instance still starting")
 	}
 
-	p.UpdateCurParameters()
+	if err := p.UpdateCurParameters(); err != nil {
+		return err
+	}
 	p.UpdateCurRecoveryOptions()
-	p.UpdateCurHba()
+	if err := p.UpdateCurHba(); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -439,13 +446,13 @@ func (p *Manager) start(args ...string) error {
 // times out (60 second).
 // Stop stops PostgreSQL.
 func (p *Manager) Stop(fast bool) error {
-	log.Infow("stopping database")
+	zl().Info().Msg("stopping database")
 	name := filepath.Join(p.pgBinPath, "pg_ctl")
 	cmd := exec.Command(name, "stop", "-w", "-D", p.dataDir, "-o", "-c unix_socket_directories="+common.PgUnixSocketDirectories)
 	if fast {
 		cmd.Args = append(cmd.Args, "-m", "fast")
 	}
-	log.Debugw("execing cmd", "cmd", cmd)
+	zl().Debug().Str("path", name).Strs("args", cmd.Args).Msg("execing cmd")
 
 	// Pipe command's std[err|out] to parent.
 	cmd.Stdout = os.Stdout
@@ -478,7 +485,7 @@ func (p *Manager) IsStarted() (bool, error) {
 
 // Reload requests PostgreSQL to reload its configuration.
 func (p *Manager) Reload() error {
-	log.Infow("reloading database configuration")
+	zl().Info().Msg("reloading database configuration")
 
 	if err := p.writeConfs(false); err != nil {
 		return err
@@ -486,7 +493,7 @@ func (p *Manager) Reload() error {
 
 	name := filepath.Join(p.pgBinPath, "pg_ctl")
 	cmd := exec.Command(name, "reload", "-D", p.dataDir, "-o", "-c unix_socket_directories="+common.PgUnixSocketDirectories)
-	log.Debugw("execing cmd", "cmd", cmd)
+	zl().Debug().Str("path", name).Strs("args", cmd.Args).Msg("execing cmd")
 
 	// Pipe command's std[err|out] to parent.
 	cmd.Stdout = os.Stdout
@@ -495,9 +502,13 @@ func (p *Manager) Reload() error {
 		return fmt.Errorf("error: %v", err)
 	}
 
-	p.UpdateCurParameters()
+	if err := p.UpdateCurParameters(); err != nil {
+		return err
+	}
 	p.UpdateCurRecoveryOptions()
-	p.UpdateCurHba()
+	if err := p.UpdateCurHba(); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -535,7 +546,7 @@ func (p *Manager) StopIfStarted(fast bool) error {
 
 // Restart restarts PostgreSQL.
 func (p *Manager) Restart(fast bool) error {
-	log.Infow("restarting database")
+	zl().Info().Msg("restarting database")
 	if err := p.StopIfStarted(fast); err != nil {
 		return err
 	}
@@ -594,11 +605,11 @@ func (p *Manager) WaitRecoveryDone(timeout time.Duration) error {
 
 // Promote promotes a standby to primary.
 func (p *Manager) Promote() error {
-	log.Infow("promoting database")
+	zl().Info().Msg("promoting database")
 
 	name := filepath.Join(p.pgBinPath, "pg_ctl")
 	cmd := exec.Command(name, "promote", "-w", "-D", p.dataDir)
-	log.Debugw("execing cmd", "cmd", cmd)
+	zl().Debug().Str("path", name).Strs("args", cmd.Args).Msg("execing cmd")
 
 	// Pipe command's std[err|out] to parent.
 	cmd.Stdout = os.Stdout
@@ -620,7 +631,7 @@ func (p *Manager) SetupRoles() error {
 	defer cancel()
 
 	if p.suUsername == p.replUsername {
-		log.Infow("adding replication role to superuser")
+		zl().Info().Msg("adding replication role to superuser")
 		if p.suAuthMethod == "trust" {
 			if err := alterPasswordlessRole(ctx, p.localConnParams, p.suUsername); err != nil {
 				return fmt.Errorf("error adding replication role to superuser: %v", err)
@@ -630,17 +641,17 @@ func (p *Manager) SetupRoles() error {
 				return fmt.Errorf("error adding replication role to superuser: %v", err)
 			}
 		}
-		log.Infow("replication role added to superuser")
+		zl().Info().Msg("replication role added to superuser")
 	} else {
 		// Configure superuser role password if auth method is not trust
 		if p.suAuthMethod != "trust" && p.suPassword != "" {
-			log.Infow("setting superuser password")
+			zl().Info().Msg("setting superuser password")
 			if err := setPassword(ctx, p.localConnParams, p.suUsername, p.suPassword); err != nil {
 				return fmt.Errorf("error setting superuser password: %v", err)
 			}
-			log.Infow("superuser password set")
+			zl().Info().Msg("superuser password set")
 		}
-		log.Infow("creating replication role")
+		zl().Info().Msg("creating replication role")
 		if p.replAuthMethod != "trust" {
 			if err := createRole(ctx, p.localConnParams, p.replUsername, p.replPassword); err != nil {
 				return fmt.Errorf("error creating replication role: %v", err)
@@ -650,7 +661,7 @@ func (p *Manager) SetupRoles() error {
 				return fmt.Errorf("error creating replication role: %v", err)
 			}
 		}
-		log.Infow("replication role created", "role", p.replUsername)
+		zl().Info().Str("role", p.replUsername).Msg("replication role created")
 	}
 	return nil
 }
@@ -692,7 +703,7 @@ func (p *Manager) DropReplicationSlot(name string) error {
 func (p *Manager) BinaryVersion() (int, int, error) {
 	name := filepath.Join(p.pgBinPath, "postgres")
 	cmd := exec.Command(name, "-V")
-	log.Debugw("execing cmd", "cmd", cmd)
+	zl().Debug().Str("path", name).Strs("args", cmd.Args).Msg("execing cmd")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return 0, 0, fmt.Errorf("error: %v, output: %s", err, string(out))
@@ -908,7 +919,7 @@ func (p *Manager) writeStandbySignal() error {
 		return nil
 	}
 
-	log.Infof("writing standby signal file")
+	zl().Info().Msg("writing standby signal file")
 
 	return common.WriteFileAtomicFunc(filepath.Join(p.dataDir, postgresStandbySignal), 0600,
 		func(_ io.Writer) error {
@@ -922,7 +933,7 @@ func (p *Manager) writeRecoverySignal() error {
 		return nil
 	}
 
-	log.Infof("writing recovery signal file")
+	zl().Info().Msg("writing recovery signal file")
 
 	return common.WriteFileAtomicFunc(filepath.Join(p.dataDir, postgresRecoverySignal), 0600,
 		func(_ io.Writer) error {
@@ -986,11 +997,11 @@ func (p *Manager) SyncFromFollowedPGRewind(followedConnParams ConnParams, passwo
 	followedConnParams.Set("options", "-c synchronous_commit=off")
 	followedConnString := followedConnParams.ConnString()
 
-	log.Infow("running pg_rewind")
+	zl().Info().Msg("running pg_rewind")
 	name := filepath.Join(p.pgBinPath, "pg_rewind")
 	cmd := exec.Command(name, "--debug", "-D", p.dataDir, "--source-server="+followedConnString)
 	cmd.Env = append(os.Environ(), "PGPASSFILE="+pgpass.Name())
-	log.Debugw("execing cmd", "cmd", cmd)
+	zl().Debug().Str("path", name).Strs("args", cmd.Args).Msg("execing cmd")
 
 	// Pipe command's std[err|out] to parent.
 	cmd.Stdout = os.Stdout
@@ -1030,7 +1041,7 @@ func (p *Manager) SyncFromFollowed(followedConnParams ConnParams, replSlot strin
 	fcp.Set("options", "-c synchronous_commit=off")
 	followedConnString := fcp.ConnString()
 
-	log.Infow("running pg_basebackup")
+	zl().Info().Msg("running pg_basebackup")
 	name := filepath.Join(p.pgBinPath, "pg_basebackup")
 	args := []string{"-R", "-v", "-P", "-Xs", "-D", p.dataDir, "-d", followedConnString}
 	if replSlot != "" {
@@ -1039,7 +1050,7 @@ func (p *Manager) SyncFromFollowed(followedConnParams ConnParams, replSlot strin
 	cmd := exec.Command(name, args...)
 
 	cmd.Env = append(os.Environ(), "PGPASSFILE="+pgpass.Name())
-	log.Debugw("execing cmd", "cmd", cmd)
+	zl().Debug().Str("path", name).Strs("args", cmd.Args).Msg("execing cmd")
 
 	// Pipe pg_basebackup's stderr to our stderr.
 	// We do this indirectly so that pg_basebackup doesn't think it's connected to a tty.
@@ -1059,7 +1070,7 @@ func (p *Manager) SyncFromFollowed(followedConnParams ConnParams, replSlot strin
 
 	go func() {
 		if _, err := io.Copy(os.Stderr, stderr); err != nil {
-			log.Errorf("pg_basebackup failed to copy stderr: %v", err)
+			zl().Error().Err(err).Msg("pg_basebackup failed to copy stderr")
 		}
 	}()
 

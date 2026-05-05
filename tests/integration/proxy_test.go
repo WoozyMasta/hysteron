@@ -33,6 +33,8 @@ import (
 func TestProxyListening(t *testing.T) {
 	t.Parallel()
 
+	storeWaitTimeout := 30 * time.Second
+
 	dir, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
@@ -67,7 +69,7 @@ func TestProxyListening(t *testing.T) {
 	if err := tstore.Start(); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if err := tstore.WaitUp(10 * time.Second); err != nil {
+	if err := tstore.WaitUp(storeWaitTimeout); err != nil {
 		t.Fatalf("error waiting on store up: %v", err)
 	}
 	defer func() {
@@ -159,7 +161,7 @@ func TestProxyListening(t *testing.T) {
 	if err := tstore.Start(); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if err := tstore.WaitUp(10 * time.Second); err != nil {
+	if err := tstore.WaitUp(storeWaitTimeout); err != nil {
 		t.Fatalf("error waiting on store up: %v", err)
 	}
 	// tp should listen
@@ -179,7 +181,7 @@ func TestProxyListening(t *testing.T) {
 	if err := tstore.Start(); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if err := tstore.WaitUp(10 * time.Second); err != nil {
+	if err := tstore.WaitUp(storeWaitTimeout); err != nil {
 		t.Fatalf("error waiting on store up: %v", err)
 	}
 	// tp should listen

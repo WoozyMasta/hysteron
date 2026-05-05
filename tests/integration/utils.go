@@ -29,7 +29,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
-	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -485,36 +484,6 @@ func (tk *TestKeeper) PGDataVersion() (int, int, error) {
 	return pg.ParseVersion(version)
 }
 
-func (tk *TestKeeper) GetPrimaryConninfo() (pg.ConnParams, error) {
-	maj, _, err := tk.PGDataVersion()
-	if err != nil {
-		return nil, err
-	}
-
-	confFile := "recovery.conf"
-	if maj >= 12 {
-		confFile = "postgresql.conf"
-	}
-	regex := regexp.MustCompile(`\s*primary_conninfo\s*=\s*'(.*)'$`)
-
-	fh, err := os.Open(filepath.Join(tk.dataDir, "postgres", confFile))
-	if os.IsNotExist(err) {
-		return nil, nil
-	}
-	defer fh.Close()
-
-	scanner := bufio.NewScanner(fh)
-	scanner.Split(bufio.ScanLines)
-
-	for scanner.Scan() {
-		m := regex.FindStringSubmatch(scanner.Text())
-		if len(m) == 2 {
-			return pg.ParseConnString(m[1])
-		}
-	}
-	return nil, nil
-}
-
 func (tk *TestKeeper) Exec(query string, args ...interface{}) (sql.Result, error) {
 	res, err := tk.db.Exec(query, args...)
 	if err != nil {
@@ -759,6 +728,30 @@ func (tk *TestKeeper) isInRecovery() (bool, error) {
 	return false, fmt.Errorf("no rows returned")
 }
 
+func (tk *TestKeeper) primaryConninfo() (pg.ConnParams, error) {
+	rows, err := tk.Query("SELECT setting FROM pg_settings WHERE name = 'primary_conninfo'")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		return nil, fmt.Errorf("primary_conninfo setting not found")
+	}
+
+	var setting string
+	if err := rows.Scan(&setting); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if setting == "" {
+		return nil, nil
+	}
+	return pg.ParseConnString(setting)
+}
+
 func (tk *TestKeeper) WaitDBRole(r common.Role, ptk *TestKeeper, timeout time.Duration) error {
 	start := time.Now()
 	for time.Now().Add(-timeout).Before(start) {
@@ -786,9 +779,7 @@ func (tk *TestKeeper) WaitDBRole(r common.Role, ptk *TestKeeper, timeout time.Du
 			if !ok {
 				continue
 			}
-			// TODO(sgotti) get this information from the running instance instead than from
-			// recovery.conf to be really sure it's applied
-			conninfo, err := tk.GetPrimaryConninfo()
+			conninfo, err := tk.primaryConninfo()
 			if err != nil {
 				continue
 			}

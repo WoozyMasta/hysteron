@@ -19,7 +19,6 @@ package integration
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -227,29 +226,24 @@ type Process struct {
 	uid  string
 	name string
 	args []string
-	cmd  *expectProcess
+	cmd  *managedProcess
 	bin  string
 }
 
-type expectProcess struct {
+type managedProcess struct {
 	Cmd *exec.Cmd
 
-	mu   sync.Mutex
-	cond *sync.Cond
-	buf  bytes.Buffer
 	done chan error
 }
 
-func newExpectProcess(cmd *exec.Cmd) *expectProcess {
-	p := &expectProcess{
+func newManagedProcess(cmd *exec.Cmd) *managedProcess {
+	return &managedProcess{
 		Cmd:  cmd,
 		done: make(chan error, 1),
 	}
-	p.cond = sync.NewCond(&p.mu)
-	return p
 }
 
-func (p *expectProcess) Start(output io.WriteCloser) error {
+func (p *managedProcess) Start(output io.WriteCloser) error {
 	pr, pw, err := os.Pipe()
 	if err != nil {
 		return err
@@ -268,12 +262,11 @@ func (p *expectProcess) Start(output io.WriteCloser) error {
 	go p.captureOutput(pr, output)
 	go func() {
 		p.done <- p.Cmd.Wait()
-		p.cond.Broadcast()
 	}()
 	return nil
 }
 
-func (p *expectProcess) captureOutput(r io.ReadCloser, output io.Writer) {
+func (p *managedProcess) captureOutput(r io.ReadCloser, output io.Writer) {
 	defer r.Close()
 	if closer, ok := output.(io.Closer); ok {
 		defer closer.Close()
@@ -281,103 +274,17 @@ func (p *expectProcess) captureOutput(r io.ReadCloser, output io.Writer) {
 
 	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
-		line := scanner.Bytes()
-		p.mu.Lock()
-		_, _ = p.buf.Write(line)
-		_ = p.buf.WriteByte('\n')
-		p.cond.Broadcast()
-		p.mu.Unlock()
-
-		_, _ = fmt.Fprintln(output, string(line))
-	}
-	p.mu.Lock()
-	p.cond.Broadcast()
-	p.mu.Unlock()
-}
-
-func (p *expectProcess) Continue() {}
-
-func (p *expectProcess) Expect(searchString string) error {
-	return p.ExpectTimeout(searchString, 0)
-}
-
-func (p *expectProcess) ExpectTimeout(searchString string, timeout time.Duration) error {
-	deadline, hasDeadline := deadlineFromTimeout(timeout)
-
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	for {
-		if bytes.Contains(p.buf.Bytes(), []byte(searchString)) {
-			return nil
-		}
-		if err := p.wait(deadline, hasDeadline); err != nil {
-			return fmt.Errorf("expect %q: %w", searchString, err)
-		}
+		_, _ = fmt.Fprintln(output, scanner.Text())
 	}
 }
 
-func (p *expectProcess) ExpectTimeoutRegexFind(regex string, timeout time.Duration) ([]string, error) {
-	re, err := regexp.Compile(regex)
-	if err != nil {
-		return nil, err
-	}
-	deadline, hasDeadline := deadlineFromTimeout(timeout)
-
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	for {
-		if matches := re.FindStringSubmatch(p.buf.String()); len(matches) > 0 {
-			return matches, nil
-		}
-		if err := p.wait(deadline, hasDeadline); err != nil {
-			return nil, fmt.Errorf("expect regex %q: %w", regex, err)
-		}
-	}
-}
-
-func (p *expectProcess) wait(deadline time.Time, hasDeadline bool) error {
-	if hasDeadline {
-		remaining := time.Until(deadline)
-		if remaining <= 0 {
-			return fmt.Errorf("timeout")
-		}
-		timer := time.AfterFunc(remaining, func() {
-			p.mu.Lock()
-			p.cond.Broadcast()
-			p.mu.Unlock()
-		})
-		p.cond.Wait()
-		timer.Stop()
-	} else {
-		p.cond.Wait()
-	}
-
-	select {
-	case err := <-p.done:
-		p.done <- err
-		if err != nil {
-			return fmt.Errorf("process exited: %w", err)
-		}
-		return fmt.Errorf("process exited")
-	default:
-		return nil
-	}
-}
-
-func (p *expectProcess) Wait() error {
+func (p *managedProcess) Wait() error {
 	err := <-p.done
 	p.done <- err
 	return err
 }
 
-func deadlineFromTimeout(timeout time.Duration) (time.Time, bool) {
-	if timeout <= 0 {
-		return time.Time{}, false
-	}
-	return time.Now().Add(timeout), true
-}
-
-func (p *Process) start() error {
+func (p *Process) Start() error {
 	if p.cmd != nil {
 		panic(fmt.Errorf("%s: cmd not cleanly stopped", p.uid))
 	}
@@ -386,7 +293,7 @@ func (p *Process) start() error {
 	if err != nil {
 		return err
 	}
-	p.cmd = newExpectProcess(cmd)
+	p.cmd = newManagedProcess(cmd)
 	if err := p.cmd.Start(pw); err != nil {
 		return err
 	}
@@ -399,18 +306,6 @@ func (p *Process) start() error {
 	}()
 
 	return nil
-}
-
-func (p *Process) Start() error {
-	if err := p.start(); err != nil {
-		return err
-	}
-	p.cmd.Continue()
-	return nil
-}
-
-func (p *Process) StartExpect() error {
-	return p.start()
 }
 
 func (p *Process) Signal(sig os.Signal) error {
@@ -454,7 +349,6 @@ func (p *Process) Stop() {
 	if p.cmd == nil {
 		panic(fmt.Errorf("p: %s, cmd is empty", p.uid))
 	}
-	p.cmd.Continue()
 	_ = p.cmd.Cmd.Process.Signal(os.Interrupt)
 	_ = p.cmd.Wait()
 	p.cmd = nil

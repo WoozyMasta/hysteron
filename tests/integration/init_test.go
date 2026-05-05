@@ -323,7 +323,7 @@ func TestInitUsers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if err := tk.StartExpect(); err != nil {
+	if err := tk.Start(); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 	if err := tk.Wait(30 * time.Second); err == nil {
@@ -537,7 +537,7 @@ func TestExclusiveLock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if err := tk2.StartExpect(); err != nil {
+	if err := tk2.Start(); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
@@ -623,7 +623,7 @@ func TestPasswordTrailingNewLine(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if err := tk.StartExpect(); err != nil {
+	if err := tk.Start(); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 	if err := tk.Wait(30 * time.Second); err == nil {
@@ -637,7 +637,7 @@ func TestPasswordTrailingNewLine(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if err := tk.StartExpect(); err != nil {
+	if err := tk.Start(); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 	if err := tk.Wait(30 * time.Second); err == nil {

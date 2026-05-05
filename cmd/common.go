@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -47,7 +48,7 @@ import (
 // `default:` tags; we never mutate the struct before parse.
 type CommonConfig struct {
 	Kube                 KubeOptions     `group:"Kubernetes" namespace:"kube" env-namespace:"KUBE"`
-	ClusterName          string          `short:"c" long:"cluster-name" env:"CLUSTER_NAME" description:"cluster name"`
+	ClusterNames         []string        `short:"c" long:"cluster-name" env:"CLUSTER_NAME" description:"cluster name. Can be repeated by components that support multiple clusters"`
 	MetricsListenAddress string          `long:"metrics-listen-address" env:"METRICS_LISTEN_ADDRESS" description:"metrics listen address i.e \"0.0.0.0:8080\" (disabled by default)"`
 	KubeConfig           string          `long:"kubeconfig" env:"KUBECONFIG" description:"path to kubeconfig file. Overrides $KUBECONFIG"`
 	Log                  stlog.FlagGroup `group:"Logging" namespace:"log" env-namespace:"LOG"`
@@ -171,7 +172,12 @@ func CheckCommonConfig(cfg *CommonConfig) error {
 
 // SetMetrics labels the cluster identifier metric for the running component.
 func SetMetrics(cfg *CommonConfig, component string) {
-	clusterIdentifier.WithLabelValues(cfg.ClusterName, component).Set(1)
+	SetMetricsForCluster(cfg.ClusterName(), component)
+}
+
+// SetMetricsForCluster labels the cluster identifier metric for one cluster.
+func SetMetricsForCluster(clusterName, component string) {
+	clusterIdentifier.WithLabelValues(clusterName, component).Set(1)
 }
 
 // NewKVStore creates the configured key-value store backend.
@@ -191,9 +197,14 @@ func NewKVStore(cfg *CommonConfig) (store.KVStore, error) {
 // flag controls whether the kubernetes backend is allowed to skip
 // resolving the local pod identity (useful for stolonctl).
 func NewStore(cfg *CommonConfig, requirePod bool) (store.Store, error) {
+	return NewStoreForCluster(cfg, cfg.ClusterName(), requirePod)
+}
+
+// NewStoreForCluster creates the configured cluster-data store for one cluster.
+func NewStoreForCluster(cfg *CommonConfig, clusterName string, requirePod bool) (store.Store, error) {
 	switch cfg.Store.Backend {
 	case "etcdv3":
-		storePath := filepath.Join(cfg.Store.Prefix, cfg.ClusterName)
+		storePath := filepath.Join(cfg.Store.Prefix, clusterName)
 		kvstore, err := NewKVStore(cfg)
 		if err != nil {
 			return nil, fmt.Errorf("cannot create kv store: %v", err)
@@ -204,7 +215,7 @@ func NewStore(cfg *CommonConfig, requirePod bool) (store.Store, error) {
 		if err != nil {
 			return nil, err
 		}
-		s, err := store.NewKubeStore(kubecli, podName, namespace, cfg.ClusterName)
+		s, err := store.NewKubeStore(kubecli, podName, namespace, clusterName)
 		if err != nil {
 			return nil, fmt.Errorf("cannot create store: %v", err)
 		}
@@ -215,9 +226,14 @@ func NewStore(cfg *CommonConfig, requirePod bool) (store.Store, error) {
 
 // NewElection creates the configured sentinel leader election backend.
 func NewElection(cfg *CommonConfig, uid string) (store.Election, error) {
+	return NewElectionForCluster(cfg, cfg.ClusterName(), uid)
+}
+
+// NewElectionForCluster creates the configured election backend for one cluster.
+func NewElectionForCluster(cfg *CommonConfig, clusterName, uid string) (store.Election, error) {
 	switch cfg.Store.Backend {
 	case "etcdv3":
-		storePath := filepath.Join(cfg.Store.Prefix, cfg.ClusterName)
+		storePath := filepath.Join(cfg.Store.Prefix, clusterName)
 		kvstore, err := NewKVStore(cfg)
 		if err != nil {
 			return nil, fmt.Errorf("cannot create kv store: %v", err)
@@ -228,7 +244,7 @@ func NewElection(cfg *CommonConfig, uid string) (store.Election, error) {
 		if err != nil {
 			return nil, err
 		}
-		return store.NewKubeElection(kubecli, podName, namespace, cfg.ClusterName, uid)
+		return store.NewKubeElection(kubecli, podName, namespace, clusterName, uid)
 	}
 	return nil, fmt.Errorf("unknown store backend: %q", cfg.Store.Backend)
 }
@@ -258,12 +274,60 @@ func getKubeValues(cfg *CommonConfig, requirePod bool) (*kubernetes.Clientset, s
 	return kubecli, podName, namespace, nil
 }
 
-// CheckClusterName fails when ClusterName has not been provided. Daemons
-// must always require a cluster name; we keep this as a separate check
-// because validate-non-empty alone would block --help.
+// ClusterNamesList returns normalized cluster names from CLI/env input.
+func (cfg *CommonConfig) ClusterNamesList() []string {
+	return normalizeClusterNames(cfg.ClusterNames)
+}
+
+// ClusterName returns the single configured cluster name, if present.
+func (cfg *CommonConfig) ClusterName() string {
+	names := cfg.ClusterNamesList()
+	if len(names) == 0 {
+		return ""
+	}
+	return names[0]
+}
+
+func normalizeClusterNames(values []string) []string {
+	names := []string{}
+	for _, value := range values {
+		for name := range strings.SplitSeq(value, ",") {
+			name = strings.TrimSpace(name)
+			if name != "" {
+				names = append(names, name)
+			}
+		}
+	}
+	return names
+}
+
+// CheckClusterName fails unless exactly one cluster name has been provided.
+// Single-cluster components keep this validation even though sentinel can run
+// multiple clusters.
 func CheckClusterName(cfg *CommonConfig) error {
-	if cfg.ClusterName == "" {
+	names := cfg.ClusterNamesList()
+	if len(names) == 0 {
 		return errors.New("cluster name required")
 	}
+	if len(names) > 1 {
+		return errors.New("exactly one cluster name required")
+	}
 	return nil
+}
+
+// CheckClusterNames fails when no cluster names are provided or any duplicate
+// name is configured.
+func CheckClusterNames(cfg *CommonConfig) ([]string, error) {
+	names := cfg.ClusterNamesList()
+	if len(names) == 0 {
+		return nil, errors.New("cluster name required")
+	}
+	seen := map[string]struct{}{}
+	for _, name := range names {
+		if _, ok := seen[name]; ok {
+			return nil, fmt.Errorf("duplicate cluster name %q", name)
+		}
+		seen[name] = struct{}{}
+	}
+	return names, nil
 }

@@ -468,6 +468,93 @@ func TestInitialClusterSpec(t *testing.T) {
 	}
 }
 
+func TestSentinelMultiCluster(t *testing.T) {
+	t.Parallel()
+
+	dir, err := os.MkdirTemp("", "")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	tstore := setupStore(t, dir)
+	defer tstore.Stop()
+
+	storeEndpoints := fmt.Sprintf("%s:%s", tstore.listenAddress, tstore.port)
+
+	clusterName1 := uuid.NewString()
+	clusterName2 := uuid.NewString()
+
+	initialClusterSpec := &cluster.ClusterSpec{
+		InitMode:           cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
+		SleepInterval:      &cluster.Duration{Duration: 2 * time.Second},
+		FailInterval:       &cluster.Duration{Duration: 5 * time.Second},
+		ConvergenceTimeout: &cluster.Duration{Duration: 30 * time.Second},
+		PGParameters:       defaultPGParameters,
+	}
+	initialClusterSpecFile, err := writeClusterSpec(dir, initialClusterSpec)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	ts, err := NewTestSentinel(
+		t,
+		dir,
+		clusterName1,
+		tstore.storeBackend,
+		storeEndpoints,
+		fmt.Sprintf("--cluster-name=%s", clusterName2),
+		fmt.Sprintf("--initial-cluster-spec=%s", initialClusterSpecFile),
+	)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := ts.Start(); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer ts.Stop()
+
+	sm1 := store.NewKVBackedStore(tstore.store, filepath.Join(common.StorePrefix, clusterName1))
+	sm2 := store.NewKVBackedStore(tstore.store, filepath.Join(common.StorePrefix, clusterName2))
+	if err := WaitClusterPhase(sm1, cluster.ClusterPhaseInitializing, 60*time.Second); err != nil {
+		t.Fatalf("expected first cluster in initializing phase: %v", err)
+	}
+	if err := WaitClusterPhase(sm2, cluster.ClusterPhaseInitializing, 60*time.Second); err != nil {
+		t.Fatalf("expected second cluster in initializing phase: %v", err)
+	}
+
+	tk1, err := NewTestKeeper(t, dir, clusterName1, pgSUUsername, pgSUPassword, pgReplUsername, pgReplPassword, tstore.storeBackend, storeEndpoints)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := tk1.Start(); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer tk1.Stop()
+
+	tk2, err := NewTestKeeper(t, dir, clusterName2, pgSUUsername, pgSUPassword, pgReplUsername, pgReplPassword, tstore.storeBackend, storeEndpoints)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := tk2.Start(); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer tk2.Stop()
+
+	if err := WaitClusterPhase(sm1, cluster.ClusterPhaseNormal, 60*time.Second); err != nil {
+		t.Fatalf("expected first cluster in normal phase: %v", err)
+	}
+	if err := WaitClusterPhase(sm2, cluster.ClusterPhaseNormal, 60*time.Second); err != nil {
+		t.Fatalf("expected second cluster in normal phase: %v", err)
+	}
+	if err := tk1.WaitDBUp(60 * time.Second); err != nil {
+		t.Fatalf("expected first cluster database up: %v", err)
+	}
+	if err := tk2.WaitDBUp(60 * time.Second); err != nil {
+		t.Fatalf("expected second cluster database up: %v", err)
+	}
+}
+
 func TestExclusiveLock(t *testing.T) {
 	t.Parallel()
 

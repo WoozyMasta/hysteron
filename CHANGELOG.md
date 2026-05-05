@@ -78,6 +78,8 @@ The format is based on [Keep a Changelog][], and this project adheres to
   imports, and early-return control flow.
 * Clean up shared command and stolonctl command revive findings, including
   comments and TLS naming.
+* Allow one sentinel process to run control loops for multiple clusters with
+  per-cluster initial spec overrides and per-cluster log and metrics labels.
 * Clean up keeper and sentinel command revive findings with package and exported
   symbol comments.
 * Clean up cluster contract revive findings with documentation comments while

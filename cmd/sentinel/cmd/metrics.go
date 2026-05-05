@@ -20,55 +20,32 @@ import (
 )
 
 var (
-	lastCheckSuccessSeconds = prometheus.NewGauge(
+	lastCheckSuccessSeconds = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "stolon_sentinel_last_cluster_check_success_seconds",
 			Help: "Last time we successfully performed a cluster check as seconds since unix epoch",
 		},
+		[]string{"cluster_name"},
 	)
-	// These metrics will be provided by the collector. They represent values
-	// that shouldn't be updated as part of the sentinel code, but should be
-	// gathered just prior to providing Prometheus with a measurement.
-	isLeaderDesc = prometheus.NewDesc(
-		"stolon_sentinel_is_leader",
-		"Set to 1 if the sentinel is currently a leader",
-		[]string{},
-		nil,
+	isLeaderGauge = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "stolon_sentinel_is_leader",
+			Help: "Set to 1 if the sentinel is currently a leader",
+		},
+		[]string{"cluster_name"},
 	)
-	leaderCountDesc = prometheus.NewDesc(
-		"stolon_sentinel_leader_count",
-		"Number of times this sentinel has been elected as leader",
-		[]string{},
-		nil,
+	leaderCountGauge = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "stolon_sentinel_leader_count",
+			Help: "Number of times this sentinel has been elected as leader",
+		},
+		[]string{"cluster_name"},
 	)
 )
 
 // Register the static methods on the default Prometheus registry automatically
 func init() {
 	prometheus.MustRegister(lastCheckSuccessSeconds)
-}
-
-func mustRegisterSentinelCollector(s *Sentinel) {
-	prometheus.MustRegister(
-		sentinelCollector{s},
-	)
-}
-
-type sentinelCollector struct {
-	*Sentinel
-}
-
-func (c sentinelCollector) Describe(ch chan<- *prometheus.Desc) {
-	prometheus.DescribeByCollect(c, ch)
-}
-
-func (c sentinelCollector) Collect(ch chan<- prometheus.Metric) {
-	var isLeaderValue float64
-	isLeader, leaderCount := c.leaderInfo()
-	if isLeader {
-		isLeaderValue = 1
-	}
-
-	ch <- prometheus.MustNewConstMetric(isLeaderDesc, prometheus.GaugeValue, isLeaderValue)
-	ch <- prometheus.MustNewConstMetric(leaderCountDesc, prometheus.GaugeValue, float64(leaderCount))
+	prometheus.MustRegister(isLeaderGauge)
+	prometheus.MustRegister(leaderCountGauge)
 }

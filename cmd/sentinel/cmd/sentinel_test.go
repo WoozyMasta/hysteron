@@ -6246,3 +6246,78 @@ func testEqualCD(cd1, cd2 *cluster.ClusterData) bool {
 	return reflect.DeepEqual(cd1, cd2)
 
 }
+
+func TestClusterSpecFiles(t *testing.T) {
+	tests := []struct {
+		name        string
+		defaultSpec string
+		overrides   []string
+		clusters    []string
+		want        map[string]string
+		wantErr     bool
+	}{
+		{
+			name:        "default applies to every cluster",
+			defaultSpec: "default.json",
+			clusters:    []string{"one", "two"},
+			want: map[string]string{
+				"one": "default.json",
+				"two": "default.json",
+			},
+		},
+		{
+			name:        "override replaces default",
+			defaultSpec: "default.json",
+			overrides:   []string{"two=highload.json"},
+			clusters:    []string{"one", "two"},
+			want: map[string]string{
+				"one": "default.json",
+				"two": "highload.json",
+			},
+		},
+		{
+			name:      "override without default",
+			overrides: []string{"two=highload.json"},
+			clusters:  []string{"one", "two"},
+			want: map[string]string{
+				"two": "highload.json",
+			},
+		},
+		{
+			name:      "unknown cluster",
+			overrides: []string{"missing=spec.json"},
+			clusters:  []string{"one"},
+			wantErr:   true,
+		},
+		{
+			name:      "invalid override",
+			overrides: []string{"missing"},
+			clusters:  []string{"one"},
+			wantErr:   true,
+		},
+		{
+			name:      "duplicate override",
+			overrides: []string{"one=spec.json", "one=other.json"},
+			clusters:  []string{"one"},
+			wantErr:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := clusterSpecFiles(tt.defaultSpec, tt.overrides, tt.clusters)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("clusterSpecFiles() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

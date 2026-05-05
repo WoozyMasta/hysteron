@@ -14,7 +14,8 @@
 ### Application Options
 
 * `-c`, `--cluster-name` -
-  cluster name
+  cluster name. Can be repeated to run one sentinel process for multiple
+clusters
   * Environment: `STSENTINEL_CLUSTER_NAME`
 * `--metrics-listen-address` -
   metrics listen address i.e "0.0.0.0:8080" (disabled by default)
@@ -26,6 +27,10 @@
   a file providing the initial cluster specification, used only at cluster
 initialization, ignored if cluster is already initialized
   * Environment: `STSENTINEL_INITIAL_CLUSTER_SPEC`
+* `--cluster-spec` -
+  per-cluster initial cluster specification override as
+`<cluster-name>=<path>`; can be repeated
+  * Environment: `STSENTINEL_CLUSTER_SPEC`
 
 ### Store
 
@@ -35,7 +40,7 @@ initialization, ignored if cluster is already initialized
   * Choices: `etcdv3, kubernetes`
 * `--store-endpoints` -
   a comma-delimited list of store endpoints (use https scheme for tls
-communication) (defaults: http://127.0.0.1:2379 for etcdv3)
+communication) (defaults: <http://127.0.0.1:2379> for etcdv3)
   * Environment: `STSENTINEL_STORE_ENDPOINTS`
 * `--store-prefix` -
   the store base prefix

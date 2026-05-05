@@ -56,7 +56,7 @@ func keeperRootLog(cfg *config) *zerolog.Logger {
 		l = slog.WithComponent("keeper")
 	} else {
 		l = slog.WithComponent("keeper").With().
-			Str(slog.FieldClusterName, cfg.ClusterName).
+			Str(slog.FieldClusterName, cfg.ClusterName()).
 			Str(slog.FieldKeeperUID, cfg.UID).
 			Logger()
 	}
@@ -595,7 +595,7 @@ func (p *PostgresKeeper) baseLog() *zerolog.Logger {
 	}
 	l := slog.L().With().
 		Str(slog.FieldComponent, "keeper").
-		Str(slog.FieldClusterName, p.cfg.ClusterName).
+		Str(slog.FieldClusterName, p.cfg.ClusterName()).
 		Str(slog.FieldKeeperUID, uid).
 		Str("boot_uuid", p.bootUUID).
 		Logger()

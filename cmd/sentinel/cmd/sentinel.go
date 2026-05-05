@@ -25,6 +25,7 @@ import (
 	"reflect"
 	"slices"
 	"sort"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -62,7 +63,8 @@ const (
 )
 
 type config struct {
-	InitialClusterSpecFile string `short:"f" long:"initial-cluster-spec" env:"INITIAL_CLUSTER_SPEC" description:"a file providing the initial cluster specification, used only at cluster initialization, ignored if cluster is already initialized"`
+	InitialClusterSpecFile string   `short:"f" long:"initial-cluster-spec" env:"INITIAL_CLUSTER_SPEC" description:"a file providing the initial cluster specification, used only at cluster initialization, ignored if cluster is already initialized"`
+	ClusterSpecFiles       []string `long:"cluster-spec" env:"CLUSTER_SPEC" description:"per-cluster initial cluster specification override as <cluster-name>=<path>; can be repeated"`
 	cmd.CommonConfig
 }
 
@@ -70,13 +72,13 @@ var cfg config
 
 func (s *Sentinel) electionLoop(ctx context.Context) {
 	for {
-		log.Info().Msg("Trying to acquire sentinels leadership")
+		s.log.Info().Msg("trying to acquire sentinel leadership")
 		electedCh, errCh, err := s.election.RunForElection()
 		if err != nil {
-			log.Error().Err(err).Msg("failed to start sentinel election")
+			s.log.Error().Err(err).Msg("failed to start sentinel election")
 			select {
 			case <-ctx.Done():
-				log.Debug().Msg("stopping election loop")
+				s.log.Debug().Msg("stopping election loop")
 				return
 			case <-time.After(10 * time.Second):
 			}
@@ -88,29 +90,32 @@ func (s *Sentinel) electionLoop(ctx context.Context) {
 			case elected := <-electedCh:
 				s.leaderMutex.Lock()
 				if elected {
-					log.Info().Msg("sentinel leadership acquired")
+					s.log.Info().Msg("sentinel leadership acquired")
 					s.leader = true
 					s.leadershipCount++
+					isLeaderGauge.WithLabelValues(s.clusterName).Set(1)
+					leaderCountGauge.WithLabelValues(s.clusterName).Set(float64(s.leadershipCount))
 				} else {
 					if s.leader {
-						log.Info().Msg("sentinel leadership lost")
+						s.log.Info().Msg("sentinel leadership lost")
 					}
 					s.leader = false
+					isLeaderGauge.WithLabelValues(s.clusterName).Set(0)
 				}
 				s.leaderMutex.Unlock()
 
 			case err := <-errCh:
 				if err != nil {
-					log.Error().Err(err).Msg("sentinel election loop failed")
+					s.log.Error().Err(err).Msg("sentinel election loop failed")
 					if err := s.election.Stop(); err != nil {
-						log.Error().Err(err).Msg("failed to stop sentinel election")
+						s.log.Error().Err(err).Msg("failed to stop sentinel election")
 					}
 				}
 				break inner
 			case <-ctx.Done():
-				log.Debug().Msg("stopping election loop")
+				s.log.Debug().Msg("stopping election loop")
 				if err := s.election.Stop(); err != nil {
-					log.Error().Err(err).Msg("failed to stop sentinel election")
+					s.log.Error().Err(err).Msg("failed to stop sentinel election")
 				}
 				return
 			}
@@ -139,7 +144,7 @@ func (s *Sentinel) setSentinelInfo(
 	sentinelInfo := &cluster.SentinelInfo{
 		UID: s.uid,
 	}
-	log.Debug().
+	s.log.Debug().
 		Str("sentinel_uid", sentinelInfo.UID).
 		Msg("sentinel registration payload before write to store")
 
@@ -303,7 +308,7 @@ func (s *Sentinel) updateKeepersStatus(
 		// Mark not found DBs in DBstates in error
 		k, ok := keepersInfo[db.Spec.KeeperUID]
 		if !ok {
-			log.Warn().
+			s.log.Warn().
 				Str(slog.FieldDBUID, db.UID).
 				Str(slog.FieldKeeperUID, db.Spec.KeeperUID).
 				Msg("no keeper info available")
@@ -312,7 +317,7 @@ func (s *Sentinel) updateKeepersStatus(
 		}
 		dbs := k.PostgresState
 		if dbs == nil {
-			log.Warn().
+			s.log.Warn().
 				Str(slog.FieldDBUID, db.UID).
 				Str(slog.FieldKeeperUID, db.Spec.KeeperUID).
 				Msg("no db state available")
@@ -320,7 +325,7 @@ func (s *Sentinel) updateKeepersStatus(
 			continue
 		}
 		if dbs.UID != db.UID {
-			log.Warn().
+			s.log.Warn().
 				Str("received_db_uid", dbs.UID).
 				Str(slog.FieldDBUID, db.UID).
 				Str(slog.FieldKeeperUID, db.Spec.KeeperUID).
@@ -328,7 +333,7 @@ func (s *Sentinel) updateKeepersStatus(
 			s.SetDBError(db.UID)
 			continue
 		}
-		log.Debug().
+		s.log.Debug().
 			Str(slog.FieldDBUID, db.UID).
 			Str(slog.FieldKeeperUID, db.Spec.KeeperUID).
 			Msg("received db state")
@@ -449,7 +454,7 @@ func (s *Sentinel) setDBSpecFromClusterSpec(cd *cluster.ClusterData) {
 		db.Spec.AdditionalWalSenders = *clusterSpec.AdditionalWalSenders
 		dt, err := s.dbType(cd, db.UID)
 		if err != nil {
-			log.Warn().
+			s.log.Warn().
 				Err(err).
 				Str(slog.FieldDBUID, db.UID).
 				Msg("skipping database spec update because database type cannot be determined")
@@ -471,7 +476,7 @@ func (s *Sentinel) isDifferentTimelineBranch(
 	db *cluster.DB,
 ) bool {
 	if followedDB.Status.TimelineID < db.Status.TimelineID {
-		log.Info().
+		s.log.Info().
 			Uint64("followed_timeline", followedDB.Status.TimelineID).
 			Uint64("db_timeline", db.Status.TimelineID).
 			Msg("followed instance timeline < than our timeline")
@@ -497,7 +502,7 @@ func (s *Sentinel) isDifferentTimelineBranch(
 		if ftlh.SwitchPoint == tlh.SwitchPoint {
 			return false
 		}
-		log.Info().
+		s.log.Info().
 			Uint64("followed_timeline", followedDB.Status.TimelineID).
 			Uint64("followed_xlog_pos", ftlh.SwitchPoint).
 			Uint64("db_timeline", db.Status.TimelineID).
@@ -515,7 +520,7 @@ func (s *Sentinel) isDifferentTimelineBranch(
 	)
 	if ftlh != nil {
 		if ftlh.SwitchPoint < db.Status.XLogPos {
-			log.Info().
+			s.log.Info().
 				Uint64("followed_timeline", followedDB.Status.TimelineID).
 				Uint64("followed_xlog_pos", ftlh.SwitchPoint).
 				Uint64("db_timeline", db.Status.TimelineID).
@@ -537,19 +542,18 @@ func (s *Sentinel) isLagBelowMax(
 	if curMasterDB.Status.XLogPos > db.Status.XLogPos {
 		lag = curMasterDB.Status.XLogPos - db.Status.XLogPos
 	}
-	log.Debug().
-		Msgf(
-			"curMasterDB.Status.XLogPos: %d, db.Status.XLogPos: %d, lag: %d",
-			curMasterDB.Status.XLogPos,
-			db.Status.XLogPos,
-			lag,
-		)
+	s.log.Debug().
+		Uint64("master_xlog_pos", curMasterDB.Status.XLogPos).
+		Uint64("db_xlog_pos", db.Status.XLogPos).
+		Uint64("lag", lag).
+		Msg("standby lag calculated")
 	if lag > uint64(*cd.Cluster.DefSpec().MaxStandbyLag) {
-		log.Info().
+		s.log.Info().
 			Str(slog.FieldDBUID, db.UID).
 			Uint64("db_xlog_pos", db.Status.XLogPos).
 			Uint64("master_xlog_pos", curMasterDB.Status.XLogPos).
-			Msg("ignoring keeper since its behind that maximum xlog position")
+			Uint64("max_standby_lag", uint64(*cd.Cluster.DefSpec().MaxStandbyLag)).
+			Msg("ignoring keeper because standby lag exceeds maximum")
 		return false
 	}
 	return true
@@ -647,7 +651,7 @@ func (s *Sentinel) dbValidity(
 	if db.Status.SystemID != "" {
 		// if with a different postgres systemID it's invalid
 		if db.Status.SystemID != masterDB.Status.SystemID {
-			log.Info().
+			s.log.Info().
 				Str(slog.FieldDBUID, db.UID).
 				Str(slog.FieldKeeperUID, db.Spec.KeeperUID).
 				Str("db_system_id", db.Status.SystemID).
@@ -726,11 +730,11 @@ func (s *Sentinel) dbCanSync(
 	older, err := pg.WalFileNameNoTimeLine(masterDB.Status.OlderWalFile)
 	if err != nil {
 		// warn on wrong file name (shouldn't happen...)
-		log.Warn().
+		s.log.Warn().
 			Str("filename", masterDB.Status.OlderWalFile).
 			Msg("wrong wal file name")
 	}
-	log.Debug().
+	s.log.Debug().
 		Str(slog.FieldDBUID, db.UID).
 		Str(slog.FieldKeeperUID, db.Spec.KeeperUID).
 		Str("required_wal", required).
@@ -744,7 +748,7 @@ func (s *Sentinel) dbCanSync(
 		return true, nil
 	}
 
-	log.Info().
+	s.log.Info().
 		Str(slog.FieldDBUID, db.UID).
 		Str(slog.FieldKeeperUID, db.Spec.KeeperUID).
 		Str("required_wal", required).
@@ -817,7 +821,7 @@ func (s *Sentinel) validDBsByStatus(
 	for _, db := range cd.DBs {
 		valid, err := s.dbValidity(cd, db.UID)
 		if err != nil {
-			log.Debug().
+			s.log.Debug().
 				Err(err).
 				Str(slog.FieldDBUID, db.UID).
 				Str("role", logRole).
@@ -826,7 +830,7 @@ func (s *Sentinel) validDBsByStatus(
 		}
 		dt, err := s.dbType(cd, db.UID)
 		if err != nil {
-			log.Debug().
+			s.log.Debug().
 				Err(err).
 				Str(slog.FieldDBUID, db.UID).
 				Str("role", logRole).
@@ -838,7 +842,7 @@ func (s *Sentinel) validDBsByStatus(
 		}
 		status, err := s.dbStatus(cd, db.UID)
 		if err != nil {
-			log.Debug().
+			s.log.Debug().
 				Err(err).
 				Str(slog.FieldDBUID, db.UID).
 				Str("role", logRole).
@@ -877,7 +881,7 @@ func (s *Sentinel) findBestStandbys(
 	bestDBs := []*cluster.DB{}
 	for _, db := range goodStandbys {
 		if db.Status.TimelineID != masterDB.Status.TimelineID {
-			log.Debug().
+			s.log.Debug().
 				Str(slog.FieldDBUID, db.UID).
 				Uint64("db_timeline", db.Status.TimelineID).
 				Uint64("master_timeline", masterDB.Status.TimelineID).
@@ -889,7 +893,7 @@ func (s *Sentinel) findBestStandbys(
 		// skipped
 		if !s.syncRepl(cd.Cluster.DefSpec()) {
 			if !s.isLagBelowMax(cd, masterDB, db) {
-				log.Debug().
+				s.log.Debug().
 					Str(slog.FieldDBUID, db.UID).
 					Uint64("db_xlog_pos", db.Status.XLogPos).
 					Uint64("master_xlog_pos", masterDB.Status.XLogPos).
@@ -916,7 +920,7 @@ func (s *Sentinel) findBestNewMasters(
 	for _, db := range s.findBestStandbys(cd, masterDB) {
 		if k, ok := cd.Keepers[db.Spec.KeeperUID]; ok &&
 			(k.Status.CanBeMaster != nil && !*k.Status.CanBeMaster) {
-			log.Info().
+			s.log.Info().
 				Str(slog.FieldDBUID, db.UID).
 				Str(slog.FieldKeeperUID, db.Spec.KeeperUID).
 				Msg("ignoring keeper since it cannot be master (--can-be-master=false)")
@@ -928,12 +932,12 @@ func (s *Sentinel) findBestNewMasters(
 
 	// Add the previous masters to the best standbys (if valid and in good state)
 	validMastersByStatus, _, _ := s.validMastersByStatus(cd)
-	log.Debug().
+	s.log.Debug().
 		Interface("valid_masters", cluster.LogSummaryDBMap(validMastersByStatus)).
 		Msg("master databases currently considered valid by status")
 	for _, db := range validMastersByStatus {
 		if db.UID == masterDB.UID {
-			log.Debug().
+			s.log.Debug().
 				Str(slog.FieldDBUID, db.UID).
 				Str(slog.FieldKeeperUID, db.Spec.KeeperUID).
 				Msg("ignoring db since it's the current master")
@@ -941,7 +945,7 @@ func (s *Sentinel) findBestNewMasters(
 		}
 
 		if db.Status.TimelineID != masterDB.Status.TimelineID {
-			log.Debug().
+			s.log.Debug().
 				Str(slog.FieldDBUID, db.UID).
 				Uint64("db_timeline", db.Status.TimelineID).
 				Uint64("master_timeline", masterDB.Status.TimelineID).
@@ -954,7 +958,7 @@ func (s *Sentinel) findBestNewMasters(
 		// skipped
 		if !s.syncRepl(cd.Cluster.DefSpec()) {
 			if !s.isLagBelowMax(cd, masterDB, db) {
-				log.Debug().
+				s.log.Debug().
 					Str(slog.FieldDBUID, db.UID).
 					Uint64("db_xlog_pos", db.Status.XLogPos).
 					Uint64("master_xlog_pos", masterDB.Status.XLogPos).
@@ -968,7 +972,7 @@ func (s *Sentinel) findBestNewMasters(
 
 	// Sort by XLogPos
 	sort.Sort(dbSlice(bestNewMasters))
-	log.Debug().
+	s.log.Debug().
 		Interface("candidate_masters", cluster.LogSummaryDBList(bestNewMasters)).
 		Msg("candidate databases for new master, ordered by XLog position")
 	return bestNewMasters
@@ -984,7 +988,7 @@ func (s *Sentinel) applyInitialDBConvergence(
 	switch state {
 	case Converged:
 		if db.Status.Healthy {
-			log.Info().
+			s.log.Info().
 				Str(slog.FieldDBUID, db.UID).
 				Str(slog.FieldKeeperUID, db.Spec.KeeperUID).
 				Msg("db initialized")
@@ -1001,12 +1005,12 @@ func (s *Sentinel) applyInitialDBConvergence(
 			newcd.Cluster.Status.Phase = cluster.ClusterPhaseNormal
 		}
 	case Converging:
-		log.Info().
+		s.log.Info().
 			Str(slog.FieldDBUID, db.UID).
 			Str(slog.FieldKeeperUID, db.Spec.KeeperUID).
 			Msg(waitMsg)
 	case ConvergenceFailed:
-		log.Info().
+		s.log.Info().
 			Str(slog.FieldDBUID, db.UID).
 			Str(slog.FieldKeeperUID, db.Spec.KeeperUID).
 			Msg("db failed to initialize")
@@ -1032,7 +1036,7 @@ func (s *Sentinel) updateCluster(
 		case cluster.ClusterInitModeNew:
 			// Is there already a keeper choosed to be the new master?
 			if cd.Cluster.Status.Master == "" {
-				log.Info().Msg("trying to find initial master")
+				s.log.Info().Msg("trying to find initial master")
 				k, err := s.findInitialKeeper(newcd)
 				if err != nil {
 					return nil, fmt.Errorf(
@@ -1040,7 +1044,7 @@ func (s *Sentinel) updateCluster(
 						err,
 					)
 				}
-				log.Info().
+				s.log.Info().
 					Str(slog.FieldKeeperUID, k.UID).
 					Msg("initializing cluster")
 				db := &cluster.DB{
@@ -1057,7 +1061,7 @@ func (s *Sentinel) updateCluster(
 				}
 				newcd.DBs[db.UID] = db
 				newcd.Cluster.Status.Master = db.UID
-				log.Debug().
+				s.log.Debug().
 					Fields(cluster.LogSummaryClusterData(newcd)).
 					Msg("cluster data after creating initial master DB (new cluster init)")
 			} else {
@@ -1077,7 +1081,7 @@ func (s *Sentinel) updateCluster(
 		case cluster.ClusterInitModeExisting:
 			if cd.Cluster.Status.Master == "" {
 				wantedKeeper := clusterSpec.ExistingConfig.KeeperUID
-				log.Info().
+				s.log.Info().
 					Str(slog.FieldKeeperUID, wantedKeeper).
 					Msg("trying to use keeper as initial master")
 
@@ -1089,7 +1093,7 @@ func (s *Sentinel) updateCluster(
 					)
 				}
 
-				log.Info().
+				s.log.Info().
 					Str(slog.FieldKeeperUID, k.UID).
 					Msg("initializing cluster using selected keeper as master db owner")
 
@@ -1106,7 +1110,7 @@ func (s *Sentinel) updateCluster(
 				}
 				newcd.DBs[db.UID] = db
 				newcd.Cluster.Status.Master = db.UID
-				log.Debug().
+				s.log.Debug().
 					Fields(cluster.LogSummaryClusterData(newcd)).
 					Msg("cluster data after creating initial master DB (existing data init)")
 			} else {
@@ -1116,7 +1120,7 @@ func (s *Sentinel) updateCluster(
 				}
 				// Check that the choosed db for being the master has correctly initialized
 				if db.Status.Healthy && s.dbConvergenceState(db, clusterSpec.ConvergenceTimeout.Duration) == Converged {
-					log.Info().
+					s.log.Info().
 						Str(slog.FieldDBUID, db.UID).
 						Str(slog.FieldKeeperUID, db.Spec.KeeperUID).
 						Msg("db initialized")
@@ -1135,7 +1139,7 @@ func (s *Sentinel) updateCluster(
 		case cluster.ClusterInitModePITR:
 			// Is there already a keeper choosed to be the new master?
 			if cd.Cluster.Status.Master == "" {
-				log.Info().Msg("trying to find initial master")
+				s.log.Info().Msg("trying to find initial master")
 				k, err := s.findInitialKeeper(cd)
 				if err != nil {
 					return nil, fmt.Errorf(
@@ -1143,7 +1147,7 @@ func (s *Sentinel) updateCluster(
 						err,
 					)
 				}
-				log.Info().
+				s.log.Info().
 					Str(slog.FieldKeeperUID, k.UID).
 					Msg("initializing cluster using selected keeper as master db owner")
 				role := common.RoleMaster
@@ -1171,7 +1175,7 @@ func (s *Sentinel) updateCluster(
 				}
 				newcd.DBs[db.UID] = db
 				newcd.Cluster.Status.Master = db.UID
-				log.Debug().
+				s.log.Debug().
 					Fields(cluster.LogSummaryClusterData(newcd)).
 					Msg("cluster data after creating initial master DB (PITR init)")
 			} else {
@@ -1208,7 +1212,7 @@ func (s *Sentinel) updateCluster(
 			}
 			if time.Now().
 				After(k.Status.LastHealthyTime.Add(cd.Cluster.DefSpec().DeadKeeperRemovalInterval.Duration)) {
-				log.Info().
+				s.log.Info().
 					Str(slog.FieldKeeperUID, k.UID).
 					Msg("removing old dead keeper")
 				keepersToRemove = append(keepersToRemove, k)
@@ -1230,12 +1234,12 @@ func (s *Sentinel) updateCluster(
 				curMasterDBUID,
 			)
 		}
-		log.Debug().
+		s.log.Debug().
 			Fields(cluster.LogSummaryDBBrief(curMasterDB)).
 			Msg("current master database record from cluster data")
 
 		if !curMasterDB.Status.Healthy {
-			log.Info().
+			s.log.Info().
 				Str(slog.FieldDBUID, curMasterDB.UID).
 				Str(slog.FieldKeeperUID, curMasterDB.Spec.KeeperUID).
 				Msg("master db is failed")
@@ -1247,7 +1251,7 @@ func (s *Sentinel) updateCluster(
 			curMasterDB,
 			clusterSpec.ConvergenceTimeout.Duration,
 		) == ConvergenceFailed {
-			log.Info().
+			s.log.Info().
 				Str(slog.FieldDBUID, curMasterDB.UID).
 				Str(slog.FieldKeeperUID, curMasterDB.Spec.KeeperUID).
 				Msg("db not converged")
@@ -1255,18 +1259,18 @@ func (s *Sentinel) updateCluster(
 		}
 
 		if !masterOK {
-			log.Info().
+			s.log.Info().
 				Msg("trying to find a new master to replace failed master")
 			bestNewMasters := s.findBestNewMasters(newcd, curMasterDB)
 			if len(bestNewMasters) == 0 {
-				log.Error().Msg("no eligible masters")
+				s.log.Error().Msg("no eligible masters")
 			} else {
 				// if synchronous replication is enabled, only choose new master in the synchronous replication standbys.
 				var bestNewMasterDB *cluster.DB
 				if curMasterDB.Spec.SynchronousReplication {
 					commonSyncStandbys := util.CommonElements(curMasterDB.Status.SynchronousStandbys, curMasterDB.Spec.SynchronousStandbys)
 					if len(commonSyncStandbys) == 0 {
-						log.Warn().
+						s.log.Warn().
 							Strs(
 								"reported_sync_standbys",
 								curMasterDB.Status.SynchronousStandbys,
@@ -1288,7 +1292,7 @@ func (s *Sentinel) updateCluster(
 							}
 						}
 						if bestNewMasterDB == nil {
-							log.Warn().
+							s.log.Warn().
 								Strs(
 									"reported_sync_standbys",
 									curMasterDB.Status.SynchronousStandbys,
@@ -1312,13 +1316,13 @@ func (s *Sentinel) updateCluster(
 					bestNewMasterDB = bestNewMasters[0]
 				}
 				if bestNewMasterDB != nil {
-					log.Info().
+					s.log.Info().
 						Str(slog.FieldDBUID, bestNewMasterDB.UID).
 						Str(slog.FieldKeeperUID, bestNewMasterDB.Spec.KeeperUID).
 						Msg("electing db as the new master")
 					wantedMasterDBUID = bestNewMasterDB.UID
 				} else {
-					log.Error().Msg("no eligible masters")
+					s.log.Error().Msg("no eligible masters")
 				}
 			}
 		}
@@ -1406,7 +1410,7 @@ func (s *Sentinel) updateCluster(
 					}
 				}
 				if len(unconvergedProxiesUIDs) > 0 {
-					log.Info().
+					s.log.Info().
 						Strs("unconverged_proxy_uids", unconvergedProxiesUIDs).
 						Msg("waiting for proxies to be converged to the current generation")
 				} else {
@@ -1449,7 +1453,7 @@ func (s *Sentinel) updateCluster(
 					}
 					dt, err := s.dbType(newcd, db.UID)
 					if err != nil {
-						log.Warn().
+						s.log.Warn().
 							Err(err).
 							Str(slog.FieldDBUID, db.UID).
 							Msg("skipping old master cleanup because database type cannot be determined")
@@ -1458,7 +1462,7 @@ func (s *Sentinel) updateCluster(
 					if dt != dbTypeMaster {
 						continue
 					}
-					log.Info().
+					s.log.Info().
 						Str(slog.FieldDBUID, db.UID).
 						Str(slog.FieldKeeperUID, db.Spec.KeeperUID).
 						Msg("removing old master db")
@@ -1476,7 +1480,7 @@ func (s *Sentinel) updateCluster(
 					}
 					v, err := s.dbValidity(newcd, db.UID)
 					if err != nil {
-						log.Warn().
+						s.log.Warn().
 							Err(err).
 							Str(slog.FieldDBUID, db.UID).
 							Msg("skipping invalid database cleanup because validity cannot be determined")
@@ -1485,7 +1489,7 @@ func (s *Sentinel) updateCluster(
 					if v != dbValidityInvalid {
 						continue
 					}
-					log.Info().
+					s.log.Info().
 						Str(slog.FieldDBUID, db.UID).
 						Str(slog.FieldKeeperUID, db.Spec.KeeperUID).
 						Msg("removing invalid db")
@@ -1500,7 +1504,7 @@ func (s *Sentinel) updateCluster(
 				for _, db := range newcd.DBs {
 					canSync, err := s.dbCanSync(cd, db.UID)
 					if err != nil {
-						log.Warn().
+						s.log.Warn().
 							Err(err).
 							Str(slog.FieldDBUID, db.UID).
 							Msg("skipping database sync check")
@@ -1509,7 +1513,7 @@ func (s *Sentinel) updateCluster(
 					if canSync {
 						continue
 					}
-					log.Info().
+					s.log.Info().
 						Str(slog.FieldDBUID, db.UID).
 						Str(slog.FieldKeeperUID, db.Spec.KeeperUID).
 						Msg(
@@ -1528,7 +1532,7 @@ func (s *Sentinel) updateCluster(
 				goodStandbysCount := len(goodStandbys)
 				failedStandbysCount := len(failedStandbys)
 				convergingStandbysCount := len(convergingStandbys)
-				log.Debug().
+				s.log.Debug().
 					Int("good_standbys", goodStandbysCount).
 					Int("failed_standbys", failedStandbysCount).
 					Int("converging_standbys", convergingStandbysCount).
@@ -1599,7 +1603,7 @@ func (s *Sentinel) updateCluster(
 						update := false
 						for _, dbUID := range notInSyncSyncStandbys {
 							if _, ok := newcd.DBs[dbUID]; !ok {
-								log.Info().
+								s.log.Info().
 									Str(slog.FieldDBUID, dbUID).
 									Strs("in_sync_standbys", masterDB.Status.SynchronousStandbys).
 									Strs("spec_sync_standbys", masterDB.Spec.SynchronousStandbys).
@@ -1608,7 +1612,7 @@ func (s *Sentinel) updateCluster(
 								continue
 							}
 							if _, ok := goodStandbys[dbUID]; !ok {
-								log.Info().
+								s.log.Info().
 									Str(slog.FieldDBUID, dbUID).
 									Strs("in_sync_standbys", masterDB.Status.SynchronousStandbys).
 									Strs("spec_sync_standbys", masterDB.Spec.SynchronousStandbys).
@@ -1619,7 +1623,7 @@ func (s *Sentinel) updateCluster(
 						}
 						if update {
 							// Use the current known in sync syncStandbys as Spec.SynchronousStandbys
-							log.Info().
+							s.log.Info().
 								Strs(
 									"in_sync_standbys",
 									masterDB.Status.SynchronousStandbys,
@@ -1651,7 +1655,7 @@ func (s *Sentinel) updateCluster(
 						masterDB.Status.SynchronousStandbys,
 						masterDB.Spec.SynchronousStandbys,
 					) {
-						log.Info().
+						s.log.Info().
 							Strs("in_sync_standbys", curMasterDB.Status.SynchronousStandbys).
 							Strs("spec_sync_standbys", curMasterDB.Spec.SynchronousStandbys).
 							Msg("waiting for new defined synchronous standbys to be in sync")
@@ -1672,7 +1676,7 @@ func (s *Sentinel) updateCluster(
 						toRemove := map[string]struct{}{}
 						for dbUID := range synchronousStandbys {
 							if _, ok := newcd.DBs[dbUID]; !ok {
-								log.Info().
+								s.log.Info().
 									Str(slog.FieldDBUID, masterDB.UID).
 									Str("standby_db_uid", dbUID).
 									Msg(
@@ -1690,7 +1694,7 @@ func (s *Sentinel) updateCluster(
 						toRemove = map[string]struct{}{}
 						for dbUID := range synchronousStandbys {
 							if _, ok := goodStandbys[dbUID]; !ok {
-								log.Info().
+								s.log.Info().
 									Str(slog.FieldDBUID, masterDB.UID).
 									Str("standby_db_uid", dbUID).
 									Msg("removing failed synchronous standby")
@@ -1710,7 +1714,7 @@ func (s *Sentinel) updateCluster(
 								if removedCount >= rc {
 									break
 								}
-								log.Info().
+								s.log.Info().
 									Str(slog.FieldDBUID, masterDB.UID).
 									Str("standby_db_uid", dbUID).
 									Msg("removing synchronous standby in excess")
@@ -1738,7 +1742,7 @@ func (s *Sentinel) updateCluster(
 							// ignore standbys that cannot be synchronous standbys
 							if db, ok := newcd.DBs[bestStandby.UID]; ok {
 								if keeper, ok := newcd.Keepers[db.Spec.KeeperUID]; ok && (keeper.Status.CanBeSynchronousReplica != nil && !*keeper.Status.CanBeSynchronousReplica) {
-									log.Info().
+									s.log.Info().
 										Str(slog.FieldDBUID, db.UID).
 										Str(slog.FieldKeeperUID, keeper.UID).
 										Msg(
@@ -1749,7 +1753,7 @@ func (s *Sentinel) updateCluster(
 								}
 							}
 
-							log.Info().
+							s.log.Info().
 								Str(slog.FieldDBUID, masterDB.UID).
 								Str("standby_db_uid", bestStandby.UID).
 								Str(slog.FieldKeeperUID, bestStandby.Spec.KeeperUID).
@@ -1776,7 +1780,7 @@ func (s *Sentinel) updateCluster(
 								continue
 							}
 							if _, ok := prevSynchronousStandbys[db.UID]; ok {
-								log.Info().
+								s.log.Info().
 									Str(slog.FieldDBUID, masterDB.UID).
 									Str("standby_db_uid", db.UID).
 									Str(slog.FieldKeeperUID, db.Spec.KeeperUID).
@@ -1807,7 +1811,7 @@ func (s *Sentinel) updateCluster(
 								}
 							}
 							if !allInPrev {
-								log.Info().
+								s.log.Info().
 									Str(slog.FieldDBUID, masterDB.UID).
 									Strs(
 										"prev_sync_standby_uids",
@@ -1821,7 +1825,7 @@ func (s *Sentinel) updateCluster(
 								// use only existing dbs
 								for _, db := range newcd.DBs {
 									if _, ok := prevSynchronousStandbys[db.UID]; ok {
-										log.Info().
+										s.log.Info().
 											Str(slog.FieldDBUID, masterDB.UID).
 											Str("standby_db_uid", db.UID).
 											Str(
@@ -1836,7 +1840,7 @@ func (s *Sentinel) updateCluster(
 						}
 
 						if !reflect.DeepEqual(synchronousStandbys, prevSynchronousStandbys) {
-							log.Info().
+							s.log.Info().
 								Str(slog.FieldDBUID, masterDB.UID).
 								Strs(
 									"prev_sync_standby_uids",
@@ -1848,7 +1852,7 @@ func (s *Sentinel) updateCluster(
 								).
 								Msg("synchronousStandbys changed")
 						} else {
-							log.Debug().
+							s.log.Debug().
 								Str(slog.FieldDBUID, masterDB.UID).
 								Strs(
 									"prev_sync_standby_uids",
@@ -1863,7 +1867,7 @@ func (s *Sentinel) updateCluster(
 
 						// If there're not enough real synchronous standbys add a fake synchronous standby because we have to be strict and make the master block transactions until MinSynchronousStandbys real standbys are available
 						if len(synchronousStandbys)+len(externalSynchronousStandbys) < minSynchronousStandbys {
-							log.Info().
+							s.log.Info().
 								Str(slog.FieldDBUID, masterDB.UID).
 								Int("min_sync_standbys_required", minSynchronousStandbys).
 								Msg(
@@ -1920,7 +1924,7 @@ func (s *Sentinel) updateCluster(
 					for _, db := range newcd.DBs {
 						dt, err := s.dbType(newcd, db.UID)
 						if err != nil {
-							log.Warn().
+							s.log.Warn().
 								Err(err).
 								Str(slog.FieldDBUID, db.UID).
 								Msg("skipping standby cleanup because database type cannot be determined")
@@ -1937,7 +1941,7 @@ func (s *Sentinel) updateCluster(
 							continue
 						}
 						if _, ok := goodStandbys[db.UID]; !ok {
-							log.Info().
+							s.log.Info().
 								Str(slog.FieldDBUID, db.UID).
 								Msg("removing non good standby")
 							toRemove = append(toRemove, db)
@@ -1957,7 +1961,7 @@ func (s *Sentinel) updateCluster(
 						) {
 							continue
 						}
-						log.Info().
+						s.log.Info().
 							Str(slog.FieldDBUID, db.UID).
 							Msg("removing good standby in excess")
 						toRemove = append(toRemove, db)
@@ -1988,7 +1992,7 @@ func (s *Sentinel) updateCluster(
 							},
 						}
 						newcd.DBs[db.UID] = db
-						log.Info().
+						s.log.Info().
 							Str(slog.FieldDBUID, db.UID).
 							Str(slog.FieldKeeperUID, db.Spec.KeeperUID).
 							Msg("added new standby db")
@@ -1999,7 +2003,7 @@ func (s *Sentinel) updateCluster(
 				for _, db := range newcd.DBs {
 					dt, err := s.dbType(newcd, db.UID)
 					if err != nil {
-						log.Warn().
+						s.log.Warn().
 							Err(err).
 							Str(slog.FieldDBUID, db.UID).
 							Msg("skipping standby reconfiguration because database type cannot be determined")
@@ -2065,7 +2069,7 @@ func (s *Sentinel) updateCluster(
 			continue
 		}
 		if !reflect.DeepEqual(db.Spec, prevDB.Spec) {
-			log.Debug().
+			s.log.Debug().
 				Str("db_uid", dbUID).
 				Int64("generation_before_bump", db.Generation).
 				Int64("generation_after_bump", db.Generation+1).
@@ -2202,7 +2206,7 @@ func (s *Sentinel) dbConvergenceState(
 				Timer:      timer.Now(),
 			}
 			s.dbConvergenceInfos[db.UID] = d
-			log.Debug().
+			s.log.Debug().
 				Str(slog.FieldDBUID, db.UID).
 				Msg("database convergence tracking initialized")
 		}
@@ -2293,8 +2297,12 @@ type Sentinel struct {
 	e store.Store
 	// Leader election backend.
 	election store.Election
+	// Cluster name served by this sentinel runner.
+	clusterName string
 	// Parsed sentinel command configuration.
 	cfg *config
+	// Per-cluster sentinel logger.
+	log zerolog.Logger
 	// Completion channel for sentinel run loop.
 	end chan bool
 
@@ -2358,11 +2366,16 @@ func sortedStringSetKeys(m map[string]struct{}) []string {
 func NewSentinel(
 	uid string,
 	cfg *config,
+	clusterName string,
+	initialClusterSpecFile string,
 	end chan bool,
 ) (*Sentinel, error) {
+	logger := slog.WithComponent("sentinel").With().
+		Str(slog.FieldClusterName, clusterName).
+		Logger()
 	var initialClusterSpec *cluster.ClusterSpec
-	if cfg.InitialClusterSpecFile != "" {
-		configData, err := os.ReadFile(cfg.InitialClusterSpecFile)
+	if initialClusterSpecFile != "" {
+		configData, err := os.ReadFile(initialClusterSpecFile)
 		if err != nil {
 			return nil, fmt.Errorf(
 				"cannot read provided initial cluster config file: %v",
@@ -2376,7 +2389,7 @@ func NewSentinel(
 				err,
 			)
 		}
-		log.Debug().
+		logger.Debug().
 			Fields(cluster.LogSummaryClusterSpec(initialClusterSpec)).
 			Msg("initial cluster specification loaded from file")
 		if err := initialClusterSpec.Validate(); err != nil {
@@ -2384,12 +2397,12 @@ func NewSentinel(
 		}
 	}
 
-	e, err := cmd.NewStore(&cfg.CommonConfig, true)
+	e, err := cmd.NewStoreForCluster(&cfg.CommonConfig, clusterName, true)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create store: %v", err)
 	}
 
-	election, err := cmd.NewElection(&cfg.CommonConfig, uid)
+	election, err := cmd.NewElectionForCluster(&cfg.CommonConfig, clusterName, uid)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create election: %v", err)
 	}
@@ -2399,6 +2412,8 @@ func NewSentinel(
 		cfg:                cfg,
 		e:                  e,
 		election:           election,
+		clusterName:        clusterName,
+		log:                logger,
 		leader:             false,
 		initialClusterSpec: initialClusterSpec,
 		end:                end,
@@ -2424,8 +2439,10 @@ func (s *Sentinel) Start(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Info().Msg("stopping stolon sentinel")
-			s.end <- true
+			s.log.Info().Msg("stopping stolon sentinel")
+			if s.end != nil {
+				s.end <- true
+			}
 			return
 		case <-timerCh:
 			go func() {
@@ -2451,18 +2468,18 @@ func (s *Sentinel) clusterSentinelCheck(pctx context.Context) {
 
 	cd, prevCDPair, err := e.GetClusterData(pctx)
 	if err != nil {
-		log.Error().Err(err).Msg("error retrieving cluster data")
+		s.log.Error().Err(err).Msg("error retrieving cluster data")
 		return
 	}
 	if cd != nil {
 		if cd.FormatVersion != cluster.CurrentCDFormatVersion {
-			log.Error().
+			s.log.Error().
 				Uint64("format_version", cd.FormatVersion).
-				Msg("unsupported clusterdata format version")
+				Msg("unsupported cluster data format version")
 			return
 		}
 		if err = cd.Cluster.Spec.Validate(); err != nil {
-			log.Error().Err(err).Msg("clusterdata validation failed")
+			s.log.Error().Err(err).Msg("cluster data validation failed")
 			return
 		}
 		if cd.Cluster != nil {
@@ -2471,53 +2488,53 @@ func (s *Sentinel) clusterSentinelCheck(pctx context.Context) {
 		}
 	}
 
-	log.Debug().
+	s.log.Debug().
 		Fields(cluster.LogSummaryClusterData(cd)).
 		Msg("cluster data at start of sentinel reconciliation")
 
 	if cd == nil {
 		// Cluster first initialization
 		if s.initialClusterSpec == nil {
-			log.Info().
+			s.log.Info().
 				Msg("no cluster data available, waiting for it to appear")
 			return
 		}
 		c := cluster.NewCluster(s.UIDFn(), s.initialClusterSpec)
-		log.Info().Msg("writing initial cluster data")
+		s.log.Info().Msg("writing initial cluster data")
 		newcd := cluster.NewClusterData(c)
-		log.Debug().
+		s.log.Debug().
 			Fields(cluster.LogSummaryClusterData(newcd)).
 			Msg("cluster data to persist on first cluster initialization")
 		if _, err = e.AtomicPutClusterData(pctx, newcd, nil); err != nil {
-			log.Error().Err(err).Msg("error saving cluster data")
+			s.log.Error().Err(err).Msg("error saving cluster data")
 		}
 		return
 	}
 
 	if err = s.setSentinelInfo(pctx, 2*s.sleepInterval); err != nil {
-		log.Error().Err(err).Msg("cannot update sentinel info")
+		s.log.Error().Err(err).Msg("cannot update sentinel info")
 		return
 	}
 
 	keepersInfo, err := s.e.GetKeepersInfo(pctx)
 	if err != nil {
-		log.Error().Err(err).Msg("cannot get keepers info")
+		s.log.Error().Err(err).Msg("cannot get keepers info")
 		return
 	}
-	log.Debug().
+	s.log.Debug().
 		Interface("keepers_info", cluster.LogSummaryKeepersInfo(keepersInfo)).
 		Msg("keeper info map from store")
 
 	proxiesInfo, err := s.e.GetProxiesInfo(pctx)
 	if err != nil {
-		log.Error().Err(err).Msg("failed to get proxies info")
+		s.log.Error().Err(err).Msg("failed to get proxies info")
 		return
 	}
 
 	isLeader, leadershipCount := s.leaderInfo()
 	if !isLeader {
 		if slog.IsTrace() {
-			log.Trace().
+			s.log.Trace().
 				Uint("leadership_epoch", leadershipCount).
 				Msg("skipping cluster reconciliation: not sentinel leader")
 		}
@@ -2551,32 +2568,32 @@ func (s *Sentinel) clusterSentinelCheck(pctx context.Context) {
 		firstRun,
 	)
 	if err != nil {
-		log.Error().Err(err).Msg("failed to update keeper status")
+		s.log.Error().Err(err).Msg("failed to update keeper status")
 		return
 	}
-	log.Debug().
+	s.log.Debug().
 		Fields(cluster.LogSummaryClusterData(newcd)).
 		Msg("cluster data after merging keeper health and reported state")
 
 	activeProxiesInfos, err := s.activeProxiesInfos(proxiesInfo)
 	if err != nil {
-		log.Error().Err(err).Msg("failed to compute active proxy info")
+		s.log.Error().Err(err).Msg("failed to compute active proxy info")
 		return
 	}
 
 	newcd, err = s.updateCluster(newcd, activeProxiesInfos)
 	if err != nil {
-		log.Error().Err(err).Msg("failed to update cluster data")
+		s.log.Error().Err(err).Msg("failed to update cluster data")
 		return
 	}
-	log.Debug().
+	s.log.Debug().
 		Fields(cluster.LogSummaryClusterData(newcd)).
 		Msg("cluster data after sentinel failover and convergence logic")
 
 	if newcd != nil {
 		s.updateChangeTimes(cd, newcd)
 		if _, err := e.AtomicPutClusterData(pctx, newcd, prevCDPair); err != nil {
-			log.Error().Err(err).Msg("error saving clusterdata")
+			s.log.Error().Err(err).Msg("error saving cluster data")
 		}
 	}
 
@@ -2591,7 +2608,7 @@ func (s *Sentinel) clusterSentinelCheck(pctx context.Context) {
 	// We only update this metric when we've completed all actions in this method
 	// successfully. That enables us to alert on when Sentinels are failing to
 	// correctly sync.
-	lastCheckSuccessSeconds.SetToCurrentTime()
+	lastCheckSuccessSeconds.WithLabelValues(s.clusterName).SetToCurrentTime()
 }
 
 func sigHandler(sigs chan os.Signal, cancel context.CancelFunc) {
@@ -2600,6 +2617,113 @@ func sigHandler(sigs chan os.Signal, cancel context.CancelFunc) {
 		Str("signal", s.String()).
 		Msg("received shutdown signal")
 	cancel()
+}
+
+func clusterSpecFiles(defaultSpec string, overrides []string, clusterNames []string) (map[string]string, error) {
+	clusterSet := map[string]struct{}{}
+	for _, name := range clusterNames {
+		clusterSet[name] = struct{}{}
+	}
+
+	specs := map[string]string{}
+	for _, name := range clusterNames {
+		if defaultSpec != "" {
+			specs[name] = defaultSpec
+		}
+	}
+
+	for _, override := range overrides {
+		name, path, ok := strings.Cut(override, "=")
+		name = strings.TrimSpace(name)
+		path = strings.TrimSpace(path)
+		if !ok || name == "" || path == "" {
+			return nil, fmt.Errorf("invalid cluster spec override %q, expected <cluster-name>=<path>", override)
+		}
+		if _, ok := clusterSet[name]; !ok {
+			return nil, fmt.Errorf("cluster spec override references unknown cluster %q", name)
+		}
+		if _, ok := specs[name]; ok && specs[name] != defaultSpec {
+			return nil, fmt.Errorf("duplicate cluster spec override for cluster %q", name)
+		}
+		specs[name] = path
+	}
+	return specs, nil
+}
+
+func runSentinelCluster(ctx context.Context, uid string, cfg *config, clusterName, initialSpecFile string) {
+	logger := slog.WithComponent("sentinel").With().
+		Str(slog.FieldClusterName, clusterName).
+		Logger()
+	backoff := time.Second
+	const maxBackoff = 30 * time.Second
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		s, err := NewSentinel(uid, cfg, clusterName, initialSpecFile, nil)
+		if err != nil {
+			logger.Error().
+				Err(err).
+				Dur("retry_after", backoff).
+				Msg("failed to create sentinel cluster runner")
+			if !waitForSentinelRetry(ctx, backoff) {
+				return
+			}
+			backoff = nextSentinelRetryBackoff(backoff, maxBackoff)
+			continue
+		}
+
+		cmd.SetMetricsForCluster(clusterName, "sentinel")
+		if err := runSentinelOnce(ctx, s); err != nil {
+			s.log.Error().
+				Err(err).
+				Dur("retry_after", backoff).
+				Msg("sentinel cluster runner stopped unexpectedly")
+			if !waitForSentinelRetry(ctx, backoff) {
+				return
+			}
+			backoff = nextSentinelRetryBackoff(backoff, maxBackoff)
+			continue
+		}
+		return
+	}
+}
+
+func waitForSentinelRetry(ctx context.Context, backoff time.Duration) bool {
+	timer := time.NewTimer(backoff)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
+}
+
+func nextSentinelRetryBackoff(current, maxBackoff time.Duration) time.Duration {
+	next := current * 2
+	if next > maxBackoff {
+		return maxBackoff
+	}
+	return next
+}
+
+func runSentinelOnce(ctx context.Context, s *Sentinel) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("panic in sentinel cluster runner: %v", r)
+		}
+	}()
+	s.Start(ctx)
+	if ctx.Err() != nil {
+		return nil
+	}
+	return errors.New("sentinel cluster runner returned without cancellation")
 }
 
 // Execute runs the stolon-sentinel command.
@@ -2632,8 +2756,9 @@ func sentinel(_ *flags.Parser) {
 		cmd.CloseLogging(closer, &log)
 	}
 
-	if err := cmd.CheckClusterName(&cfg.CommonConfig); err != nil {
-		log.Error().Err(err).Msg("invalid cluster name")
+	clusterNames, err := cmd.CheckClusterNames(&cfg.CommonConfig)
+	if err != nil {
+		log.Error().Err(err).Msg("invalid cluster names")
 		closeLog()
 		os.Exit(1)
 	}
@@ -2643,13 +2768,17 @@ func sentinel(_ *flags.Parser) {
 		os.Exit(1)
 	}
 
-	cmd.SetMetrics(&cfg.CommonConfig, "sentinel")
+	specFiles, err := clusterSpecFiles(cfg.InitialClusterSpecFile, cfg.ClusterSpecFiles, clusterNames)
+	if err != nil {
+		log.Error().Err(err).Msg("invalid cluster spec configuration")
+		closeLog()
+		os.Exit(1)
+	}
 
 	uid := common.UID()
 	log.Info().Str(slog.FieldSentinelUID, uid).Msg("sentinel UID assigned")
 
 	ctx, cancel := context.WithCancel(context.Background())
-	end := make(chan bool)
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	go sigHandler(sigs, cancel)
@@ -2671,15 +2800,14 @@ func sentinel(_ *flags.Parser) {
 		}()
 	}
 
-	s, err := NewSentinel(uid, &cfg, end)
-	if err != nil {
-		log.Fatal().Err(err).Msg("failed to create sentinel")
+	var wg sync.WaitGroup
+	for _, clusterName := range clusterNames {
+		wg.Go(func() {
+			runSentinelCluster(ctx, uid, &cfg, clusterName, specFiles[clusterName])
+		})
 	}
-	go s.Start(ctx)
 
-	// Ensure we collect Sentinel metrics prior to providing Prometheus with an update
-	mustRegisterSentinelCollector(s)
-
-	<-end
+	<-ctx.Done()
+	wg.Wait()
 	closeLog()
 }

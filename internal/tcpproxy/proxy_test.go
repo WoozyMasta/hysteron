@@ -89,6 +89,68 @@ func TestProxyDestinationChangeClosesActiveConnections(t *testing.T) {
 	waitProxy(t, proxyDone)
 }
 
+func TestProxyRoundRobinsDestinations(t *testing.T) {
+	firstBackend := startEchoServer(t, "one")
+	secondBackend := startEchoServer(t, "two")
+	proxy, proxyAddr, proxyDone := startProxy(t)
+	proxy.SetDestinations([]*net.TCPAddr{firstBackend, secondBackend})
+
+	firstConn := dialTCP(t, proxyAddr)
+	defer firstConn.Close()
+	if got := roundTrip(t, firstConn, "first"); got != "one:first" {
+		t.Fatalf("unexpected first backend response: %q", got)
+	}
+
+	secondConn := dialTCP(t, proxyAddr)
+	defer secondConn.Close()
+	if got := roundTrip(t, secondConn, "second"); got != "two:second" {
+		t.Fatalf("unexpected second backend response: %q", got)
+	}
+
+	thirdConn := dialTCP(t, proxyAddr)
+	defer thirdConn.Close()
+	if got := roundTrip(t, thirdConn, "third"); got != "one:third" {
+		t.Fatalf("unexpected third backend response: %q", got)
+	}
+
+	proxy.Stop()
+	waitProxy(t, proxyDone)
+}
+
+func TestProxyDestinationSetChangeKeepsRetainedConnections(t *testing.T) {
+	firstBackend := startEchoServer(t, "one")
+	secondBackend := startEchoServer(t, "two")
+	proxy, proxyAddr, proxyDone := startProxy(t)
+	proxy.SetDestinations([]*net.TCPAddr{firstBackend, secondBackend})
+
+	firstConn := dialTCP(t, proxyAddr)
+	defer firstConn.Close()
+	if got := roundTrip(t, firstConn, "before"); got != "one:before" {
+		t.Fatalf("unexpected first backend response: %q", got)
+	}
+
+	secondConn := dialTCP(t, proxyAddr)
+	defer secondConn.Close()
+	if got := roundTrip(t, secondConn, "before"); got != "two:before" {
+		t.Fatalf("unexpected second backend response: %q", got)
+	}
+
+	proxy.SetDestinations([]*net.TCPAddr{firstBackend})
+
+	if got := roundTrip(t, firstConn, "after"); got != "one:after" {
+		t.Fatalf("expected retained connection to stay open, got %q", got)
+	}
+
+	_ = secondConn.SetReadDeadline(time.Now().Add(time.Second))
+	_, err := bufio.NewReader(secondConn).ReadString('\n')
+	if err == nil {
+		t.Fatal("expected removed destination connection to close")
+	}
+
+	proxy.Stop()
+	waitProxy(t, proxyDone)
+}
+
 func TestProxyStopIsIdempotent(t *testing.T) {
 	proxy, proxyAddr, proxyDone := startProxy(t)
 	conn := dialTCP(t, proxyAddr)

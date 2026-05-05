@@ -190,6 +190,10 @@ func setupServers(t *testing.T, clusterName, dir string, numKeepers, numSentinel
 }
 
 func setupServersCustom(t *testing.T, clusterName, dir string, numKeepers, numSentinels uint8, initialClusterSpec *cluster.ClusterSpec) (testKeepers, testSentinels, *TestProxy, *TestStore) {
+	return setupServersCustomWithProxyArgs(t, clusterName, dir, numKeepers, numSentinels, initialClusterSpec)
+}
+
+func setupServersCustomWithProxyArgs(t *testing.T, clusterName, dir string, numKeepers, numSentinels uint8, initialClusterSpec *cluster.ClusterSpec, proxyArgs ...string) (testKeepers, testSentinels, *TestProxy, *TestStore) {
 	tstore := setupStore(t, dir)
 
 	storeEndpoints := fmt.Sprintf("%s:%s", tstore.listenAddress, tstore.port)
@@ -226,7 +230,7 @@ func setupServersCustom(t *testing.T, clusterName, dir string, numKeepers, numSe
 		tks[tk.uid] = tk
 	}
 
-	tp, err := NewTestProxy(t, dir, clusterName, pgSUUsername, pgSUPassword, pgReplUsername, pgReplPassword, tstore.storeBackend, storeEndpoints)
+	tp, err := NewTestProxy(t, dir, clusterName, pgSUUsername, pgSUPassword, pgReplUsername, pgReplPassword, tstore.storeBackend, storeEndpoints, proxyArgs...)
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}

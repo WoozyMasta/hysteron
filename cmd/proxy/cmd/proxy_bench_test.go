@@ -29,7 +29,7 @@ import (
 
 func BenchmarkProxyCheckEnabledMaster(b *testing.B) {
 	c := benchmarkProxyChecker(benchmarkProxyClusterData(true))
-	defer c.stopTCPProxy()
+	defer c.writable.stop()
 	if err := c.Check(); err != nil {
 		b.Fatal(err)
 	}
@@ -45,7 +45,7 @@ func BenchmarkProxyCheckEnabledMaster(b *testing.B) {
 
 func BenchmarkProxyCheckDisabledProxy(b *testing.B) {
 	c := benchmarkProxyChecker(benchmarkProxyClusterData(false))
-	defer c.stopTCPProxy()
+	defer c.writable.stop()
 	if err := c.Check(); err != nil {
 		b.Fatal(err)
 	}
@@ -76,21 +76,28 @@ func init() {
 }
 
 func benchmarkProxyChecker(cd *cluster.ClusterData) *ClusterChecker {
-	cfg.ListenAddress = "127.0.0.1"
-	cfg.Port = "0"
+	cfg.Writable.ListenAddress = "127.0.0.1"
+	cfg.Writable.Port = "0"
 	cfg.KeepAlive.Idle = 0
 	cfg.KeepAlive.Count = 0
 	cfg.KeepAlive.Interval = 0
 
 	return &ClusterChecker{
 		uid:                "proxy-0",
-		listenAddress:      cfg.ListenAddress,
-		port:               cfg.Port,
+		writable:           benchmarkProxyListener(),
 		stopListening:      true,
 		e:                  &benchmarkProxyStore{cd: cd},
-		endTCPProxyCh:      make(chan error, 1),
 		proxyCheckInterval: cluster.DefaultProxyCheckInterval,
 		proxyTimeout:       cluster.DefaultProxyTimeout,
+	}
+}
+
+func benchmarkProxyListener() *proxyListener {
+	return &proxyListener{
+		mode:          proxyModeWritable,
+		listenAddress: cfg.Writable.ListenAddress,
+		port:          cfg.Writable.Port,
+		endTCPProxyCh: make(chan error, 1),
 	}
 }
 

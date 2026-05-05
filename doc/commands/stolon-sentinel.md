@@ -17,12 +17,6 @@
   cluster name. Can be repeated to run one sentinel process for multiple
 clusters
   * Environment: `STSENTINEL_CLUSTER_NAME`
-* `--metrics-listen-address` -
-  metrics listen address i.e "0.0.0.0:8080" (disabled by default)
-  * Environment: `STSENTINEL_METRICS_LISTEN_ADDRESS`
-* `--kubeconfig` -
-  path to kubeconfig file. Overrides $KUBECONFIG
-  * Environment: `STSENTINEL_KUBECONFIG`
 * `-f`, `--initial-cluster-spec` -
   a file providing the initial cluster specification, used only at cluster
 initialization, ignored if cluster is already initialized
@@ -74,8 +68,17 @@ communication) (defaults: <http://127.0.0.1:2379> for etcdv3)
   enable color in log output (default if attached to a terminal)
   * Environment: `STSENTINEL_LOG_COLOR`
 
+### Metrics
+
+* `--metrics-listen-address` -
+  metrics listen address i.e "0.0.0.0:8080" (disabled by default)
+  * Environment: `STSENTINEL_METRICS_LISTEN_ADDRESS`
+
 ### Kubernetes
 
+* `--kubeconfig` -
+  path to kubeconfig file. Overrides $KUBECONFIG
+  * Environment: `STSENTINEL_KUBECONFIG`
 * `--kube-resource-kind` -
   the k8s resource kind to be used to store stolon clusterdata
   * Environment: `STSENTINEL_KUBE_RESOURCE_KIND`

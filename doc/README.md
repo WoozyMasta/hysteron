@@ -9,6 +9,7 @@ primary concepts and avoid possible mistakes.
 * [Cluster Specification](cluster_spec.md)
 * [Config Variable Expansion](config_expansion.md)
 * [Cluster Initialization](initialization.md)
+* [Stolon Proxy](proxy.md)
 * [Setting instance parameters](postgres_parameters.md)
 * [Custom pg_hba.conf entries](custom_pg_hba_entries.md)
 * [Stolon Client](stolonctl.md)

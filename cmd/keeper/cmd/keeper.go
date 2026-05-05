@@ -2740,11 +2740,11 @@ func keeper(parser *flags.Parser) {
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	go sigHandler(sigs, cancel)
 
-	if cfg.MetricsListenAddress != "" {
+	if cfg.Metrics.ListenAddress != "" {
 		metricsMux := http.NewServeMux()
 		metricsMux.Handle("/metrics", promhttp.Handler())
 		metricsServer := http.Server{
-			Addr:              cfg.MetricsListenAddress,
+			Addr:              cfg.Metrics.ListenAddress,
 			Handler:           metricsMux,
 			ReadHeaderTimeout: 5 * time.Second,
 		}
@@ -2753,7 +2753,7 @@ func keeper(parser *flags.Parser) {
 			if err != nil {
 				kl.Error().
 					Err(err).
-					Str("addr", cfg.MetricsListenAddress).
+					Str("addr", cfg.Metrics.ListenAddress).
 					Msg("metrics HTTP server failed")
 				cancel()
 			}

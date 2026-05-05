@@ -18,11 +18,13 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"os"
 	"slices"
+	"sort"
 	"sync"
 	"time"
 
@@ -46,12 +48,57 @@ func init() {
 }
 
 type config struct {
-	ListenAddress string `short:"l" long:"listen-address" env:"LISTEN_ADDRESS" default:"127.0.0.1" description:"proxy listening address"`
-	Port          string `short:"p" long:"port"           env:"PORT"           default:"5432"      description:"proxy listening port"`
+	Writable writableOptions `group:"Writable Proxy"`
+	ReadOnly readOnlyOptions `group:"Read-Only Proxy" namespace:"read-only" env-namespace:"READ_ONLY"`
 	cmd.CommonConfig
 
 	KeepAlive     tcpKeepAliveOptions `group:"TCP Keep-Alive" namespace:"tcp-keepalive" env-namespace:"TCP_KEEPALIVE"`
 	StopListening bool                `                                                                               long:"stop-listening" env:"STOP_LISTENING" description:"stop listening on store error (default true)"`
+}
+
+type readOnlyReplicaPriority string
+
+const (
+	readOnlyReplicaPrioritySync  readOnlyReplicaPriority = "sync"
+	readOnlyReplicaPriorityAsync readOnlyReplicaPriority = "async"
+	readOnlyReplicaPriorityAny   readOnlyReplicaPriority = "any"
+)
+
+type readOnlyOptions struct {
+	ListenAddress   string                  `long:"listen-address"   env:"LISTEN_ADDRESS"   description:"read-only proxy listening address"`
+	Port            string                  `long:"port"             env:"PORT"             description:"read-only proxy listening port"`
+	ReplicaPriority readOnlyReplicaPriority `long:"replica-priority" env:"REPLICA_PRIORITY" default:"sync" choices:"sync;async;any" description:"read-only replica priority policy"`
+	MaxLag          uint64                  `long:"max-lag"          env:"MAX_LAG"          default:"0" description:"maximum standby WAL lag in bytes for read-only routing"`
+	NoFallback      bool                    `long:"no-fallback"      env:"NO_FALLBACK"      xor:"read-only-primary-policy" description:"do not route read-only connections to primary when no eligible standby exists"`
+	IncludePrimary  bool                    `long:"include-primary"  env:"INCLUDE_PRIMARY"  xor:"read-only-primary-policy" description:"include primary in the normal read-only backend pool"`
+}
+
+type writableOptions struct {
+	ListenAddress   string `short:"l" long:"listen-address"            env:"LISTEN_ADDRESS"            default:"127.0.0.1" description:"proxy listening address"`
+	Port            string `short:"p" long:"port"                      env:"PORT"                      default:"5432"      description:"proxy listening port"`
+	DisableListener bool   `          long:"disable-writable-listener" env:"DISABLE_WRITABLE_LISTENER"                    description:"disable the writable proxy listener"`
+}
+
+type proxyMode string
+
+const (
+	proxyModeWritable proxyMode = "writable"
+	proxyModeReadOnly proxyMode = "read-only"
+)
+
+type proxyDestination struct {
+	addr  *net.TCPAddr
+	dbUID string
+	lag   uint64
+}
+
+type proxyListener struct {
+	tcpProxy      *tcpproxy.Proxy
+	endTCPProxyCh chan error
+	mode          proxyMode
+	listenAddress string
+	port          string
+	mutex         sync.Mutex
 }
 
 // tcpKeepAliveOptions tunes TCP keep-alive settings on accepted client
@@ -69,22 +116,18 @@ var cfg = config{StopListening: true}
 type ClusterChecker struct {
 	// External cluster store client.
 	e store.Store
-	// Active TCP proxy instance (nil when stopped).
-	tcpProxy *tcpproxy.Proxy
-	// Asynchronous TCP proxy termination/error channel.
-	endTCPProxyCh chan error
+	// Writable TCP proxy listener.
+	writable *proxyListener
+	// Optional read-only TCP proxy listener.
+	readOnly *proxyListener
 	// Proxy instance UID.
 	uid string
-	// Local listen address.
-	listenAddress string
-	// Local listen port.
-	port string
+	// Read-only routing options.
+	readOnlyOptions readOnlyOptions
 	// Interval between periodic proxy checks.
 	proxyCheckInterval time.Duration
 	// TTL/liveness timeout advertised for this proxy.
 	proxyTimeout time.Duration
-	// Guards tcpProxy lifecycle and destination updates.
-	tcpProxyMutex sync.Mutex
 	// Guards mutable runtime configuration updates.
 	configMutex sync.Mutex
 	// Stop listener when critical store errors happen.
@@ -96,33 +139,86 @@ func NewClusterChecker(
 	uid string,
 	cfg config,
 ) (*ClusterChecker, error) {
+	writableEnabled, readOnlyEnabled, err := validateProxyListeners(cfg)
+	if err != nil {
+		return nil, err
+	}
+
 	e, err := cmd.NewStore(&cfg.CommonConfig, true)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create store: %v", err)
 	}
 
-	return &ClusterChecker{
-		uid:           uid,
-		listenAddress: cfg.ListenAddress,
-		port:          cfg.Port,
-		stopListening: cfg.StopListening,
-		e:             e,
-		endTCPProxyCh: make(chan error),
-
+	cc := &ClusterChecker{
+		uid:                uid,
+		readOnlyOptions:    cfg.ReadOnly,
+		stopListening:      cfg.StopListening,
+		e:                  e,
 		proxyCheckInterval: cluster.DefaultProxyCheckInterval,
 		proxyTimeout:       cluster.DefaultProxyTimeout,
-	}, nil
+	}
+	if writableEnabled {
+		cc.writable = &proxyListener{
+			mode:          proxyModeWritable,
+			listenAddress: cfg.Writable.ListenAddress,
+			port:          cfg.Writable.Port,
+			endTCPProxyCh: make(chan error),
+		}
+	}
+	if readOnlyEnabled {
+		listenAddress := cfg.ReadOnly.ListenAddress
+		if listenAddress == "" {
+			listenAddress = cfg.Writable.ListenAddress
+		}
+		cc.readOnly = &proxyListener{
+			mode:          proxyModeReadOnly,
+			listenAddress: listenAddress,
+			port:          cfg.ReadOnly.Port,
+			endTCPProxyCh: make(chan error),
+		}
+	}
+	return cc, nil
 }
 
-func (c *ClusterChecker) startTCPProxy() error {
-	c.tcpProxyMutex.Lock()
-	defer c.tcpProxyMutex.Unlock()
-	if c.tcpProxy != nil {
+func validateProxyListeners(cfg config) (writableEnabled, readOnlyEnabled bool, err error) {
+	writableEnabled = !cfg.Writable.DisableListener
+	readOnlyEnabled = cfg.ReadOnly.Port != ""
+	if cfg.ReadOnly.IncludePrimary && cfg.ReadOnly.NoFallback {
+		return false, false, errors.New("read-only include-primary and no-fallback options are mutually exclusive")
+	}
+	if !writableEnabled && !readOnlyEnabled {
+		return false, false, errors.New("at least one proxy listener must be enabled")
+	}
+	if !writableEnabled {
+		return false, readOnlyEnabled, nil
+	}
+	if !readOnlyEnabled {
+		return writableEnabled, false, nil
+	}
+
+	readOnlyListenAddress := cfg.ReadOnly.ListenAddress
+	if readOnlyListenAddress == "" {
+		readOnlyListenAddress = cfg.Writable.ListenAddress
+	}
+	if cfg.Writable.ListenAddress == readOnlyListenAddress && cfg.Writable.Port == cfg.ReadOnly.Port {
+		return false, false, errors.New("writable and read-only proxy listeners cannot use the same address and port")
+	}
+	return writableEnabled, readOnlyEnabled, nil
+}
+
+func (l *proxyListener) start() error {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	if l.tcpProxy != nil {
 		return nil
 	}
 
-	log.Info().Msg("Starting proxying")
-	listenAddr := net.JoinHostPort(c.listenAddress, c.port)
+	log.Info().
+		Str("proxy_mode", string(l.mode)).
+		Str("listen_address", l.listenAddress).
+		Str("port", l.port).
+		Msg("starting proxy listener")
+	listenAddr := net.JoinHostPort(l.listenAddress, l.port)
 	addr, err := net.ResolveTCPAddr("tcp", listenAddr)
 	if err != nil {
 		return fmt.Errorf(
@@ -152,29 +248,41 @@ func (c *ClusterChecker) startTCPProxy() error {
 		) * time.Second,
 	})
 
-	c.tcpProxy = pp
+	l.tcpProxy = pp
 	go func() {
-		c.endTCPProxyCh <- pp.Start()
+		l.endTCPProxyCh <- pp.Start()
 	}()
 
 	return nil
 }
 
-func (c *ClusterChecker) stopTCPProxy() {
-	c.tcpProxyMutex.Lock()
-	defer c.tcpProxyMutex.Unlock()
-	if c.tcpProxy != nil {
-		log.Info().Msg("Stopping listening")
-		c.tcpProxy.Stop()
-		c.tcpProxy = nil
+func (l *proxyListener) stop() {
+	if l == nil {
+		return
+	}
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	if l.tcpProxy != nil {
+		log.Info().
+			Str("proxy_mode", string(l.mode)).
+			Msg("stopping proxy listener")
+		l.tcpProxy.Stop()
+		l.tcpProxy = nil
 	}
 }
 
-func (c *ClusterChecker) setProxyDestination(addr *net.TCPAddr) {
-	c.tcpProxyMutex.Lock()
-	defer c.tcpProxyMutex.Unlock()
-	if c.tcpProxy != nil {
-		c.tcpProxy.SetDestination(addr)
+func (l *proxyListener) setDestination(addr *net.TCPAddr) {
+	l.setDestinations([]*net.TCPAddr{addr})
+}
+
+func (l *proxyListener) setDestinations(addrs []*net.TCPAddr) {
+	if l == nil {
+		return
+	}
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	if l.tcpProxy != nil {
+		l.tcpProxy.SetDestinations(addrs)
 	}
 }
 
@@ -206,9 +314,15 @@ func (c *ClusterChecker) Check() error {
 		return fmt.Errorf("cannot get cluster data: %v", err)
 	}
 
-	// Start proxy if not active.
-	if err = c.startTCPProxy(); err != nil {
-		return fmt.Errorf("failed to start proxy: %v", err)
+	if c.writable != nil {
+		if err = c.writable.start(); err != nil {
+			return fmt.Errorf("failed to start writable proxy: %v", err)
+		}
+	}
+	if c.readOnly != nil {
+		if err = c.readOnly.start(); err != nil {
+			return fmt.Errorf("failed to start read-only proxy: %v", err)
+		}
 	}
 
 	log.Debug().
@@ -217,18 +331,18 @@ func (c *ClusterChecker) Check() error {
 	if cd == nil {
 		log.Info().
 			Msg("no clusterdata available, closing connections to master")
-		c.setProxyDestination(nil)
+		c.clearDestinations()
 		return nil
 	}
 	if cd.FormatVersion != cluster.CurrentCDFormatVersion {
-		c.setProxyDestination(nil)
+		c.clearDestinations()
 		return fmt.Errorf(
 			"unsupported clusterdata format version: %d",
 			cd.FormatVersion,
 		)
 	}
 	if err = cd.Cluster.Spec.Validate(); err != nil {
-		c.setProxyDestination(nil)
+		c.clearDestinations()
 		return fmt.Errorf("clusterdata validation failed: %v", err)
 	}
 
@@ -245,17 +359,15 @@ func (c *ClusterChecker) Check() error {
 	if proxy == nil {
 		log.Info().
 			Msg("no proxy object available, closing connections to master")
-		c.setProxyDestination(nil)
-		// ignore errors on setting proxy info
-		if err = c.SetProxyInfo(cluster.NoGeneration, proxyTimeout); err != nil {
-			log.Error().Err(err).Msg("failed to update proxyInfo")
-		} else {
-			// update proxyCheckinterval and proxyTimeout only if we successfully updated our proxy info
-			c.configMutex.Lock()
-			c.proxyCheckInterval = cdProxyCheckInterval
-			c.proxyTimeout = cdProxyTimeout
-			c.configMutex.Unlock()
+		c.clearDestinations()
+		if c.writable != nil {
+			// ignore errors on setting proxy info
+			if err = c.SetProxyInfo(cluster.NoGeneration, proxyTimeout); err != nil {
+				log.Error().Err(err).Msg("failed to update proxyInfo")
+				return nil
+			}
 		}
+		c.updateRuntimeConfig(cdProxyCheckInterval, cdProxyTimeout)
 		return nil
 	}
 
@@ -264,17 +376,15 @@ func (c *ClusterChecker) Check() error {
 		log.Info().
 			Str(slog.FieldDBUID, proxy.Spec.MasterDBUID).
 			Msg("no db object for master uid, closing connections to master")
-		c.setProxyDestination(nil)
-		// ignore errors on setting proxy info
-		if err = c.SetProxyInfo(proxy.Generation, proxyTimeout); err != nil {
-			log.Error().Err(err).Msg("failed to update proxyInfo")
-		} else {
-			// update proxyCheckinterval and proxyTimeout only if we successfully updated our proxy info
-			c.configMutex.Lock()
-			c.proxyCheckInterval = cdProxyCheckInterval
-			c.proxyTimeout = cdProxyTimeout
-			c.configMutex.Unlock()
+		c.clearDestinations()
+		if c.writable != nil {
+			// ignore errors on setting proxy info
+			if err = c.SetProxyInfo(proxy.Generation, proxyTimeout); err != nil {
+				log.Error().Err(err).Msg("failed to update proxyInfo")
+				return nil
+			}
 		}
+		c.updateRuntimeConfig(cdProxyCheckInterval, cdProxyTimeout)
 		return nil
 	}
 
@@ -284,24 +394,22 @@ func (c *ClusterChecker) Check() error {
 	)
 	if err != nil {
 		log.Error().Err(err).Msg("cannot resolve db address")
-		c.setProxyDestination(nil)
+		c.clearDestinations()
 		return nil
 	}
 	log.Info().
 		Str("tcp_addr", addr.String()).
 		Msg("resolved current master address")
-	if err = c.SetProxyInfo(proxy.Generation, proxyTimeout); err != nil {
-		// if we failed to update our proxy info when a master is defined we
-		// cannot ignore this error since the sentinel won't know that we exist
-		// and are sending connections to a master so, when electing a new
-		// master, it'll not wait for us to close connections to the old one.
-		return fmt.Errorf("failed to update proxyInfo: %v", err)
+	if c.writable != nil {
+		if err = c.SetProxyInfo(proxy.Generation, proxyTimeout); err != nil {
+			// if we failed to update our proxy info when a master is defined we
+			// cannot ignore this error since the sentinel won't know that we exist
+			// and are sending connections to a master so, when electing a new
+			// master, it'll not wait for us to close connections to the old one.
+			return fmt.Errorf("failed to update proxyInfo: %v", err)
+		}
 	}
-	// update proxyCheckInterval and proxyTimeout only if we successfully updated our proxy info
-	c.configMutex.Lock()
-	c.proxyCheckInterval = cdProxyCheckInterval
-	c.proxyTimeout = cdProxyTimeout
-	c.configMutex.Unlock()
+	c.updateRuntimeConfig(cdProxyCheckInterval, cdProxyTimeout)
 
 	// start proxing only if we are inside enabledProxies, this ensures that the
 	// sentinel has read our proxyinfo and knows we are alive
@@ -309,15 +417,164 @@ func (c *ClusterChecker) Check() error {
 		log.Info().
 			Str("tcp_addr", addr.String()).
 			Msg("proxying connections to current master")
-		c.setProxyDestination(addr)
+		c.setWritableDestination(addr)
 	} else {
 		log.Info().
 			Str("tcp_addr", addr.String()).
 			Msg("not proxying because this proxy is not enabled in cluster data")
-		c.setProxyDestination(nil)
+		c.setWritableDestination(nil)
 	}
+	c.setReadOnlyDestinations(c.readOnlyDestinations(cd, db))
 
 	return nil
+}
+
+func (c *ClusterChecker) updateRuntimeConfig(proxyCheckInterval, proxyTimeout time.Duration) {
+	c.configMutex.Lock()
+	defer c.configMutex.Unlock()
+	c.proxyCheckInterval = proxyCheckInterval
+	c.proxyTimeout = proxyTimeout
+}
+
+func (c *ClusterChecker) clearDestinations() {
+	c.setWritableDestination(nil)
+	c.setReadOnlyDestinations(nil)
+}
+
+func (c *ClusterChecker) setWritableDestination(addr *net.TCPAddr) {
+	if c.writable != nil {
+		c.writable.setDestination(addr)
+	}
+}
+
+func (c *ClusterChecker) setReadOnlyDestinations(addrs []*net.TCPAddr) {
+	if c.readOnly != nil {
+		c.readOnly.setDestinations(addrs)
+	}
+}
+
+func (c *ClusterChecker) readOnlyDestinations(cd *cluster.ClusterData, primary *cluster.DB) []*net.TCPAddr {
+	if c.readOnly == nil || primary == nil {
+		return nil
+	}
+
+	syncStandbys, asyncStandbys := c.readOnlyStandbyCandidates(cd, primary)
+	selected := readOnlyPrioritySelection(c.readOnlyOptions.ReplicaPriority, syncStandbys, asyncStandbys)
+	if c.readOnlyOptions.IncludePrimary {
+		if primaryDest, ok := readOnlyDestinationFromDB(primary, 0); ok {
+			selected = append(selected, primaryDest)
+			log.Debug().
+				Str(slog.FieldDBUID, primary.UID).
+				Msg("including primary in read-only proxy destination pool")
+		}
+	}
+	if len(selected) == 0 && !c.readOnlyOptions.NoFallback {
+		if primaryDest, ok := readOnlyDestinationFromDB(primary, 0); ok {
+			log.Info().
+				Str(slog.FieldDBUID, primary.UID).
+				Uint64("max_lag", c.readOnlyOptions.MaxLag).
+				Msg("read-only proxy falling back to primary")
+			selected = append(selected, primaryDest)
+		}
+	}
+
+	addrs := make([]*net.TCPAddr, 0, len(selected))
+	for _, dest := range selected {
+		addrs = append(addrs, dest.addr)
+	}
+	return addrs
+}
+
+func (c *ClusterChecker) readOnlyStandbyCandidates(cd *cluster.ClusterData, primary *cluster.DB) ([]proxyDestination, []proxyDestination) {
+	syncStandbySet := map[string]struct{}{}
+	for _, dbUID := range primary.Status.SynchronousStandbys {
+		syncStandbySet[dbUID] = struct{}{}
+	}
+
+	dbUIDs := make([]string, 0, len(cd.DBs))
+	for dbUID := range cd.DBs {
+		dbUIDs = append(dbUIDs, dbUID)
+	}
+	sort.Strings(dbUIDs)
+
+	var syncStandbys []proxyDestination
+	var asyncStandbys []proxyDestination
+	for _, dbUID := range dbUIDs {
+		db := cd.DBs[dbUID]
+		if db == nil || db.UID == primary.UID || db.Spec == nil {
+			continue
+		}
+		if db.Spec.Role != common.RoleStandby || !readOnlyDBStatusEligible(db) {
+			continue
+		}
+
+		lag := xlogLag(primary.Status.XLogPos, db.Status.XLogPos)
+		if lag > c.readOnlyOptions.MaxLag {
+			continue
+		}
+		dest, ok := readOnlyDestinationFromDB(db, lag)
+		if !ok {
+			continue
+		}
+		if _, ok := syncStandbySet[db.UID]; ok {
+			syncStandbys = append(syncStandbys, dest)
+		} else {
+			asyncStandbys = append(asyncStandbys, dest)
+		}
+	}
+	return syncStandbys, asyncStandbys
+}
+
+func readOnlyPrioritySelection(priority readOnlyReplicaPriority, syncStandbys, asyncStandbys []proxyDestination) []proxyDestination {
+	switch priority {
+	case readOnlyReplicaPriorityAny:
+		return append(append([]proxyDestination{}, syncStandbys...), asyncStandbys...)
+	case readOnlyReplicaPriorityAsync:
+		if len(asyncStandbys) > 0 {
+			return asyncStandbys
+		}
+		return syncStandbys
+	case readOnlyReplicaPrioritySync:
+		fallthrough
+	default:
+		if len(syncStandbys) > 0 {
+			return syncStandbys
+		}
+		return asyncStandbys
+	}
+}
+
+func readOnlyDBStatusEligible(db *cluster.DB) bool {
+	return db.Status.Healthy &&
+		db.Status.CurrentGeneration == db.Generation &&
+		db.Status.ListenAddress != "" &&
+		db.Status.Port != ""
+}
+
+func readOnlyDestinationFromDB(db *cluster.DB, lag uint64) (proxyDestination, bool) {
+	addr, err := net.ResolveTCPAddr(
+		"tcp",
+		net.JoinHostPort(db.Status.ListenAddress, db.Status.Port),
+	)
+	if err != nil {
+		log.Error().
+			Err(err).
+			Str(slog.FieldDBUID, db.UID).
+			Msg("cannot resolve read-only db address")
+		return proxyDestination{}, false
+	}
+	return proxyDestination{
+		dbUID: db.UID,
+		addr:  addr,
+		lag:   lag,
+	}, true
+}
+
+func xlogLag(primaryXLogPos, standbyXLogPos uint64) uint64 {
+	if primaryXLogPos > standbyXLogPos {
+		return primaryXLogPos - standbyXLogPos
+	}
+	return 0
 }
 
 // TimeoutChecker closes proxy connections when cluster checks stop succeeding.
@@ -333,9 +590,10 @@ func (c *ClusterChecker) TimeoutChecker(checkOkCh chan struct{}) {
 			// if the check timeouts close all connections and stop listening
 			// (for example to avoid load balancers forward connections to us
 			// since we aren't ready or in a bad state)
-			c.setProxyDestination(nil)
+			c.clearDestinations()
 			if c.stopListening {
-				c.stopTCPProxy()
+				c.writable.stop()
+				c.readOnly.stop()
 			}
 
 		case <-checkOkCh:
@@ -356,6 +614,14 @@ func (c *ClusterChecker) Start() error {
 	checkOkCh := make(chan struct{})
 	checkCh := make(chan error)
 	timerCh := time.NewTimer(0).C
+	var writableEndCh <-chan error
+	if c.writable != nil {
+		writableEndCh = c.writable.endTCPProxyCh
+	}
+	var readOnlyEndCh <-chan error
+	if c.readOnly != nil {
+		readOnlyEndCh = c.readOnly.endTCPProxyCh
+	}
 
 	// TODO(sgotti) TimeoutCecker is needed to forcefully close connection also
 	// if the Check method is blocked somewhere.
@@ -383,9 +649,13 @@ func (c *ClusterChecker) Start() error {
 			timerCh = time.NewTimer(c.proxyCheckInterval).C
 			c.configMutex.Unlock()
 
-		case err := <-c.endTCPProxyCh:
+		case err := <-writableEndCh:
 			if err != nil {
-				return fmt.Errorf("proxy error: %v", err)
+				return fmt.Errorf("writable proxy error: %v", err)
+			}
+		case err := <-readOnlyEndCh:
+			if err != nil {
+				return fmt.Errorf("read-only proxy error: %v", err)
 			}
 		}
 	}
@@ -416,7 +686,7 @@ func proxy(_ *flags.Parser) {
 		os.Exit(1)
 	}
 	log = slog.WithComponent("proxy")
-	tcpproxy.SetLogger(slog.Std())
+	tcpproxy.SetLogger(log)
 	closeLog := func() {
 		cmd.CloseLogging(closer, &log)
 	}
@@ -437,18 +707,18 @@ func proxy(_ *flags.Parser) {
 	uid := common.UID()
 	log.Info().Str(slog.FieldProxyUID, uid).Msg("proxy UID assigned")
 
-	if cfg.MetricsListenAddress != "" {
+	if cfg.Metrics.ListenAddress != "" {
 		http.Handle("/metrics", promhttp.Handler())
 		go func() {
 			server := &http.Server{
-				Addr:              cfg.MetricsListenAddress,
+				Addr:              cfg.Metrics.ListenAddress,
 				ReadHeaderTimeout: 5 * time.Second,
 			}
 			err := server.ListenAndServe()
 			if err != nil {
 				log.Fatal().
 					Err(err).
-					Str("addr", cfg.MetricsListenAddress).
+					Str("addr", cfg.Metrics.ListenAddress).
 					Msg("metrics HTTP server failed")
 			}
 		}()

@@ -50,13 +50,12 @@ import (
 // `kube`/`KUBE`) from a single declaration. Defaults are expressed via
 // `default:` tags; we never mutate the struct before parse.
 type CommonConfig struct {
-	Kube                 KubeOptions     `group:"Kubernetes" namespace:"kube" env-namespace:"KUBE"`
-	ClusterNames         []string        `short:"c" long:"cluster-name" env:"CLUSTER_NAME" description:"cluster name. Can be repeated by components that support multiple clusters"`
-	MetricsListenAddress string          `long:"metrics-listen-address" env:"METRICS_LISTEN_ADDRESS" description:"metrics listen address i.e \"0.0.0.0:8080\" (disabled by default)"`
-	KubeConfig           string          `long:"kubeconfig" env:"KUBECONFIG" description:"path to kubeconfig file. Overrides $KUBECONFIG"`
-	Log                  stlog.FlagGroup `group:"Logging" namespace:"log" env-namespace:"LOG"`
-	Store                StoreOptions    `group:"Store" namespace:"store" env-namespace:"STORE"`
-	Debug                bool            `long:"debug" env:"DEBUG" hidden:"true" description:"deprecated: forces debug logging"`
+	Metrics      MetricsOptions  `group:"Metrics"`
+	Kube         KubeOptions     `group:"Kubernetes"`
+	ClusterNames []string        `short:"c" long:"cluster-name" env:"CLUSTER_NAME" description:"cluster name. Can be repeated by components that support multiple clusters"`
+	Log          stlog.FlagGroup `group:"Logging" namespace:"log" env-namespace:"LOG"`
+	Store        StoreOptions    `group:"Store" namespace:"store" env-namespace:"STORE"`
+	Debug        bool            `long:"debug" env:"DEBUG" hidden:"true" description:"deprecated: forces debug logging"`
 }
 
 // StoreOptions configures the cluster data store backend (etcd v3 or
@@ -73,13 +72,18 @@ type StoreOptions struct {
 	SkipTLSVerify bool          `long:"skip-tls-verify" env:"SKIP_TLS_VERIFY" description:"skip store certificate verification (insecure!!!)"`
 }
 
-// KubeOptions configures the kubernetes-backed store. KubeConfig is
-// kept on CommonConfig (outside the group) to preserve the standard
-// `--kubeconfig` flag and the conventional `KUBECONFIG` env variable.
+// MetricsOptions configures metrics serving for Stolon binaries.
+type MetricsOptions struct {
+	ListenAddress string `long:"metrics-listen-address" env:"METRICS_LISTEN_ADDRESS" description:"metrics listen address i.e \"0.0.0.0:8080\" (disabled by default)"`
+}
+
+// KubeOptions configures the kubernetes-backed store. Long names are explicit
+// to keep the existing public CLI while grouping the options in help output.
 type KubeOptions struct {
-	ResourceKind string `long:"resource-kind" env:"RESOURCE_KIND" choice:"configmap" description:"the k8s resource kind to be used to store stolon clusterdata"`
-	Context      string `long:"context" env:"CONTEXT" description:"name of the kubeconfig context to use"`
-	Namespace    string `long:"namespace" env:"NAMESPACE" description:"name of the kubernetes namespace to use"`
+	Config       string `long:"kubeconfig" env:"KUBECONFIG" description:"path to kubeconfig file. Overrides $KUBECONFIG"`
+	ResourceKind string `long:"kube-resource-kind" env:"KUBE_RESOURCE_KIND" choice:"configmap" description:"the k8s resource kind to be used to store stolon clusterdata"`
+	Context      string `long:"kube-context" env:"KUBE_CONTEXT" description:"name of the kubeconfig context to use"`
+	Namespace    string `long:"kube-namespace" env:"KUBE_NAMESPACE" description:"name of the kubernetes namespace to use"`
 }
 
 // NewParser creates a Stolon command parser with repository-wide
@@ -334,7 +338,7 @@ func sortedStringSet(set map[string]struct{}) []string {
 }
 
 func getKubeValues(cfg *CommonConfig, requirePod bool) (*kubernetes.Clientset, string, string, error) {
-	kubeClientConfig := util.NewKubeClientConfig(cfg.KubeConfig, cfg.Kube.Context, cfg.Kube.Namespace)
+	kubeClientConfig := util.NewKubeClientConfig(cfg.Kube.Config, cfg.Kube.Context, cfg.Kube.Namespace)
 	kubecfg, err := kubeClientConfig.ClientConfig()
 	if err != nil {
 		return nil, "", "", err

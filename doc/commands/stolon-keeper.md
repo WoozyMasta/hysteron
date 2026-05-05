@@ -16,12 +16,6 @@
 * `-c`, `--cluster-name` -
   cluster name
   * Environment: `STKEEPER_CLUSTER_NAME`
-* `--metrics-listen-address` -
-  metrics listen address i.e "0.0.0.0:8080" (disabled by default)
-  * Environment: `STKEEPER_METRICS_LISTEN_ADDRESS`
-* `--kubeconfig` -
-  path to kubeconfig file. Overrides $KUBECONFIG
-  * Environment: `STKEEPER_KUBECONFIG`
 * `-i`, `--uid` -
   keeper uid (must be unique in the cluster and can contain only lower-case
 letters, numbers and the underscore character). If not provided a random
@@ -54,7 +48,7 @@ configuration rendering, or file layout handling.
   * Choices: `etcdv3, kubernetes`
 * `--store-endpoints` -
   a comma-delimited list of store endpoints (use https scheme for tls
-communication) (defaults: http://127.0.0.1:2379 for etcdv3)
+communication) (defaults: `http://127.0.0.1:2379` for etcdv3)
   * Environment: `STKEEPER_STORE_ENDPOINTS`
 * `--store-prefix` -
   the store base prefix
@@ -88,8 +82,17 @@ communication) (defaults: http://127.0.0.1:2379 for etcdv3)
   enable color in log output (default if attached to a terminal)
   * Environment: `STKEEPER_LOG_COLOR`
 
+### Metrics
+
+* `--metrics-listen-address` -
+  metrics listen address i.e "0.0.0.0:8080" (disabled by default)
+  * Environment: `STKEEPER_METRICS_LISTEN_ADDRESS`
+
 ### Kubernetes
 
+* `--kubeconfig` -
+  path to kubeconfig file. Overrides $KUBECONFIG
+  * Environment: `STKEEPER_KUBECONFIG`
 * `--kube-resource-kind` -
   the k8s resource kind to be used to store stolon clusterdata
   * Environment: `STKEEPER_KUBE_RESOURCE_KIND`

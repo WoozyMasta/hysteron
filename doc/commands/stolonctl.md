@@ -16,12 +16,6 @@
 * `-c`, `--cluster-name` -
   cluster name
   * Environment: `STOLONCTL_CLUSTER_NAME`
-* `--metrics-listen-address` -
-  metrics listen address i.e "0.0.0.0:8080" (disabled by default)
-  * Environment: `STOLONCTL_METRICS_LISTEN_ADDRESS`
-* `--kubeconfig` -
-  path to kubeconfig file. Overrides $KUBECONFIG
-  * Environment: `STOLONCTL_KUBECONFIG`
 
 ### Store
 
@@ -65,8 +59,17 @@ communication) (defaults: <http://127.0.0.1:2379> for etcdv3)
   enable color in log output (default if attached to a terminal)
   * Environment: `STOLONCTL_LOG_COLOR`
 
+### Metrics
+
+* `--metrics-listen-address` -
+  metrics listen address i.e "0.0.0.0:8080" (disabled by default)
+  * Environment: `STOLONCTL_METRICS_LISTEN_ADDRESS`
+
 ### Kubernetes
 
+* `--kubeconfig` -
+  path to kubeconfig file. Overrides $KUBECONFIG
+  * Environment: `STOLONCTL_KUBECONFIG`
 * `--kube-resource-kind` -
   the k8s resource kind to be used to store stolon clusterdata
   * Environment: `STOLONCTL_KUBE_RESOURCE_KIND`

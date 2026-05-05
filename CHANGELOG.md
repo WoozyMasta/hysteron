@@ -93,10 +93,11 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Centralize build metadata in the new `internal/buildflags` package and wire
   it through the `flags` built-in `version` command via Makefile `ldflags`.
 * Reorganize CLI options into reflection-based groups (`Store`/`Logging`/
-  `Kubernetes` for every binary, `PostgreSQL` with nested `Replication User`
-  and `Superuser` sub-groups for the keeper, and `TCP Keep-Alive` for the
-  proxy), preserving the public flag and environment names while making help
-  output and generated docs easier to navigate.
+  `Metrics`/`Kubernetes` for every binary, `PostgreSQL` with nested
+  `Replication User` and `Superuser` sub-groups for the keeper, and
+  `Writable Proxy`/`Read-Only Proxy`/`TCP Keep-Alive` for the proxy),
+  preserving the public flag and environment names while making help output and
+  generated docs easier to navigate.
 * Add convenient short flags for the most common options:
   `-c/--cluster-name` (all binaries), `-i/--uid` and `-d/--data-dir` (keeper),
   `-p/--pg-port` (keeper), `-l/--listen-address` and `-p/--port` (proxy), and
@@ -111,6 +112,9 @@ The format is based on [Keep a Changelog][], and this project adheres to
   command-level logging setup, and remove production-path `panic` calls.
 * Migrate PostgreSQL `database/sql` access from `github.com/lib/pq` to
   `github.com/jackc/pgx/v5/stdlib`.
+* Add an optional read-only `stolon-proxy` listener with standby lag filtering,
+  sync/async replica priority, round-robin standby routing, and explicit primary
+  fallback controls.
 
 ## v0.17.0
 

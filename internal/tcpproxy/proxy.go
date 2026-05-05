@@ -25,29 +25,14 @@ import (
 	"net"
 	"sync"
 	"time"
+
+	"github.com/rs/zerolog"
 )
 
-// Logger mimics Go's standard logger. Only Print functions are needed.
-type Logger interface {
-	Print(...any)
-	Printf(string, ...any)
-	Println(...any)
-}
-
-type nopLogger struct{}
-
-func (l *nopLogger) Print(...any)          {}
-func (l *nopLogger) Printf(string, ...any) {}
-func (l *nopLogger) Println(...any)        {}
-
-var log Logger = &nopLogger{}
+var log zerolog.Logger = zerolog.Nop()
 
 // SetLogger sets the logger used by TCP proxies.
-func SetLogger(l Logger) {
-	if l == nil {
-		log = &nopLogger{}
-		return
-	}
+func SetLogger(l zerolog.Logger) {
 	log = l
 }
 
@@ -63,18 +48,20 @@ type Options struct {
 	KeepAliveInterval time.Duration
 }
 
-// Proxy forwards TCP connections from a listener to the current destination.
+// Proxy forwards TCP connections from a listener to current destinations.
 type Proxy struct {
 	// listener accepts inbound client connections.
 	listener *net.TCPListener
-	// destAddr is current destination address.
-	destAddr *net.TCPAddr
-	// closeConns broadcasts connection-drain events when destination changes.
-	closeConns chan struct{}
+	// destinations are current backend addresses keyed by TCP address string.
+	destinations map[string]*destination
 	// stopCh signals proxy shutdown.
 	stopCh chan struct{}
+	// destinationOrder stores backend address keys in round-robin order.
+	destinationOrder []string
 	// options stores keepalive configuration.
 	options Options
+	// nextDestination is next index into destinationOrder.
+	nextDestination int
 	// stopOnce ensures Stop is idempotent.
 	stopOnce sync.Once
 	// mu guards destination and closeConns swaps.
@@ -84,26 +71,67 @@ type Proxy struct {
 // New creates a TCP proxy around listener.
 func New(listener *net.TCPListener, options Options) *Proxy {
 	return &Proxy{
-		listener:   listener,
-		closeConns: make(chan struct{}),
-		stopCh:     make(chan struct{}),
-		options:    options,
+		listener:     listener,
+		destinations: map[string]*destination{},
+		stopCh:       make(chan struct{}),
+		options:      options,
 	}
 }
 
 // SetDestination changes the TCP destination and closes active connections.
 // A nil destination disables proxying for new connections.
 func (p *Proxy) SetDestination(addr *net.TCPAddr) {
+	if addr == nil {
+		p.SetDestinations(nil)
+		return
+	}
+	p.SetDestinations([]*net.TCPAddr{addr})
+}
+
+// SetDestinations changes the destination set. Active connections to removed
+// destinations are closed. Active connections to retained destinations keep
+// using their selected backend.
+func (p *Proxy) SetDestinations(addrs []*net.TCPAddr) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if sameAddr(p.destAddr, addr) {
+	next := map[string]*destination{}
+	nextOrder := make([]string, 0, len(addrs))
+	for _, addr := range addrs {
+		if addr == nil {
+			continue
+		}
+		key := addr.String()
+		if _, ok := next[key]; ok {
+			continue
+		}
+		if existing, ok := p.destinations[key]; ok {
+			next[key] = existing
+		} else {
+			next[key] = &destination{
+				addr:       cloneTCPAddr(addr),
+				closeConns: make(chan struct{}),
+			}
+		}
+		nextOrder = append(nextOrder, key)
+	}
+
+	if sameDestinationSet(p.destinationOrder, nextOrder) {
 		return
 	}
 
-	close(p.closeConns)
-	p.closeConns = make(chan struct{})
-	p.destAddr = addr
+	for key, current := range p.destinations {
+		if _, ok := next[key]; !ok {
+			close(current.closeConns)
+		}
+	}
+	p.destinations = next
+	p.destinationOrder = nextOrder
+	if len(p.destinationOrder) == 0 {
+		p.nextDestination = 0
+	} else {
+		p.nextDestination %= len(p.destinationOrder)
+	}
 }
 
 // Start accepts connections until Stop is called or the listener fails.
@@ -137,21 +165,27 @@ func (p *Proxy) Stop() {
 		_ = p.listener.Close()
 
 		p.mu.Lock()
-		close(p.closeConns)
-		p.closeConns = make(chan struct{})
-		p.destAddr = nil
+		for _, dest := range p.destinations {
+			close(dest.closeConns)
+		}
+		p.destinations = map[string]*destination{}
+		p.destinationOrder = nil
+		p.nextDestination = 0
 		p.mu.Unlock()
 	})
 }
 
 func (p *Proxy) proxyConn(src *net.TCPConn) {
-	closeConns, destAddr := p.destination()
+	dest := p.destination()
 	defer func() {
-		log.Printf("closing source connection: %v", src)
+		log.Debug().
+			Str("local_addr", connLocalAddr(src)).
+			Str("remote_addr", connRemoteAddr(src)).
+			Msg("closing source connection")
 		_ = src.Close()
 	}()
 
-	if destAddr == nil {
+	if dest == nil {
 		return
 	}
 
@@ -160,27 +194,35 @@ func (p *Proxy) proxyConn(src *net.TCPConn) {
 
 	go func() {
 		select {
-		case <-closeConns:
+		case <-dest.closeConns:
 			cancel()
 		case <-ctx.Done():
 		}
 	}()
 
 	var dialer net.Dialer
-	destConn, err := dialer.DialContext(ctx, "tcp", destAddr.String())
+	destConn, err := dialer.DialContext(ctx, "tcp", dest.addr.String())
 	if err != nil {
-		log.Printf("dial destination %s: %v", destAddr, err)
+		log.Debug().
+			Err(err).
+			Stringer("destination_addr", dest.addr).
+			Msg("failed to dial proxy destination")
 		return
 	}
 
 	dst, ok := destConn.(*net.TCPConn)
 	if !ok {
 		_ = destConn.Close()
-		log.Printf("destination connection is not TCP: %T", destConn)
+		log.Error().
+			Str("destination_type", fmt.Sprintf("%T", destConn)).
+			Msg("destination connection is not TCP")
 		return
 	}
 	defer func() {
-		log.Printf("closing destination connection: %v", dst)
+		log.Debug().
+			Str("local_addr", connLocalAddr(dst)).
+			Str("remote_addr", connRemoteAddr(dst)).
+			Msg("closing destination connection")
 		_ = dst.Close()
 	}()
 
@@ -197,19 +239,39 @@ func (p *Proxy) proxyConn(src *net.TCPConn) {
 	select {
 	case <-done:
 		<-done
-		log.Printf("all io copy goroutines done")
-	case <-closeConns:
-		log.Printf("closing all connections")
+		log.Debug().Msg("proxy connection copy completed")
+	case <-dest.closeConns:
+		log.Debug().
+			Stringer("destination_addr", dest.addr).
+			Msg("closing connections to removed proxy destination")
 		closeBoth.Do(closeConnections)
 		<-done
 		<-done
 	}
 }
 
-func (p *Proxy) destination() (<-chan struct{}, *net.TCPAddr) {
+func (p *Proxy) destination() *destination {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return p.closeConns, cloneTCPAddr(p.destAddr)
+
+	if len(p.destinationOrder) == 0 {
+		return nil
+	}
+	key := p.destinationOrder[p.nextDestination%len(p.destinationOrder)]
+	p.nextDestination = (p.nextDestination + 1) % len(p.destinationOrder)
+	return p.destinations[key].clone()
+}
+
+type destination struct {
+	addr       *net.TCPAddr
+	closeConns chan struct{}
+}
+
+func (d *destination) clone() *destination {
+	return &destination{
+		addr:       cloneTCPAddr(d.addr),
+		closeConns: d.closeConns,
+	}
 }
 
 func (p *Proxy) setupKeepAlive(conn *net.TCPConn) error {
@@ -235,7 +297,9 @@ func (p *Proxy) setupKeepAlive(conn *net.TCPConn) error {
 		config.Count = p.options.KeepAliveCount
 	}
 	if err := conn.SetKeepAliveConfig(config); err != nil {
-		log.Printf("set tcp keepalive config failed, using default keepalive: %v", err)
+		log.Warn().
+			Err(err).
+			Msg("failed to set TCP keepalive config, using default keepalive")
 		return conn.SetKeepAlive(true)
 	}
 	return nil
@@ -257,16 +321,43 @@ func copyAndClose(
 
 	n, err := io.Copy(dst, src)
 	if err != nil && !errors.Is(err, net.ErrClosed) {
-		log.Printf("copy %s to %s: %v", srcName, dstName, err)
+		log.Debug().
+			Err(err).
+			Str("source", srcName).
+			Str("destination", dstName).
+			Msg("proxy connection copy failed")
 	}
-	log.Printf("ending. copied %d bytes from %s to %s", n, srcName, dstName)
+	log.Debug().
+		Int64("bytes", n).
+		Str("source", srcName).
+		Str("destination", dstName).
+		Msg("proxy connection copy ended")
 }
 
-func sameAddr(a, b *net.TCPAddr) bool {
-	if a == nil || b == nil {
-		return a == nil && b == nil
+func connLocalAddr(conn net.Conn) string {
+	if conn == nil || conn.LocalAddr() == nil {
+		return ""
 	}
-	return a.String() == b.String()
+	return conn.LocalAddr().String()
+}
+
+func connRemoteAddr(conn net.Conn) string {
+	if conn == nil || conn.RemoteAddr() == nil {
+		return ""
+	}
+	return conn.RemoteAddr().String()
+}
+
+func sameDestinationSet(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func cloneTCPAddr(addr *net.TCPAddr) *net.TCPAddr {

@@ -16,12 +16,12 @@
 * `-c`, `--cluster-name` -
   cluster name
   * Environment: `STPROXY_CLUSTER_NAME`
-* `--metrics-listen-address` -
-  metrics listen address i.e "0.0.0.0:8080" (disabled by default)
-  * Environment: `STPROXY_METRICS_LISTEN_ADDRESS`
-* `--kubeconfig` -
-  path to kubeconfig file. Overrides $KUBECONFIG
-  * Environment: `STPROXY_KUBECONFIG`
+* `--stop-listening` -
+  stop listening on store error (default true)
+  * Environment: `STPROXY_STOP_LISTENING`
+
+### Writable Proxy
+
 * `-l`, `--listen-address` -
   proxy listening address
   * Defaults: `127.0.0.1`
@@ -30,9 +30,39 @@
   proxy listening port
   * Defaults: `5432`
   * Environment: `STPROXY_PORT`
-* `--stop-listening` -
-  stop listening on store error (default true)
-  * Environment: `STPROXY_STOP_LISTENING`
+* `--disable-writable-listener` -
+  disable the writable proxy listener
+  * Environment: `STPROXY_DISABLE_WRITABLE_LISTENER`
+
+### Read-Only Proxy
+
+* `--read-only-listen-address` -
+  read-only proxy listening address
+  * Environment: `STPROXY_READ_ONLY_LISTEN_ADDRESS`
+* `--read-only-port` -
+  read-only proxy listening port
+  * Environment: `STPROXY_READ_ONLY_PORT`
+* `--read-only-max-lag` -
+  maximum standby WAL lag in bytes for read-only routing
+  * Defaults: `0`
+  * Environment: `STPROXY_READ_ONLY_MAX_LAG`
+* `--read-only-no-fallback` -
+  do not route read-only connections to primary when no eligible standby exists
+  * Environment: `STPROXY_READ_ONLY_NO_FALLBACK`
+* `--read-only-include-primary` -
+  include primary in the normal read-only backend pool
+  * Environment: `STPROXY_READ_ONLY_INCLUDE_PRIMARY`
+* `--read-only-replica-priority` -
+  read-only replica priority policy
+  * Defaults: `sync`
+  * Environment: `STPROXY_READ_ONLY_REPLICA_PRIORITY`
+  * Choices: `sync, async, any`
+
+### Metrics
+
+* `--metrics-listen-address` -
+  metrics listen address i.e "0.0.0.0:8080" (disabled by default)
+  * Environment: `STPROXY_METRICS_LISTEN_ADDRESS`
 
 ### Store
 
@@ -42,7 +72,7 @@
   * Choices: `etcdv3, kubernetes`
 * `--store-endpoints` -
   a comma-delimited list of store endpoints (use https scheme for tls
-communication) (defaults: http://127.0.0.1:2379 for etcdv3)
+communication) (defaults: `http://127.0.0.1:2379` for etcdv3)
   * Environment: `STPROXY_STORE_ENDPOINTS`
 * `--store-prefix` -
   the store base prefix
@@ -78,6 +108,9 @@ communication) (defaults: http://127.0.0.1:2379 for etcdv3)
 
 ### Kubernetes
 
+* `--kubeconfig` -
+  path to kubeconfig file. Overrides $KUBECONFIG
+  * Environment: `STPROXY_KUBECONFIG`
 * `--kube-resource-kind` -
   the k8s resource kind to be used to store stolon clusterdata
   * Environment: `STPROXY_KUBE_RESOURCE_KIND`

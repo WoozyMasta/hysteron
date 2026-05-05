@@ -18,6 +18,7 @@ package integration
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -27,8 +28,73 @@ import (
 	"github.com/google/uuid"
 	"github.com/sorintlab/stolon/internal/cluster"
 	"github.com/sorintlab/stolon/internal/common"
+	pg "github.com/sorintlab/stolon/internal/postgresql"
 	"github.com/sorintlab/stolon/internal/store"
 )
+
+func TestProxyReadOnlyRouting(t *testing.T) {
+	t.Parallel()
+
+	env := setupReadOnlyProxyCluster(t)
+	defer env.shutdown()
+
+	standby := env.standby
+	if err := waitReadOnlyProxyRecovery(env.readOnlyListenAddress, env.readOnlyPort, true, 30*time.Second); err != nil {
+		t.Fatalf("expected read-only proxy to route to standby: %v", err)
+	}
+
+	standby.Stop()
+	if err := standby.WaitDBDown(30 * time.Second); err != nil {
+		t.Fatalf("expected standby database to stop: %v", err)
+	}
+	if err := waitReadOnlyProxyRecovery(env.readOnlyListenAddress, env.readOnlyPort, false, 30*time.Second); err != nil {
+		t.Fatalf("expected read-only proxy to fall back to primary: %v", err)
+	}
+}
+
+func TestProxyReadOnlyNoFallback(t *testing.T) {
+	t.Parallel()
+
+	env := setupReadOnlyProxyCluster(t, "--read-only-no-fallback")
+	defer env.shutdown()
+
+	if err := waitReadOnlyProxyRecovery(env.readOnlyListenAddress, env.readOnlyPort, true, 30*time.Second); err != nil {
+		t.Fatalf("expected read-only proxy to route to standby: %v", err)
+	}
+
+	env.standby.Stop()
+	if err := env.standby.WaitDBDown(30 * time.Second); err != nil {
+		t.Fatalf("expected standby database to stop: %v", err)
+	}
+	if err := waitReadOnlyProxyUnavailable(env.readOnlyListenAddress, env.readOnlyPort, 30*time.Second); err != nil {
+		t.Fatalf("expected read-only proxy to reject traffic without fallback: %v", err)
+	}
+}
+
+func TestProxyReadOnlyIncludePrimary(t *testing.T) {
+	t.Parallel()
+
+	env := setupReadOnlyProxyCluster(t, "--read-only-include-primary")
+	defer env.shutdown()
+
+	if err := waitReadOnlyProxyRecoveryValues(env.readOnlyListenAddress, env.readOnlyPort, 30*time.Second, true, false); err != nil {
+		t.Fatalf("expected read-only proxy to route to standby and primary: %v", err)
+	}
+}
+
+func TestProxyReadOnlyOnly(t *testing.T) {
+	t.Parallel()
+
+	env := setupReadOnlyProxyCluster(t, "--disable-writable-listener")
+	defer env.shutdown()
+
+	if err := env.proxy.WaitNotListening(10 * time.Second); err != nil {
+		t.Fatalf("expected writable proxy listener to be disabled: %v", err)
+	}
+	if err := waitReadOnlyProxyRecovery(env.readOnlyListenAddress, env.readOnlyPort, true, 30*time.Second); err != nil {
+		t.Fatalf("expected read-only-only proxy to route to standby: %v", err)
+	}
+}
 
 func TestProxyListening(t *testing.T) {
 	t.Parallel()
@@ -254,4 +320,191 @@ func TestProxyListening(t *testing.T) {
 	if err := tp.WaitListening(10 * time.Second); err != nil {
 		t.Fatalf("expecting tp listening, but it's not listening.")
 	}
+}
+
+func waitReadOnlyProxyRecovery(listenAddress, port string, want bool, timeout time.Duration) error {
+	start := time.Now()
+	var lastErr error
+	var lastRecovery bool
+	for time.Now().Add(-timeout).Before(start) {
+		inRecovery, err := queryReadOnlyProxyRecovery(listenAddress, port)
+		if err == nil {
+			if inRecovery == want {
+				return nil
+			}
+			lastRecovery = inRecovery
+		} else {
+			lastErr = err
+		}
+		time.Sleep(sleepInterval)
+	}
+	if lastErr != nil {
+		return fmt.Errorf("timeout waiting for pg_is_in_recovery=%t, last error: %w", want, lastErr)
+	}
+	return fmt.Errorf("timeout waiting for pg_is_in_recovery=%t, last value: %t", want, lastRecovery)
+}
+
+func waitReadOnlyProxyRecoveryValues(listenAddress, port string, timeout time.Duration, wants ...bool) error {
+	remaining := make(map[bool]struct{}, len(wants))
+	for _, want := range wants {
+		remaining[want] = struct{}{}
+	}
+
+	start := time.Now()
+	var lastErr error
+	for time.Now().Add(-timeout).Before(start) {
+		inRecovery, err := queryReadOnlyProxyRecovery(listenAddress, port)
+		if err == nil {
+			delete(remaining, inRecovery)
+			if len(remaining) == 0 {
+				return nil
+			}
+		} else {
+			lastErr = err
+		}
+		time.Sleep(sleepInterval)
+	}
+	if lastErr != nil {
+		return fmt.Errorf("timeout waiting for pg_is_in_recovery values, missing: %v, last error: %w", remaining, lastErr)
+	}
+	return fmt.Errorf("timeout waiting for pg_is_in_recovery values, missing: %v", remaining)
+}
+
+func waitReadOnlyProxyUnavailable(listenAddress, port string, timeout time.Duration) error {
+	start := time.Now()
+	var lastRecovery bool
+	sawUnavailable := false
+	for time.Now().Add(-timeout).Before(start) {
+		inRecovery, err := queryReadOnlyProxyRecovery(listenAddress, port)
+		if err != nil {
+			sawUnavailable = true
+			time.Sleep(sleepInterval)
+			continue
+		}
+		if !inRecovery {
+			return fmt.Errorf("read-only proxy routed to primary while fallback is disabled")
+		}
+		lastRecovery = inRecovery
+		time.Sleep(sleepInterval)
+	}
+	if sawUnavailable {
+		return nil
+	}
+	return fmt.Errorf("timeout waiting for read-only proxy to become unavailable, last pg_is_in_recovery: %t", lastRecovery)
+}
+
+func queryReadOnlyProxyRecovery(listenAddress, port string) (bool, error) {
+	connParams := pg.ConnParams{
+		"user":     pgSUUsername,
+		"password": pgSUPassword,
+		"host":     listenAddress,
+		"port":     port,
+		"dbname":   "postgres",
+		"sslmode":  "disable",
+	}
+	db, err := sql.Open(pg.SQLDriverName, connParams.ConnString())
+	if err != nil {
+		return false, err
+	}
+	defer db.Close()
+
+	var inRecovery bool
+	if err := db.QueryRow("SELECT pg_is_in_recovery()").Scan(&inRecovery); err != nil {
+		return false, err
+	}
+	return inRecovery, nil
+}
+
+type readOnlyProxyCluster struct {
+	t                     *testing.T
+	dir                   string
+	readOnlyListenAddress string
+	readOnlyPort          string
+	keepers               testKeepers
+	sentinels             testSentinels
+	proxy                 *TestProxy
+	store                 *TestStore
+	master                *TestKeeper
+	standby               *TestKeeper
+}
+
+func setupReadOnlyProxyCluster(t *testing.T, proxyArgs ...string) *readOnlyProxyCluster {
+	t.Helper()
+
+	dir, err := os.MkdirTemp("", "stolon")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	clusterName := uuid.NewString()
+	readOnlyListenAddress, readOnlyPort, err := getFreePort(true, false)
+	if err != nil {
+		os.RemoveAll(dir)
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	initialClusterSpec := &cluster.ClusterSpec{
+		InitMode:               cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
+		SleepInterval:          &cluster.Duration{Duration: 2 * time.Second},
+		FailInterval:           &cluster.Duration{Duration: 5 * time.Second},
+		ConvergenceTimeout:     &cluster.Duration{Duration: 30 * time.Second},
+		MaxStandbyLag:          cluster.Uint32P(50 * 1024),
+		SynchronousReplication: cluster.BoolP(true),
+		UsePgrewind:            cluster.BoolP(false),
+		PGParameters:           defaultPGParameters,
+	}
+	args := []string{
+		fmt.Sprintf("--read-only-listen-address=%s", readOnlyListenAddress),
+		fmt.Sprintf("--read-only-port=%s", readOnlyPort),
+	}
+	args = append(args, proxyArgs...)
+	tks, tss, tp, tstore := setupServersCustomWithProxyArgs(
+		t,
+		clusterName,
+		dir,
+		2,
+		1,
+		initialClusterSpec,
+		args...,
+	)
+
+	storePath := filepath.Join(common.StorePrefix, clusterName)
+	sm := store.NewKVBackedStore(tstore.store, storePath)
+
+	master, standbys := waitMasterStandbysReady(t, sm, tks)
+	standby := standbys[0]
+	if err := WaitClusterDataSynchronousStandbys([]string{standby.uid}, sm, 60*time.Second); err != nil {
+		shutdown(tks, tss, tp, tstore)
+		os.RemoveAll(dir)
+		t.Fatalf("expected synchronous standby on keeper %q in cluster data: %v", standby.uid, err)
+	}
+	xLogPos, err := GetXLogPos(master)
+	if err != nil {
+		shutdown(tks, tss, tp, tstore)
+		os.RemoveAll(dir)
+		t.Fatalf("failed to get master xlog position: %v", err)
+	}
+	if err := WaitClusterSyncedXLogPos([]*TestKeeper{master, standby}, xLogPos, sm, 30*time.Second); err != nil {
+		shutdown(tks, tss, tp, tstore)
+		os.RemoveAll(dir)
+		t.Fatalf("expected standby to be synced with master: %v", err)
+	}
+
+	return &readOnlyProxyCluster{
+		t:                     t,
+		dir:                   dir,
+		readOnlyListenAddress: readOnlyListenAddress,
+		readOnlyPort:          readOnlyPort,
+		keepers:               tks,
+		sentinels:             tss,
+		proxy:                 tp,
+		store:                 tstore,
+		master:                master,
+		standby:               standby,
+	}
+}
+
+func (e *readOnlyProxyCluster) shutdown() {
+	shutdown(e.keepers, e.sentinels, e.proxy, e.store)
+	os.RemoveAll(e.dir)
 }

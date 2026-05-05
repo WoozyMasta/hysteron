@@ -1,6 +1,8 @@
-## Stolon Documentation
+# Stolon Documentation
 
-We suggest that you first read the [Stolon Architecture and Requirements](architecture.md) to understand the primary concepts and avoid possible mistakes.
+We suggest that you first read the
+[Stolon Architecture and Requirements](architecture.md) to understand the
+primary concepts and avoid possible mistakes.
 
 * [Stolon Architecture and Requirements](architecture.md)
 * [Commands Invocation](commands_invocation.md)
@@ -16,21 +18,21 @@ We suggest that you first read the [Stolon Architecture and Requirements](archit
   * [Point In Time Recovery with wal-g](pitr_wal-g.md)
 * [Standby Cluster](standbycluster.md)
 
-### Misc topics
+## Misc topics
 
 * [Enabling pg_rewind](pg_rewind.md)
 * [Enabling synchronous replication](syncrepl.md)
 * [PostgreSQL SSL/TLS setup](ssl.md)
 * [Forcing a failover](forcefailover.md)
 
-### Recipes
+## Recipes
 
 * [Manual switchover without transactions loss](manual_switchover.md)
 
-### Examples
+## Examples
 
 * [Simple test cluster](simplecluster.md)
 * [Kubernetes](../examples/kubernetes/README.md)
 * [Two (or more) nodes setup](twonodes.md)
 
-### [FAQ](faq.md)
+## [FAQ](faq.md)

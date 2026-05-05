@@ -80,6 +80,7 @@ The format is based on [Keep a Changelog][], and this project adheres to
   comments and TLS naming.
 * Allow one sentinel process to run control loops for multiple clusters with
   per-cluster initial spec overrides and per-cluster log and metrics labels.
+* Add `stolonctl ls` to list clusters present in the configured store.
 * Clean up keeper and sentinel command revive findings with package and exported
   symbol comments.
 * Clean up cluster contract revive findings with documentation comments while

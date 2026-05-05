@@ -1030,8 +1030,15 @@ func (tp *TestProxy) WaitRightMaster(tk *TestKeeper, timeout time.Duration) erro
 }
 
 func StolonCtl(t *testing.T, clusterName string, storeBackend store.Backend, storeEndpoints string, a ...string) error {
+	_, err := StolonCtlOutput(t, clusterName, storeBackend, storeEndpoints, a...)
+	return err
+}
+
+func StolonCtlOutput(t *testing.T, clusterName string, storeBackend store.Backend, storeEndpoints string, a ...string) (string, error) {
 	args := []string{}
-	args = append(args, fmt.Sprintf("--cluster-name=%s", clusterName))
+	if clusterName != "" {
+		args = append(args, fmt.Sprintf("--cluster-name=%s", clusterName))
+	}
 	args = append(args, fmt.Sprintf("--store-backend=%s", storeBackend))
 	args = append(args, fmt.Sprintf("--store-endpoints=%s", storeEndpoints))
 	args = append(args, a...)
@@ -1040,23 +1047,18 @@ func StolonCtl(t *testing.T, clusterName string, storeBackend store.Backend, sto
 
 	bin := os.Getenv("STCTL_BIN")
 	if bin == "" {
-		return fmt.Errorf("missing STCTL_BIN env")
+		return "", fmt.Errorf("missing STCTL_BIN env")
 	}
 	cmd := exec.Command(bin, args...)
-	pr, pw, err := os.Pipe()
-	if err != nil {
-		return err
+	output, err := cmd.CombinedOutput()
+	scanner := bufio.NewScanner(strings.NewReader(string(output)))
+	for scanner.Scan() {
+		t.Logf("[%s]: %s", "stolonctl", scanner.Text())
 	}
-	cmd.Stdout = pw
-	cmd.Stderr = pw
-	go func() {
-		scanner := bufio.NewScanner(pr)
-		for scanner.Scan() {
-			t.Logf("[%s]: %s", "stolonctl", scanner.Text())
-		}
-	}()
-
-	return cmd.Run()
+	if err != nil {
+		return string(output), err
+	}
+	return string(output), nil
 }
 
 type TestStore struct {

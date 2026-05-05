@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -552,6 +554,18 @@ func TestSentinelMultiCluster(t *testing.T) {
 	}
 	if err := tk2.WaitDBUp(60 * time.Second); err != nil {
 		t.Fatalf("expected second cluster database up: %v", err)
+	}
+
+	output, err := StolonCtlOutput(t, "", tstore.storeBackend, storeEndpoints, "ls")
+	if err != nil {
+		t.Fatalf("stolonctl ls failed: %v", err)
+	}
+	gotClusterNames := strings.Fields(output)
+	slices.Sort(gotClusterNames)
+	wantClusterNames := []string{clusterName1, clusterName2}
+	slices.Sort(wantClusterNames)
+	if !slices.Equal(gotClusterNames, wantClusterNames) {
+		t.Fatalf("stolonctl ls = %v, want %v", gotClusterNames, wantClusterNames)
 	}
 }
 

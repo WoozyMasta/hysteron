@@ -41,6 +41,7 @@ type stolonCtl struct {
 	RemoveKeeper RemoveKeeperCommand `command:"removekeeper" description:"Remove a keeper from cluster data"`
 
 	Status StatusCommand `command:"status" description:"Display the current cluster status"`
+	Ls     LsCommand     `command:"ls" description:"List clusters in the configured store"`
 
 	Init        InitCommand        `command:"init" description:"Initialize a new cluster"`
 	Update      UpdateCommand      `command:"update" description:"Update a cluster specification"`
@@ -80,14 +81,24 @@ func Execute() {
 // only piece of glue between the `flags.Commander` interface and the
 // existing handlers.
 func runStolonCtl(fn func() error) error {
+	return runStolonCtlWithClusterValidation(true, fn)
+}
+
+func runStolonCtlWithoutCluster(fn func() error) error {
+	return runStolonCtlWithClusterValidation(false, fn)
+}
+
+func runStolonCtlWithClusterValidation(requireCluster bool, fn func() error) error {
 	closer, err := cmd.InitLogging(&cfg.CommonConfig)
 	if err != nil {
 		return fmt.Errorf("logging: %w", err)
 	}
 	log = slog.WithComponent("stolonctl")
 	defer cmd.CloseLogging(closer, &log)
-	if err := cmd.CheckClusterName(&cfg.CommonConfig); err != nil {
-		return err
+	if requireCluster {
+		if err := cmd.CheckClusterName(&cfg.CommonConfig); err != nil {
+			return err
+		}
 	}
 	if err := cmd.CheckCommonConfig(&cfg.CommonConfig); err != nil {
 		return err

@@ -31,7 +31,7 @@
   * Choices: `etcdv3, kubernetes`
 * `--store-endpoints` -
   a comma-delimited list of store endpoints (use https scheme for tls
-communication) (defaults: http://127.0.0.1:2379 for etcdv3)
+communication) (defaults: <http://127.0.0.1:2379> for etcdv3)
   * Environment: `STOLONCTL_STORE_ENDPOINTS`
 * `--store-prefix` -
   the store base prefix
@@ -358,6 +358,19 @@ Initialize a new cluster
   file containing the new cluster spec
 * `-y`, `--yes` -
   don't ask for confirmation
+
+#### Help Options
+
+* `-h`, `--help` -
+  Show this help message
+* `-v`, `--version` -
+  Show version information
+
+### ls
+
+List clusters in the configured store
+
+**Usage:** `stolonctl [OPTIONS] ls`
 
 #### Help Options
 

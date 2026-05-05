@@ -72,3 +72,55 @@ func TestCheckClusterNamesRejectsDuplicates(t *testing.T) {
 		t.Fatal("expected duplicate cluster name error")
 	}
 }
+
+func TestClusterNameFromKVClusterDataKey(t *testing.T) {
+	tests := []struct {
+		name string
+		key  string
+		want string
+		ok   bool
+	}{
+		{
+			name: "cluster data key",
+			key:  "stolon/cluster/one/clusterdata",
+			want: "one",
+			ok:   true,
+		},
+		{
+			name: "nested key is not cluster data",
+			key:  "stolon/cluster/one/keepers/info/keeper-1",
+		},
+		{
+			name: "wrong prefix",
+			key:  "other/cluster/one/clusterdata",
+		},
+		{
+			name: "empty cluster name",
+			key:  "stolon/cluster//clusterdata",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := clusterNameFromKVClusterDataKey("stolon/cluster", tt.key)
+			if ok != tt.ok {
+				t.Fatalf("ok = %v, want %v", ok, tt.ok)
+			}
+			if got != tt.want {
+				t.Fatalf("cluster name = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestClusterNameFromKubeResourceName(t *testing.T) {
+	got, ok := clusterNameFromKubeResourceName("stolon-cluster-one")
+	if !ok || got != "one" {
+		t.Fatalf("clusterNameFromKubeResourceName() = %q, %v; want one, true", got, ok)
+	}
+
+	got, ok = clusterNameFromKubeResourceName("other-one")
+	if ok || got != "" {
+		t.Fatalf("clusterNameFromKubeResourceName() = %q, %v; want empty, false", got, ok)
+	}
+}

@@ -18,10 +18,12 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -34,6 +36,7 @@ import (
 	"github.com/sorintlab/stolon/internal/util"
 	"github.com/woozymasta/flags"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
 	// Register optional Kubernetes auth plugins.
@@ -247,6 +250,87 @@ func NewElectionForCluster(cfg *CommonConfig, clusterName, uid string) (store.El
 		return store.NewKubeElection(kubecli, podName, namespace, clusterName, uid)
 	}
 	return nil, fmt.Errorf("unknown store backend: %q", cfg.Store.Backend)
+}
+
+// ListClusters returns cluster names that have cluster data in the configured
+// store backend.
+func ListClusters(ctx context.Context, cfg *CommonConfig) ([]string, error) {
+	switch cfg.Store.Backend {
+	case "etcdv3":
+		kvstore, err := NewKVStore(cfg)
+		if err != nil {
+			return nil, fmt.Errorf("cannot create kv store: %v", err)
+		}
+		defer func() {
+			_ = kvstore.Close()
+		}()
+
+		pairs, err := kvstore.List(ctx, cfg.Store.Prefix)
+		if err != nil {
+			return nil, fmt.Errorf("cannot list clusters: %v", err)
+		}
+		clusterNames := map[string]struct{}{}
+		for _, pair := range pairs {
+			name, ok := clusterNameFromKVClusterDataKey(cfg.Store.Prefix, pair.Key)
+			if ok {
+				clusterNames[name] = struct{}{}
+			}
+		}
+		return sortedStringSet(clusterNames), nil
+	case "kubernetes":
+		kubecli, _, namespace, err := getKubeValues(cfg, false)
+		if err != nil {
+			return nil, err
+		}
+		configMaps, err := kubecli.CoreV1().ConfigMaps(namespace).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("cannot list cluster configmaps: %v", err)
+		}
+		clusterNames := map[string]struct{}{}
+		for _, cm := range configMaps.Items {
+			name, ok := clusterNameFromKubeResourceName(cm.Name)
+			if !ok {
+				continue
+			}
+			if _, ok := cm.Annotations[util.KubeClusterDataAnnotation]; ok {
+				clusterNames[name] = struct{}{}
+			}
+		}
+		return sortedStringSet(clusterNames), nil
+	default:
+		return nil, fmt.Errorf("unknown store backend: %q", cfg.Store.Backend)
+	}
+}
+
+func clusterNameFromKVClusterDataKey(prefix, key string) (string, bool) {
+	cleanPrefix := strings.Trim(filepath.ToSlash(filepath.Clean(prefix)), "/")
+	cleanKey := strings.Trim(filepath.ToSlash(filepath.Clean(key)), "/")
+	rel, ok := strings.CutPrefix(cleanKey, cleanPrefix+"/")
+	if !ok {
+		return "", false
+	}
+	parts := strings.Split(rel, "/")
+	if len(parts) != 2 || parts[0] == "" || parts[1] != "clusterdata" {
+		return "", false
+	}
+	return parts[0], true
+}
+
+func clusterNameFromKubeResourceName(name string) (string, bool) {
+	clusterName, ok := strings.CutPrefix(name, util.KubeResourcePrefix+"-")
+	if !ok || clusterName == "" {
+		return "", false
+	}
+	return clusterName, true
+}
+
+func sortedStringSet(set map[string]struct{}) []string {
+	values := make([]string, 0, len(set))
+	for value := range set {
+		values = append(values, value)
+	}
+	sort.Strings(values)
+	return values
 }
 
 func getKubeValues(cfg *CommonConfig, requirePod bool) (*kubernetes.Clientset, string, string, error) {

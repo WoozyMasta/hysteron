@@ -18,6 +18,10 @@ LDFLAGS     ?= -s -w
 GOWORK      ?= off
 GOFTAGS     ?= forceposix
 
+DOC_BUILD        ?= 1
+DOC_RENDER_STYLE ?= posix
+DOC_COMMANDS_DIR ?= doc/commands
+
 INTEGRATION_TAGS          ?= integration
 INTEGRATION_TIMEOUT       ?= 20m
 INTEGRATION_PARALLEL      ?= 4
@@ -55,7 +59,7 @@ LDFLAGS_X := \
 	-X '$(LDFLAGS_PKG).Date=$(DATE)' \
 	-X '$(LDFLAGS_PKG).URL=$(URL)'
 
-.PHONY: all build release clean check ci verify tidy tidy-check download fmt \
+.PHONY: all build cli-docs release clean check ci verify tidy tidy-check download fmt \
 	fmt-check vet lint lint-fix align align-fix test test-race test-short bench \
 	bench-fast bench-reset integration integration-compose integration-matrix integration-matrix-ci vulncheck tools tools-ci tool-golangci-lint \
 	tool-betteralign tool-benchstat tool-vulncheck container-build
@@ -84,6 +88,26 @@ build: clean
 		GOWORK=$(GOWORK) CGO_ENABLED=$(CGO_ENABLED) \
 		$(GO) build $(GOFLAGS) -ldflags="$(LDFLAGS) $(LDFLAGS_X)" \
 			-tags "$(GOFTAGS)" $(EXTRA_BUILD_FLAGS) -o "$$out" "$$pkg"; \
+	done
+	@if [ "$(DOC_BUILD)" = "1" ]; then \
+		$(MAKE) cli-docs; \
+	fi
+
+cli-docs:
+	@mkdir -p $(DOC_COMMANDS_DIR)
+	@for binary in $(BINARIES); do \
+		case "$$binary" in \
+			stolon-keeper) doc="stolon-keeper.md" ;; \
+			stolon-sentinel) doc="stolon-sentinel.md" ;; \
+			stolon-proxy) doc="stolon-proxy.md" ;; \
+			stolonctl) doc="stolonctl.md" ;; \
+			*) echo "unknown binary $$binary" >&2; exit 1 ;; \
+		esac; \
+		bin="$(OUTPUT_DIR)/$$binary$(NATIVE_EXTENSION)"; \
+		out="$(DOC_COMMANDS_DIR)/$$doc"; \
+		echo ">> generating $$out"; \
+		"$$bin" docs md --style "$(DOC_RENDER_STYLE)" "$$out"; \
+		sed -i '1s/.*/<!-- markdownlint-disable MD013 MD024 MD033 MD034 MD036 -->/' "$$out"; \
 	done
 
 release: clean

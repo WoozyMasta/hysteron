@@ -2732,6 +2732,9 @@ func Execute() {
 	if _, err := parser.Parse(); err != nil {
 		os.Exit(cmd.ParseErrorExitCode(err))
 	}
+	if parser.Active != nil {
+		return
+	}
 	sentinel(parser)
 }
 

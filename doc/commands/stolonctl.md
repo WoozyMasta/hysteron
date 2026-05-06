@@ -1,4 +1,4 @@
-<!-- markdownlint-disable MD013 MD024 MD036 -->
+<!-- markdownlint-disable MD013 MD024 MD033 MD034 MD036 -->
 # stolonctl
 
 ## NAME
@@ -11,82 +11,102 @@
 
 ## OPTIONS
 
-### Application Options
-
-* `-c`, `--cluster-name` -
-  cluster name
-  * Environment: `STOLONCTL_CLUSTER_NAME`
-
-### Store
-
-* `--store-backend` -
-  store backend type
-  * Environment: `STOLONCTL_STORE_BACKEND`
-  * Choices: `etcdv3, kubernetes`
-* `--store-endpoints` -
-  a comma-delimited list of store endpoints (use https scheme for tls
-communication) (defaults: <http://127.0.0.1:2379> for etcdv3)
-  * Environment: `STOLONCTL_STORE_ENDPOINTS`
-* `--store-prefix` -
-  the store base prefix
-  * Defaults: `stolon/cluster`
-  * Environment: `STOLONCTL_STORE_PREFIX`
-* `--store-cert-file` -
-  certificate file for client identification to the store
-  * Environment: `STOLONCTL_STORE_CERT_FILE`
-* `--store-key` -
-  private key file for client identification to the store
-  * Environment: `STOLONCTL_STORE_KEY`
-* `--store-ca-file` -
-  verify certificates of HTTPS-enabled store servers using this CA bundle
-  * Environment: `STOLONCTL_STORE_CA_FILE`
-* `--store-timeout` -
-  store request timeout
-  * Defaults: `5s`
-  * Environment: `STOLONCTL_STORE_TIMEOUT`
-* `--store-skip-tls-verify` -
-  skip store certificate verification (insecure!!!)
-  * Environment: `STOLONCTL_STORE_SKIP_TLS_VERIFY`
-
-### Logging
-
-* `--log-level` -
-  log verbosity
-  * Defaults: `info`
-  * Environment: `STOLONCTL_LOG_LEVEL`
-  * Choices: `debug, info, warn, error`
-* `--log-color` -
-  enable color in log output (default if attached to a terminal)
-  * Environment: `STOLONCTL_LOG_COLOR`
-
-### Metrics
-
-* `--metrics-listen-address` -
-  metrics listen address i.e "0.0.0.0:8080" (disabled by default)
-  * Environment: `STOLONCTL_METRICS_LISTEN_ADDRESS`
-
-### Kubernetes
-
-* `--kubeconfig` -
-  path to kubeconfig file. Overrides $KUBECONFIG
-  * Environment: `STOLONCTL_KUBECONFIG`
-* `--kube-resource-kind` -
-  the k8s resource kind to be used to store stolon clusterdata
-  * Environment: `STOLONCTL_KUBE_RESOURCE_KIND`
-  * Choices: `configmap`
-* `--kube-context` -
-  name of the kubeconfig context to use
-  * Environment: `STOLONCTL_KUBE_CONTEXT`
-* `--kube-namespace` -
-  name of the kubernetes namespace to use
-  * Environment: `STOLONCTL_KUBE_NAMESPACE`
-
 ### Help Options
 
 * `-h`, `--help` -
   Show this help message
 * `-v`, `--version` -
   Show version information
+
+### Application Options
+
+* `-c`, `--cluster-name` -
+  cluster name. Can be repeated by components that support multiple clusters
+  * Environment: `$STOLONCTL_CLUSTER_NAME`
+
+### Metrics
+
+* `--metrics-listen-address` -
+  metrics listen address i.e "0.0.0.0:8080" (disabled by default)
+  * Environment: `$STOLONCTL_METRICS_LISTEN_ADDRESS`
+
+### Kubernetes
+
+* `--kubeconfig` -
+  path to kubeconfig file. Overrides $KUBECONFIG
+  * Environment: `$STOLONCTL_KUBECONFIG`
+* `--kube-resource-kind` -
+  the k8s resource kind to be used to store stolon clusterdata
+  * Environment: `$STOLONCTL_KUBE_RESOURCE_KIND`
+  * Choices: `configmap`
+* `--kube-context` -
+  name of the kubeconfig context to use
+  * Environment: `$STOLONCTL_KUBE_CONTEXT`
+* `--kube-namespace` -
+  name of the kubernetes namespace to use
+  * Environment: `$STOLONCTL_KUBE_NAMESPACE`
+
+### Logging
+
+* `--log-level` -
+  log verbosity (trace is verbose; use for short-lived diagnostics)
+  * Defaults: `info`
+  * Environment: `$STOLONCTL_LOG_LEVEL`
+  * Choices: `trace, debug, info, warn, error`
+* `--log-format` -
+  log output format (text or JSON)
+  * Defaults: `text`
+  * Environment: `$STOLONCTL_LOG_FORMAT`
+  * Choices: `text, json`
+* `--log-output` -
+  log destination: stdout, stderr, or a file path
+  * Defaults: `stderr`
+  * Environment: `$STOLONCTL_LOG_OUTPUT`
+* `--log-file-mode` -
+  when output is a file: append or truncate existing content
+  * Defaults: `append`
+  * Environment: `$STOLONCTL_LOG_FILE_MODE`
+  * Choices: `append, truncate`
+* `--log-time-format` -
+  timestamp: Go layout or rfc3339|rfc3339nano|unix|unixms|unixmicro|unixnano
+  * Defaults: `2006-01-02T15:04:05.000Z07:00`
+  * Environment: `$STOLONCTL_LOG_TIME_FORMAT`
+* `--log-color-policy` -
+  console colors: auto honors NO_COLOR, FORCE_COLOR, and TTY detection
+  * Defaults: `auto`
+  * Environment: `$STOLONCTL_LOG_COLOR_POLICY`
+  * Choices: `auto, always, never`
+
+### Store
+
+* `--store-backend` -
+  store backend type
+  * Environment: `$STOLONCTL_STORE_BACKEND`
+  * Choices: `etcdv3, kubernetes`
+* `--store-endpoints` -
+  a comma-delimited list of store endpoints (use https scheme for tls
+communication) (defaults: http://127.0.0.1:2379 for etcdv3)
+  * Environment: `$STOLONCTL_STORE_ENDPOINTS`
+* `--store-prefix` -
+  the store base prefix
+  * Defaults: `stolon/cluster`
+  * Environment: `$STOLONCTL_STORE_PREFIX`
+* `--store-cert-file` -
+  certificate file for client identification to the store
+  * Environment: `$STOLONCTL_STORE_CERT_FILE`
+* `--store-key` -
+  private key file for client identification to the store
+  * Environment: `$STOLONCTL_STORE_KEY`
+* `--store-ca-file` -
+  verify certificates of HTTPS-enabled store servers using this CA bundle
+  * Environment: `$STOLONCTL_STORE_CA_FILE`
+* `--store-timeout` -
+  store request timeout
+  * Defaults: `5s`
+  * Environment: `$STOLONCTL_STORE_TIMEOUT`
+* `--store-skip-tls-verify` -
+  skip store certificate verification (insecure!!!)
+  * Environment: `$STOLONCTL_STORE_SKIP_TLS_VERIFY`
 
 ## COMMANDS
 
@@ -130,148 +150,6 @@ Generate shell completion
   Shell completion format
   * Choices: `bash, zsh, pwsh`
   * Value name: `SHELL`
-
-#### Help Options
-
-* `-h`, `--help` -
-  Show this help message
-* `-v`, `--version` -
-  Show version information
-
-#### Arguments
-
-* `output`
-  * Description: Output file path
-
-### config
-
-Generate INI configuration example
-
-**Usage:** `stolonctl [OPTIONS] config [config-OPTIONS]`
-
-#### Generate INI configuration example
-
-* `--comment-width COLUMNS` -
-  Maximum width for wrapped comments
-  * Defaults: `80`
-  * Value name: `COLUMNS`
-
-#### Help Options
-
-* `-h`, `--help` -
-  Show this help message
-* `-v`, `--version` -
-  Show version information
-
-#### Arguments
-
-* `output`
-  * Description: Output file path
-
-### docs
-
-Generate documentation
-
-**Usage:** `stolonctl [OPTIONS] docs`
-
-#### Help Options
-
-* `-h`, `--help` -
-  Show this help message
-* `-v`, `--version` -
-  Show version information
-
-### docs html
-
-Generate HTML documentation
-
-**Usage:** `stolonctl [OPTIONS] docs html [html-OPTIONS]`
-
-#### Generate HTML documentation
-
-* `--template TEMPLATE` -
-  HTML documentation template
-  * Defaults: `default`
-  * Choices: `default, styled`
-  * Value name: `TEMPLATE`
-* `--program-name NAME` -
-  Override program name used in generated documentation templates
-  * Value name: `NAME`
-* `--toc` -
-  Include table of contents in output
-* `--trim-descriptions` -
-  Trim description whitespace in generated output
-* `--include-hidden` -
-  Include hidden options, groups and commands
-* `--mark-hidden` -
-  Mark hidden entities in documentation output
-
-#### Help Options
-
-* `-h`, `--help` -
-  Show this help message
-* `-v`, `--version` -
-  Show version information
-
-#### Arguments
-
-* `output`
-  * Description: Output file path
-
-### docs man
-
-Generate man page documentation
-
-**Usage:** `stolonctl [OPTIONS] docs man [man-OPTIONS]`
-
-#### Generate man page documentation
-
-* `--program-name NAME` -
-  Override program name used in generated documentation templates
-  * Value name: `NAME`
-* `--trim-descriptions` -
-  Trim description whitespace in generated output
-* `--include-hidden` -
-  Include hidden options, groups and commands
-* `--mark-hidden` -
-  Mark hidden entities in documentation output
-
-#### Help Options
-
-* `-h`, `--help` -
-  Show this help message
-* `-v`, `--version` -
-  Show version information
-
-#### Arguments
-
-* `output`
-  * Description: Output file path
-
-### docs md
-
-Generate Markdown documentation
-
-**Usage:** `stolonctl [OPTIONS] docs md [md-OPTIONS]`
-
-#### Generate Markdown documentation
-
-* `--template TEMPLATE` -
-  Markdown documentation template
-  * Defaults: `list`
-  * Choices: `list, table, code`
-  * Value name: `TEMPLATE`
-* `--program-name NAME` -
-  Override program name used in generated documentation templates
-  * Value name: `NAME`
-* `--toc` -
-  Include table of contents in output
-* `--trim-descriptions` -
-  Trim description whitespace in generated output
-* `--include-hidden` -
-  Include hidden options, groups and commands
-* `--mark-hidden` -
-  Mark hidden entities in documentation output
 
 #### Help Options
 

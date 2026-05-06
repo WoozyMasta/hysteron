@@ -2532,13 +2532,15 @@ func Execute() {
 	if _, err := parser.Parse(); err != nil {
 		os.Exit(cmd.ParseErrorExitCode(err))
 	}
+	if parser.Active != nil {
+		return
+	}
 	keeper(parser)
 }
 
 // NewParser creates a parser for stolon-keeper. Built-in helper
-// commands (`help`, `version`, `completion`, `config`, `docs`) are
-// available, but the keeper itself is a daemon so subcommand selection
-// is optional.
+// commands remain available, but the keeper itself is a daemon so
+// subcommand selection is optional.
 func NewParser() *flags.Parser {
 	parser := cmd.NewParser("stolon-keeper", "STKEEPER", &cfg, 0)
 	parser.SubcommandsOptional = true

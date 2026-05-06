@@ -129,8 +129,8 @@ github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UV
 github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
-github.com/woozymasta/flags v0.3.2 h1:gQqGljwa0AvrzSF3dD/NIIvtjZI6awlSH4HWq0MGD2A=
-github.com/woozymasta/flags v0.3.2/go.mod h1:qk4yWhxXMWon3A3omnwj6oLMyEzrPHpCY4Zz0NzO8vo=
+github.com/woozymasta/flags v0.3.3 h1:0xytZyrcIXZWaqJZv5/849zvTzbjSI6SgH/ljtArw9U=
+github.com/woozymasta/flags v0.3.3/go.mod h1:QsCS93ix6qQU5BEaOCo60NP1kYwJSnukRyfvV3M1fY0=
 github.com/woozymasta/jamle v0.3.0 h1:rOaJpmISrM3jAKOMdPVpMdHnTBCcPnOMH8stmRGkCh4=
 github.com/woozymasta/jamle v0.3.0/go.mod h1:9jinuW2OEkN2Vpe2QXWqJGJFdnvAbL9pyml4QDoIMfc=
 github.com/x448/float16 v0.8.4 h1:qLwI1I70+NjRFUR3zs1JPUCgaCXSh3SW62uAKT1mSBM=

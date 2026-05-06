@@ -11,7 +11,7 @@ require (
 	github.com/mitchellh/copystructure v1.2.0
 	github.com/prometheus/client_golang v1.23.2
 	github.com/rs/zerolog v1.35.1
-	github.com/woozymasta/flags v0.3.2
+	github.com/woozymasta/flags v0.3.3
 	github.com/woozymasta/jamle v0.3.0
 	go.etcd.io/etcd/api/v3 v3.6.11
 	go.etcd.io/etcd/client/v3 v3.6.11

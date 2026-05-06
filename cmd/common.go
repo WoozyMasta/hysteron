@@ -93,7 +93,10 @@ func NewParser(name, envPrefix string, data any, opts flags.Options) *flags.Pars
 	parser := flags.NewNamedParser(
 		name,
 		flags.Default|
-			flags.HelpCommands|
+			flags.HelpCommand|
+			flags.VersionCommand|
+			flags.CompletionCommand|
+			flags.DocsCommand|
 			flags.VersionFlag|
 			flags.PassDoubleDash|
 			flags.DetectShellFlagStyle|
@@ -113,6 +116,9 @@ func NewParser(name, envPrefix string, data any, opts flags.Options) *flags.Pars
 	parser.SetVersionFields(flags.VersionFieldsAll)
 	if err := parser.SetMaxLongNameLength(64); err != nil {
 		common.MustNot(err, "set maximum CLI long option length")
+	}
+	if err := parser.SetBuiltinCommandHidden("docs", true); err != nil {
+		common.MustNot(err, "hide built-in CLI docs command")
 	}
 	if data != nil {
 		if _, err := parser.AddGroup("Application Options", "", data); err != nil {

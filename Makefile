@@ -107,7 +107,6 @@ cli-docs:
 		out="$(DOC_COMMANDS_DIR)/$$doc"; \
 		echo ">> generating $$out"; \
 		"$$bin" docs md --style "$(DOC_RENDER_STYLE)" "$$out"; \
-		sed -i '1s/.*/<!-- markdownlint-disable MD013 MD024 MD033 MD034 MD036 -->/' "$$out"; \
 	done
 
 release: clean

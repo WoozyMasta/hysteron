@@ -56,6 +56,10 @@ kubectl run -i -t stolonctl --image=sorintlab/stolon:master-pg10 --restart=Never
 stolonctl --cluster-name=kube-stolon --store-backend=kubernetes --kube-resource-kind=configmap init
 ```
 
+`--kube-resource-kind=secret` can be used instead of `configmap` when cluster
+data should be stored in an opaque Kubernetes Secret. The example RBAC role
+allows both resource kinds.
+
 * later from one of the pods running the stolon components.
 
 

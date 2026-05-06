@@ -115,6 +115,8 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Add an optional read-only `stolon-proxy` listener with standby lag filtering,
   sync/async replica priority, round-robin standby routing, and explicit primary
   fallback controls.
+* Add `--kube-resource-kind=secret` as a Kubernetes store option that stores
+  cluster data in an opaque Secret `data["clusterdata"]` field.
 
 ## v0.17.0
 

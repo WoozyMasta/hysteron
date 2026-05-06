@@ -81,7 +81,7 @@ type MetricsOptions struct {
 // to keep the existing public CLI while grouping the options in help output.
 type KubeOptions struct {
 	Config       string `long:"kubeconfig" env:"KUBECONFIG" description:"path to kubeconfig file. Overrides $KUBECONFIG"`
-	ResourceKind string `long:"kube-resource-kind" env:"KUBE_RESOURCE_KIND" choice:"configmap" description:"the k8s resource kind to be used to store stolon clusterdata"`
+	ResourceKind string `long:"kube-resource-kind" env:"KUBE_RESOURCE_KIND" choices:"configmap;secret" description:"the k8s resource kind to be used to store stolon clusterdata"`
 	Context      string `long:"kube-context" env:"KUBE_CONTEXT" description:"name of the kubeconfig context to use"`
 	Namespace    string `long:"kube-namespace" env:"KUBE_NAMESPACE" description:"name of the kubernetes namespace to use"`
 }
@@ -228,7 +228,7 @@ func NewStoreForCluster(cfg *CommonConfig, clusterName string, requirePod bool) 
 		if err != nil {
 			return nil, err
 		}
-		s, err := store.NewKubeStore(kubecli, podName, namespace, clusterName)
+		s, err := store.NewKubeStore(kubecli, podName, namespace, clusterName, cfg.Kube.ResourceKind)
 		if err != nil {
 			return nil, fmt.Errorf("cannot create store: %v", err)
 		}
@@ -292,19 +292,38 @@ func ListClusters(ctx context.Context, cfg *CommonConfig) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		configMaps, err := kubecli.CoreV1().ConfigMaps(namespace).List(ctx, metav1.ListOptions{})
-		if err != nil {
-			return nil, fmt.Errorf("cannot list cluster configmaps: %v", err)
-		}
 		clusterNames := map[string]struct{}{}
-		for _, cm := range configMaps.Items {
-			name, ok := clusterNameFromKubeResourceName(cm.Name)
-			if !ok {
-				continue
+		switch cfg.Kube.ResourceKind {
+		case "configmap":
+			configMaps, err := kubecli.CoreV1().ConfigMaps(namespace).List(ctx, metav1.ListOptions{})
+			if err != nil {
+				return nil, fmt.Errorf("cannot list cluster configmaps: %v", err)
 			}
-			if _, ok := cm.Annotations[util.KubeClusterDataAnnotation]; ok {
-				clusterNames[name] = struct{}{}
+			for _, cm := range configMaps.Items {
+				name, ok := clusterNameFromKubeResourceName(cm.Name)
+				if !ok {
+					continue
+				}
+				if _, ok := cm.Annotations[util.KubeClusterDataAnnotation]; ok {
+					clusterNames[name] = struct{}{}
+				}
 			}
+		case "secret":
+			secrets, err := kubecli.CoreV1().Secrets(namespace).List(ctx, metav1.ListOptions{})
+			if err != nil {
+				return nil, fmt.Errorf("cannot list cluster secrets: %v", err)
+			}
+			for _, secret := range secrets.Items {
+				name, ok := clusterNameFromKubeResourceName(secret.Name)
+				if !ok {
+					continue
+				}
+				if _, ok := secret.Data[util.KubeClusterDataKey]; ok {
+					clusterNames[name] = struct{}{}
+				}
+			}
+		default:
+			return nil, fmt.Errorf("unsupported kubernetes resource kind %q", cfg.Kube.ResourceKind)
 		}
 		return sortedStringSet(clusterNames), nil
 	default:

@@ -16,6 +16,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -27,10 +28,10 @@ import (
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 )
 
-func TestKubeStoreClusterDataRoundTrip(t *testing.T) {
+func TestKubeStoreConfigMapClusterDataRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	kubecli := fake.NewSimpleClientset()
-	store, err := NewKubeStore(kubecli, "pod-01", "default", "test")
+	store, err := NewKubeStore(kubecli, "pod-01", "default", "test", "configmap")
 	if err != nil {
 		t.Fatalf("NewKubeStore() error = %v", err)
 	}
@@ -64,6 +65,70 @@ func TestKubeStoreClusterDataRoundTrip(t *testing.T) {
 	}
 	if cm.Annotations[util.KubeClusterDataAnnotation] == "" {
 		t.Fatalf("ConfigMap annotation %q is empty", util.KubeClusterDataAnnotation)
+	}
+}
+
+func TestKubeStoreSecretClusterDataRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	kubecli := fake.NewSimpleClientset()
+	store, err := NewKubeStore(kubecli, "pod-01", "default", "test", "secret")
+	if err != nil {
+		t.Fatalf("NewKubeStore() error = %v", err)
+	}
+
+	initMode := cluster.ClusterInitModeNew
+	cd := cluster.NewClusterData(&cluster.Cluster{
+		UID: "cluster-01",
+		Spec: &cluster.ClusterSpec{
+			InitMode: &initMode,
+		},
+	})
+
+	if err := store.PutClusterData(ctx, cd); err != nil {
+		t.Fatalf("PutClusterData() error = %v", err)
+	}
+
+	got, kv, err := store.GetClusterData(ctx)
+	if err != nil {
+		t.Fatalf("GetClusterData() error = %v", err)
+	}
+	if kv == nil {
+		t.Fatal("GetClusterData() returned nil KVPair")
+	}
+	if diff := cmp.Diff(cd, got); diff != "" {
+		t.Fatalf("GetClusterData() mismatch (-want +got):\n%s", diff)
+	}
+
+	secret, err := kubecli.CoreV1().Secrets("default").Get(ctx, "stolon-cluster-test", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("Secrets.Get() error = %v", err)
+	}
+	if len(secret.Data[util.KubeClusterDataKey]) == 0 {
+		t.Fatalf("Secret data key %q is empty", util.KubeClusterDataKey)
+	}
+}
+
+func TestKubeStoreSecretAtomicPutClusterData(t *testing.T) {
+	ctx := context.Background()
+	kubecli := fake.NewSimpleClientset()
+	store, err := NewKubeStore(kubecli, "pod-01", "default", "test", "secret")
+	if err != nil {
+		t.Fatalf("NewKubeStore() error = %v", err)
+	}
+
+	cd := cluster.NewClusterData(&cluster.Cluster{UID: "cluster-01"})
+	first, err := store.AtomicPutClusterData(ctx, cd, nil)
+	if err != nil {
+		t.Fatalf("AtomicPutClusterData() create error = %v", err)
+	}
+	if first == nil {
+		t.Fatal("AtomicPutClusterData() returned nil KVPair")
+	}
+	if _, err := store.AtomicPutClusterData(ctx, cd, nil); !errors.Is(err, ErrKeyModified) {
+		t.Fatalf("AtomicPutClusterData() duplicate error = %v, want %v", err, ErrKeyModified)
+	}
+	if _, err := store.AtomicPutClusterData(ctx, cd, first); err != nil {
+		t.Fatalf("AtomicPutClusterData() update error = %v", err)
 	}
 }
 

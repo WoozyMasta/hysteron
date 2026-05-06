@@ -2,7 +2,8 @@
 # fine tuned and split per component.
 # The required permission per component should be:
 # keeper/proxy/sentinel: update their own pod annotations
-# sentinel/stolonctl: get, create, update configmaps
+# sentinel/stolonctl: get, create, update configmaps or secrets, depending on
+# the configured --kube-resource-kind
 # sentinel: get, create, update leases for leader election
 # sentinel/stolonctl: list components pods
 # sentinel/stolonctl: get components pods annotations
@@ -18,6 +19,7 @@ rules:
   resources:
   - pods
   - configmaps
+  - secrets
   - events
   verbs:
   - "*"

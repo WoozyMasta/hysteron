@@ -38,7 +38,7 @@
 * `--kube-resource-kind` -
   the k8s resource kind to be used to store stolon clusterdata
   * Environment: `$STOLONCTL_KUBE_RESOURCE_KIND`
-  * Choices: `configmap`
+  * Choices: `configmap, secret`
 * `--kube-context` -
   name of the kubeconfig context to use
   * Environment: `$STOLONCTL_KUBE_CONTEXT`

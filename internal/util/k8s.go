@@ -34,6 +34,10 @@ const (
 
 	// KubeClusterDataAnnotation stores serialized cluster data.
 	KubeClusterDataAnnotation = "stolon-clusterdata"
+
+	// KubeClusterDataKey stores serialized cluster data in Kubernetes object data.
+	KubeClusterDataKey = "clusterdata"
+
 	// KubeStatusAnnnotation stores serialized component status data.
 	KubeStatusAnnnotation = "stolon-status"
 )

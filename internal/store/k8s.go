@@ -64,17 +64,25 @@ type KubeStore struct {
 	namespace string
 	// clusterName is Stolon cluster name.
 	clusterName string
-	// resourceName is the configmap name used for cluster data.
+	// resourceKind is the Kubernetes resource kind used for cluster data.
+	resourceKind string
+	// resourceName is the Kubernetes resource name used for cluster data.
 	resourceName string
 }
 
 // NewKubeStore creates a Kubernetes-backed store implementation.
-func NewKubeStore(kubecli kubernetes.Interface, podName, namespace, clusterName string) (*KubeStore, error) {
+func NewKubeStore(kubecli kubernetes.Interface, podName, namespace, clusterName, resourceKind string) (*KubeStore, error) {
+	switch resourceKind {
+	case "configmap", "secret":
+	default:
+		return nil, fmt.Errorf("unsupported kubernetes resource kind %q", resourceKind)
+	}
 	return &KubeStore{
 		client:       kubecli,
 		podName:      podName,
 		namespace:    namespace,
 		clusterName:  clusterName,
+		resourceKind: resourceKind,
 		resourceName: fmt.Sprintf("%s-%s", util.KubeResourcePrefix, clusterName),
 	}, nil
 }
@@ -119,7 +127,7 @@ func (s *KubeStore) patchKubeStatusAnnotation(ctx context.Context, annotationDat
 		return err
 	})
 	if retryErr != nil {
-		return fmt.Errorf("update failed: %v", retryErr)
+		return fmt.Errorf("update failed: %w", retryErr)
 	}
 	return nil
 }
@@ -130,6 +138,13 @@ func (s *KubeStore) AtomicPutClusterData(ctx context.Context, cd *cluster.Cluste
 	if err != nil {
 		return nil, err
 	}
+	if s.resourceKind == "secret" {
+		return s.atomicPutSecretClusterData(ctx, cdj, previous)
+	}
+	return s.atomicPutConfigMapClusterData(ctx, cdj, previous)
+}
+
+func (s *KubeStore) atomicPutConfigMapClusterData(ctx context.Context, cdj []byte, previous *KVPair) (*KVPair, error) {
 	epsClient := s.client.CoreV1().ConfigMaps(s.namespace)
 
 	retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
@@ -190,7 +205,52 @@ func (s *KubeStore) AtomicPutClusterData(ctx context.Context, cd *cluster.Cluste
 		return err
 	})
 	if retryErr != nil {
-		return nil, fmt.Errorf("update failed: %v", retryErr)
+		return nil, fmt.Errorf("update failed: %w", retryErr)
+	}
+	return &KVPair{Value: cdj}, nil
+}
+
+func (s *KubeStore) atomicPutSecretClusterData(ctx context.Context, cdj []byte, previous *KVPair) (*KVPair, error) {
+	secretsClient := s.client.CoreV1().Secrets(s.namespace)
+
+	retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		result, err := secretsClient.Get(ctx, s.resourceName, metav1.GetOptions{})
+		if err != nil && !apierrors.IsNotFound(err) {
+			return fmt.Errorf("failed to get latest version of secret: %v", err)
+		}
+		if !apierrors.IsNotFound(err) {
+			if previous == nil {
+				if _, ok := result.Data[util.KubeClusterDataKey]; ok {
+					return ErrKeyModified
+				}
+			}
+
+			if previous != nil {
+				curcd, ok := result.Data[util.KubeClusterDataKey]
+				if !ok || string(previous.Value) != string(curcd) {
+					return ErrKeyModified
+				}
+			}
+			if result.Data == nil {
+				result.Data = map[string][]byte{}
+			}
+			result.Data[util.KubeClusterDataKey] = cdj
+			_, err = secretsClient.Update(ctx, result, metav1.UpdateOptions{})
+			return err
+		}
+
+		if previous != nil {
+			return ErrKeyModified
+		}
+		_, err = secretsClient.Create(ctx, &v1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: s.resourceName},
+			Type:       v1.SecretTypeOpaque,
+			Data:       map[string][]byte{util.KubeClusterDataKey: cdj},
+		}, metav1.CreateOptions{})
+		return err
+	})
+	if retryErr != nil {
+		return nil, fmt.Errorf("update failed: %w", retryErr)
 	}
 	return &KVPair{Value: cdj}, nil
 }
@@ -201,6 +261,13 @@ func (s *KubeStore) PutClusterData(ctx context.Context, cd *cluster.ClusterData)
 	if err != nil {
 		return err
 	}
+	if s.resourceKind == "secret" {
+		return s.putSecretClusterData(ctx, cdj)
+	}
+	return s.putConfigMapClusterData(ctx, cdj)
+}
+
+func (s *KubeStore) putConfigMapClusterData(ctx context.Context, cdj []byte) error {
 	epsClient := s.client.CoreV1().ConfigMaps(s.namespace)
 
 	retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
@@ -228,13 +295,49 @@ func (s *KubeStore) PutClusterData(ctx context.Context, cd *cluster.ClusterData)
 		return err
 	})
 	if retryErr != nil {
-		return fmt.Errorf("update failed: %v", retryErr)
+		return fmt.Errorf("update failed: %w", retryErr)
+	}
+	return nil
+}
+
+func (s *KubeStore) putSecretClusterData(ctx context.Context, cdj []byte) error {
+	secretsClient := s.client.CoreV1().Secrets(s.namespace)
+
+	retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		result, err := secretsClient.Get(ctx, s.resourceName, metav1.GetOptions{})
+		if err != nil && !apierrors.IsNotFound(err) {
+			return fmt.Errorf("failed to get latest version of secret: %v", err)
+		}
+		if !apierrors.IsNotFound(err) {
+			if result.Data == nil {
+				result.Data = map[string][]byte{}
+			}
+			result.Data[util.KubeClusterDataKey] = cdj
+			_, err = secretsClient.Update(ctx, result, metav1.UpdateOptions{})
+			return err
+		}
+		_, err = secretsClient.Create(ctx, &v1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: s.resourceName},
+			Type:       v1.SecretTypeOpaque,
+			Data:       map[string][]byte{util.KubeClusterDataKey: cdj},
+		}, metav1.CreateOptions{})
+		return err
+	})
+	if retryErr != nil {
+		return fmt.Errorf("update failed: %w", retryErr)
 	}
 	return nil
 }
 
 // GetClusterData loads cluster data from Kubernetes.
 func (s *KubeStore) GetClusterData(ctx context.Context) (*cluster.ClusterData, *KVPair, error) {
+	if s.resourceKind == "secret" {
+		return s.getSecretClusterData(ctx)
+	}
+	return s.getConfigMapClusterData(ctx)
+}
+
+func (s *KubeStore) getConfigMapClusterData(ctx context.Context) (*cluster.ClusterData, *KVPair, error) {
 	epsClient := s.client.CoreV1().ConfigMaps(s.namespace)
 	result, err := epsClient.Get(ctx, s.resourceName, metav1.GetOptions{})
 	if err != nil {
@@ -254,6 +357,28 @@ func (s *KubeStore) GetClusterData(ctx context.Context) (*cluster.ClusterData, *
 	}
 
 	return cd, &KVPair{Value: []byte(cdj)}, nil
+}
+
+func (s *KubeStore) getSecretClusterData(ctx context.Context) (*cluster.ClusterData, *KVPair, error) {
+	secretsClient := s.client.CoreV1().Secrets(s.namespace)
+	result, err := secretsClient.Get(ctx, s.resourceName, metav1.GetOptions{})
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil, nil, nil
+		}
+		return nil, nil, fmt.Errorf("failed to get latest version of secret: %v", err)
+	}
+	cdj, ok := result.Data[util.KubeClusterDataKey]
+	if !ok {
+		return nil, nil, nil
+	}
+
+	var cd *cluster.ClusterData
+	if err := json.Unmarshal(cdj, &cd); err != nil {
+		return nil, nil, err
+	}
+
+	return cd, &KVPair{Value: cdj}, nil
 }
 
 // SetKeeperInfo publishes keeper info.

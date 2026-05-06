@@ -46,7 +46,7 @@ initialization, ignored if cluster is already initialized
 * `--kube-resource-kind` -
   the k8s resource kind to be used to store stolon clusterdata
   * Environment: `$STSENTINEL_KUBE_RESOURCE_KIND`
-  * Choices: `configmap`
+  * Choices: `configmap, secret`
 * `--kube-context` -
   name of the kubeconfig context to use
   * Environment: `$STSENTINEL_KUBE_CONTEXT`

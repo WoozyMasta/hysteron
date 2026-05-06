@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"time"
 
 	"github.com/sorintlab/stolon/internal/cluster"
@@ -71,7 +72,14 @@ type KubeStore struct {
 }
 
 // NewKubeStore creates a Kubernetes-backed store implementation.
-func NewKubeStore(kubecli kubernetes.Interface, podName, namespace, clusterName, resourceKind string) (*KubeStore, error) {
+func NewKubeStore(
+	kubecli kubernetes.Interface,
+	podName,
+	namespace,
+	clusterName,
+	resourceKind,
+	resourceName string,
+) (*KubeStore, error) {
 	switch resourceKind {
 	case "configmap", "secret":
 	default:
@@ -83,8 +91,14 @@ func NewKubeStore(kubecli kubernetes.Interface, podName, namespace, clusterName,
 		namespace:    namespace,
 		clusterName:  clusterName,
 		resourceKind: resourceKind,
-		resourceName: fmt.Sprintf("%s-%s", util.KubeResourcePrefix, clusterName),
+		resourceName: resourceName,
 	}, nil
+}
+
+func (s *KubeStore) clusterLabels() map[string]string {
+	return map[string]string{
+		util.KubeClusterLabel: s.clusterName,
+	}
 }
 
 func (s *KubeStore) labelSelector(componentLabel ComponentLabelValue) labels.Selector {
@@ -185,6 +199,10 @@ func (s *KubeStore) atomicPutConfigMapClusterData(ctx context.Context, cdj []byt
 			if result.Annotations == nil {
 				result.Annotations = map[string]string{}
 			}
+			if result.Labels == nil {
+				result.Labels = map[string]string{}
+			}
+			maps.Copy(result.Labels, s.clusterLabels())
 			result.Annotations[util.KubeClusterDataAnnotation] = string(cdj)
 			_, err = epsClient.Update(ctx, result, metav1.UpdateOptions{})
 			return err
@@ -200,6 +218,7 @@ func (s *KubeStore) atomicPutConfigMapClusterData(ctx context.Context, cdj []byt
 			ObjectMeta: metav1.ObjectMeta{
 				Name:        s.resourceName,
 				Annotations: annotations,
+				Labels:      s.clusterLabels(),
 			},
 		}, metav1.CreateOptions{})
 		return err
@@ -234,6 +253,10 @@ func (s *KubeStore) atomicPutSecretClusterData(ctx context.Context, cdj []byte, 
 			if result.Data == nil {
 				result.Data = map[string][]byte{}
 			}
+			if result.Labels == nil {
+				result.Labels = map[string]string{}
+			}
+			maps.Copy(result.Labels, s.clusterLabels())
 			result.Data[util.KubeClusterDataKey] = cdj
 			_, err = secretsClient.Update(ctx, result, metav1.UpdateOptions{})
 			return err
@@ -243,9 +266,12 @@ func (s *KubeStore) atomicPutSecretClusterData(ctx context.Context, cdj []byte, 
 			return ErrKeyModified
 		}
 		_, err = secretsClient.Create(ctx, &v1.Secret{
-			ObjectMeta: metav1.ObjectMeta{Name: s.resourceName},
-			Type:       v1.SecretTypeOpaque,
-			Data:       map[string][]byte{util.KubeClusterDataKey: cdj},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   s.resourceName,
+				Labels: s.clusterLabels(),
+			},
+			Type: v1.SecretTypeOpaque,
+			Data: map[string][]byte{util.KubeClusterDataKey: cdj},
 		}, metav1.CreateOptions{})
 		return err
 	})
@@ -280,6 +306,10 @@ func (s *KubeStore) putConfigMapClusterData(ctx context.Context, cdj []byte) err
 			if result.Annotations == nil {
 				result.Annotations = map[string]string{}
 			}
+			if result.Labels == nil {
+				result.Labels = map[string]string{}
+			}
+			maps.Copy(result.Labels, s.clusterLabels())
 			result.Annotations[util.KubeClusterDataAnnotation] = string(cdj)
 			_, err = epsClient.Update(ctx, result, metav1.UpdateOptions{})
 			return err
@@ -290,6 +320,7 @@ func (s *KubeStore) putConfigMapClusterData(ctx context.Context, cdj []byte) err
 			ObjectMeta: metav1.ObjectMeta{
 				Name:        s.resourceName,
 				Annotations: annotations,
+				Labels:      s.clusterLabels(),
 			},
 		}, metav1.CreateOptions{})
 		return err
@@ -312,14 +343,21 @@ func (s *KubeStore) putSecretClusterData(ctx context.Context, cdj []byte) error 
 			if result.Data == nil {
 				result.Data = map[string][]byte{}
 			}
+			if result.Labels == nil {
+				result.Labels = map[string]string{}
+			}
+			maps.Copy(result.Labels, s.clusterLabels())
 			result.Data[util.KubeClusterDataKey] = cdj
 			_, err = secretsClient.Update(ctx, result, metav1.UpdateOptions{})
 			return err
 		}
 		_, err = secretsClient.Create(ctx, &v1.Secret{
-			ObjectMeta: metav1.ObjectMeta{Name: s.resourceName},
-			Type:       v1.SecretTypeOpaque,
-			Data:       map[string][]byte{util.KubeClusterDataKey: cdj},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   s.resourceName,
+				Labels: s.clusterLabels(),
+			},
+			Type: v1.SecretTypeOpaque,
+			Data: map[string][]byte{util.KubeClusterDataKey: cdj},
 		}, metav1.CreateOptions{})
 		return err
 	})
@@ -517,9 +555,7 @@ type KubeElection struct {
 }
 
 // NewKubeElection creates a Kubernetes-backed election.
-func NewKubeElection(kubecli kubernetes.Interface, podName, namespace, clusterName, candidateUID string) (*KubeElection, error) {
-	resourceName := fmt.Sprintf("%s-%s", util.KubeResourcePrefix, clusterName)
-
+func NewKubeElection(kubecli kubernetes.Interface, podName, namespace, resourceName, candidateUID string) (*KubeElection, error) {
 	rl, err := resourcelock.New(resourcelock.LeasesResourceLock,
 		namespace,
 		resourceName,

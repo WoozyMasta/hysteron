@@ -117,6 +117,11 @@ The format is based on [Keep a Changelog][], and this project adheres to
   fallback controls.
 * Add `--kube-resource-kind=secret` as a Kubernetes store option that stores
   cluster data in an opaque Secret `data["clusterdata"]` field.
+* Add optional sentinel-managed Kubernetes Service publishing for the writable
+  PostgreSQL endpoint using a selectorless Service and EndpointSlice,
+  with collision-safe naming via `--kube-resource-name`
+  and configurable publishing options through
+  `--kube-service-name`/`--kube-service-port`.
 
 ## v0.17.0
 

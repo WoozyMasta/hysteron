@@ -73,6 +73,16 @@ func TestCheckClusterNamesRejectsDuplicates(t *testing.T) {
 	}
 }
 
+func TestCheckClusterNamesRequiresKubeResourceNamePlaceholderForMultipleClusters(t *testing.T) {
+	cfg := &CommonConfig{ClusterNames: []string{"one", "two"}}
+	cfg.Store.Backend = "kubernetes"
+	cfg.Kube.ResourceName = "shared-name"
+
+	if _, err := CheckClusterNames(cfg); err == nil {
+		t.Fatal("expected kubernetes resource name placeholder error")
+	}
+}
+
 func TestClusterNameFromKVClusterDataKey(t *testing.T) {
 	tests := []struct {
 		name string
@@ -122,5 +132,34 @@ func TestClusterNameFromKubeResourceName(t *testing.T) {
 	got, ok = clusterNameFromKubeResourceName("other-one")
 	if ok || got != "" {
 		t.Fatalf("clusterNameFromKubeResourceName() = %q, %v; want empty, false", got, ok)
+	}
+}
+
+func TestClusterNameFromKubeObjectPrefersLabel(t *testing.T) {
+	got := clusterNameFromKubeObject("custom-resource", map[string]string{"stolon-cluster": "one"})
+	if got != "one" {
+		t.Fatalf("clusterNameFromKubeObject() = %q, want one", got)
+	}
+}
+
+func TestKubeResourceNameForCluster(t *testing.T) {
+	cfg := &CommonConfig{}
+	cfg.Kube.ResourceName = "pg-{cluster}"
+
+	got, err := KubeResourceNameForCluster(cfg, "prod")
+	if err != nil {
+		t.Fatalf("KubeResourceNameForCluster() error = %v", err)
+	}
+	if got != "pg-prod" {
+		t.Fatalf("KubeResourceNameForCluster() = %q, want pg-prod", got)
+	}
+}
+
+func TestKubeResourceNameForClusterRejectsInvalidName(t *testing.T) {
+	cfg := &CommonConfig{}
+	cfg.Kube.ResourceName = "PG_{cluster}"
+
+	if _, err := KubeResourceNameForCluster(cfg, "prod"); err == nil {
+		t.Fatal("expected invalid kubernetes resource name error")
 	}
 }

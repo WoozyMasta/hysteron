@@ -37,6 +37,7 @@ import (
 	"github.com/woozymasta/flags"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/client-go/kubernetes"
 
 	// Register optional Kubernetes auth plugins.
@@ -62,7 +63,7 @@ type CommonConfig struct {
 // kubernetes). Long names and env keys are prefixed with `store-`/`STORE_`
 // because the enclosing CommonConfig declares the group namespaces.
 type StoreOptions struct {
-	Backend       string        `long:"backend" env:"BACKEND" choices:"etcdv3;kubernetes" description:"store backend type"`
+	Backend       string        `long:"backend" env:"BACKEND" choices:"etcdv3;kubernetes" validate-non-empty:"true" description:"store backend type"`
 	Endpoints     string        `long:"endpoints" env:"ENDPOINTS" description:"a comma-delimited list of store endpoints (use https scheme for tls communication) (defaults: http://127.0.0.1:2379 for etcdv3)"`
 	Prefix        string        `long:"prefix" env:"PREFIX" default:"stolon/cluster" description:"the store base prefix"`
 	CertFile      string        `long:"cert-file" env:"CERT_FILE" description:"certificate file for client identification to the store"`
@@ -82,6 +83,7 @@ type MetricsOptions struct {
 type KubeOptions struct {
 	Config       string `long:"kubeconfig" env:"KUBECONFIG" description:"path to kubeconfig file. Overrides $KUBECONFIG"`
 	ResourceKind string `long:"kube-resource-kind" env:"KUBE_RESOURCE_KIND" choices:"configmap;secret" description:"the k8s resource kind to be used to store stolon clusterdata"`
+	ResourceName string `long:"kube-resource-name" env:"KUBE_RESOURCE_NAME" default:"stolon-cluster-{cluster}" description:"Kubernetes resource name template for cluster data and sentinel election objects; {cluster} is replaced with the cluster name"`
 	Context      string `long:"kube-context" env:"KUBE_CONTEXT" description:"name of the kubeconfig context to use"`
 	Namespace    string `long:"kube-namespace" env:"KUBE_NAMESPACE" description:"name of the kubernetes namespace to use"`
 }
@@ -174,11 +176,11 @@ func init() {
 // CheckCommonConfig validates store backend specific requirements that
 // cannot be expressed in struct tags alone.
 func CheckCommonConfig(cfg *CommonConfig) error {
-	if cfg.Store.Backend == "" {
-		return errors.New("store backend type required")
-	}
 	if cfg.Store.Backend == "kubernetes" && cfg.Kube.ResourceKind == "" {
 		return errors.New("unspecified kubernetes resource kind")
+	}
+	if cfg.Store.Backend == "kubernetes" && cfg.Kube.ResourceName == "" {
+		return errors.New("unspecified kubernetes resource name")
 	}
 	return nil
 }
@@ -228,7 +230,11 @@ func NewStoreForCluster(cfg *CommonConfig, clusterName string, requirePod bool) 
 		if err != nil {
 			return nil, err
 		}
-		s, err := store.NewKubeStore(kubecli, podName, namespace, clusterName, cfg.Kube.ResourceKind)
+		resourceName, err := KubeResourceNameForCluster(cfg, clusterName)
+		if err != nil {
+			return nil, err
+		}
+		s, err := store.NewKubeStore(kubecli, podName, namespace, clusterName, cfg.Kube.ResourceKind, resourceName)
 		if err != nil {
 			return nil, fmt.Errorf("cannot create store: %v", err)
 		}
@@ -257,7 +263,11 @@ func NewElectionForCluster(cfg *CommonConfig, clusterName, uid string) (store.El
 		if err != nil {
 			return nil, err
 		}
-		return store.NewKubeElection(kubecli, podName, namespace, clusterName, uid)
+		resourceName, err := KubeResourceNameForCluster(cfg, clusterName)
+		if err != nil {
+			return nil, err
+		}
+		return store.NewKubeElection(kubecli, podName, namespace, resourceName, uid)
 	}
 	return nil, fmt.Errorf("unknown store backend: %q", cfg.Store.Backend)
 }
@@ -300,12 +310,10 @@ func ListClusters(ctx context.Context, cfg *CommonConfig) ([]string, error) {
 				return nil, fmt.Errorf("cannot list cluster configmaps: %v", err)
 			}
 			for _, cm := range configMaps.Items {
-				name, ok := clusterNameFromKubeResourceName(cm.Name)
-				if !ok {
-					continue
-				}
 				if _, ok := cm.Annotations[util.KubeClusterDataAnnotation]; ok {
-					clusterNames[name] = struct{}{}
+					if name := clusterNameFromKubeObject(cm.Name, cm.Labels); name != "" {
+						clusterNames[name] = struct{}{}
+					}
 				}
 			}
 		case "secret":
@@ -314,12 +322,10 @@ func ListClusters(ctx context.Context, cfg *CommonConfig) ([]string, error) {
 				return nil, fmt.Errorf("cannot list cluster secrets: %v", err)
 			}
 			for _, secret := range secrets.Items {
-				name, ok := clusterNameFromKubeResourceName(secret.Name)
-				if !ok {
-					continue
-				}
 				if _, ok := secret.Data[util.KubeClusterDataKey]; ok {
-					clusterNames[name] = struct{}{}
+					if name := clusterNameFromKubeObject(secret.Name, secret.Labels); name != "" {
+						clusterNames[name] = struct{}{}
+					}
 				}
 			}
 		default:
@@ -351,6 +357,31 @@ func clusterNameFromKubeResourceName(name string) (string, bool) {
 		return "", false
 	}
 	return clusterName, true
+}
+
+func clusterNameFromKubeObject(name string, labels map[string]string) string {
+	if clusterName := labels[util.KubeClusterLabel]; clusterName != "" {
+		return clusterName
+	}
+	clusterName, ok := clusterNameFromKubeResourceName(name)
+	if !ok {
+		return ""
+	}
+	return clusterName
+}
+
+// KubeResourceNameForCluster resolves and validates the Kubernetes resource
+// name template used for cluster data and sentinel election objects.
+func KubeResourceNameForCluster(cfg *CommonConfig, clusterName string) (string, error) {
+	name := strings.ReplaceAll(cfg.Kube.ResourceName, "{cluster}", clusterName)
+	if errs := k8svalidation.IsDNS1123Label(name); len(errs) != 0 {
+		return "", fmt.Errorf(
+			"invalid kubernetes resource name %q: %s",
+			name,
+			strings.Join(errs, "; "),
+		)
+	}
+	return name, nil
 }
 
 func sortedStringSet(set map[string]struct{}) []string {
@@ -434,6 +465,11 @@ func CheckClusterNames(cfg *CommonConfig) ([]string, error) {
 	names := cfg.ClusterNamesList()
 	if len(names) == 0 {
 		return nil, errors.New("cluster name required")
+	}
+	if cfg.Store.Backend == "kubernetes" &&
+		len(names) > 1 &&
+		!strings.Contains(cfg.Kube.ResourceName, "{cluster}") {
+		return nil, errors.New("kubernetes resource name must include {cluster} when multiple cluster names are configured")
 	}
 	seen := map[string]struct{}{}
 	for _, name := range names {

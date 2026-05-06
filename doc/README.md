@@ -10,6 +10,7 @@ primary concepts and avoid possible mistakes.
 * [Config Variable Expansion](config_expansion.md)
 * [Cluster Initialization](initialization.md)
 * [Stolon Proxy](proxy.md)
+* [Kubernetes Service Publishing](kubernetes_service_publishing.md)
 * [Setting instance parameters](postgres_parameters.md)
 * [Custom pg_hba.conf entries](custom_pg_hba_entries.md)
 * [Stolon Client](stolonctl.md)

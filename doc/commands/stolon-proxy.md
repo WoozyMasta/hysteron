@@ -81,6 +81,11 @@ exists
   the k8s resource kind to be used to store stolon clusterdata
   * Environment: `$STPROXY_KUBE_RESOURCE_KIND`
   * Choices: `configmap, secret`
+* `--kube-resource-name` -
+  Kubernetes resource name template for cluster data and sentinel election
+objects; {cluster} is replaced with the cluster name
+  * Defaults: `stolon-cluster-{cluster}`
+  * Environment: `$STPROXY_KUBE_RESOURCE_NAME`
 * `--kube-context` -
   name of the kubeconfig context to use
   * Environment: `$STPROXY_KUBE_CONTEXT`

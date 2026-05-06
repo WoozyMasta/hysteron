@@ -63,8 +63,9 @@ const (
 )
 
 type config struct {
-	InitialClusterSpecFile string   `short:"f" long:"initial-cluster-spec" env:"INITIAL_CLUSTER_SPEC" description:"a file providing the initial cluster specification, used only at cluster initialization, ignored if cluster is already initialized"`
-	ClusterSpecFiles       []string `long:"cluster-spec" env:"CLUSTER_SPEC" description:"per-cluster initial cluster specification override as <cluster-name>=<path>; can be repeated"`
+	InitialClusterSpecFile string                       `short:"f" long:"initial-cluster-spec" env:"INITIAL_CLUSTER_SPEC" description:"a file providing the initial cluster specification, used only at cluster initialization, ignored if cluster is already initialized"`
+	ClusterSpecFiles       []string                     `long:"cluster-spec" env:"CLUSTER_SPEC" description:"per-cluster initial cluster specification override as <cluster-name>=<path>; can be repeated"`
+	KubeService            kubeServicePublishingOptions `group:"Kubernetes Service Publishing"`
 	cmd.CommonConfig
 }
 
@@ -2297,6 +2298,8 @@ type Sentinel struct {
 	e store.Store
 	// Leader election backend.
 	election store.Election
+	// Optional Kubernetes Service publisher.
+	kubeServicePublisher *kubeServicePublisher
 	// Cluster name served by this sentinel runner.
 	clusterName string
 	// Parsed sentinel command configuration.
@@ -2406,18 +2409,23 @@ func NewSentinel(
 	if err != nil {
 		return nil, fmt.Errorf("cannot create election: %v", err)
 	}
+	publisher, err := newKubeServicePublisher(cfg, clusterName, logger)
+	if err != nil {
+		return nil, err
+	}
 
 	return &Sentinel{
-		uid:                uid,
-		cfg:                cfg,
-		e:                  e,
-		election:           election,
-		clusterName:        clusterName,
-		log:                logger,
-		leader:             false,
-		initialClusterSpec: initialClusterSpec,
-		end:                end,
-		UIDFn:              common.UID,
+		uid:                  uid,
+		cfg:                  cfg,
+		e:                    e,
+		election:             election,
+		kubeServicePublisher: publisher,
+		clusterName:          clusterName,
+		log:                  logger,
+		leader:               false,
+		initialClusterSpec:   initialClusterSpec,
+		end:                  end,
+		UIDFn:                common.UID,
 		// This is just to choose a pseudo random keeper so
 		// use math.rand (no need for crypto.rand) without an
 		// initial seed.
@@ -2594,6 +2602,13 @@ func (s *Sentinel) clusterSentinelCheck(pctx context.Context) {
 		s.updateChangeTimes(cd, newcd)
 		if _, err := e.AtomicPutClusterData(pctx, newcd, prevCDPair); err != nil {
 			s.log.Error().Err(err).Msg("error saving cluster data")
+			return
+		}
+	}
+	if s.kubeServicePublisher != nil {
+		if err := s.kubeServicePublisher.PublishWritable(pctx, newcd); err != nil {
+			s.log.Error().Err(err).Msg("failed to publish writable Kubernetes Service")
+			return
 		}
 	}
 
@@ -2770,6 +2785,11 @@ func sentinel(_ *flags.Parser) {
 		closeLog()
 		os.Exit(1)
 	}
+	if err := checkSentinelConfig(&cfg); err != nil {
+		log.Error().Err(err).Msg("invalid sentinel configuration")
+		closeLog()
+		os.Exit(1)
+	}
 
 	specFiles, err := clusterSpecFiles(cfg.InitialClusterSpecFile, cfg.ClusterSpecFiles, clusterNames)
 	if err != nil {
@@ -2813,4 +2833,11 @@ func sentinel(_ *flags.Parser) {
 	<-ctx.Done()
 	wg.Wait()
 	closeLog()
+}
+
+func checkSentinelConfig(cfg *config) error {
+	if cfg.KubeService.Enabled && cfg.Store.Backend != "kubernetes" {
+		return errors.New("kubernetes service publishing requires --store-backend=kubernetes")
+	}
+	return nil
 }

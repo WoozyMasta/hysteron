@@ -32,6 +32,23 @@ initialization, ignored if cluster is already initialized
   cluster name. Can be repeated by components that support multiple clusters
   * Environment: `$STSENTINEL_CLUSTER_NAME`
 
+### Kubernetes Service Publishing
+
+* `--kube-service-publishing` -
+  publish the current writable PostgreSQL endpoint through a Kubernetes
+Service and EndpointSlice
+  * Environment: `$STSENTINEL_KUBE_SERVICE_PUBLISHING`
+* `--kube-service-name` -
+  Kubernetes Service name used for writable PostgreSQL traffic; {cluster}
+and {resource} are replaced with the cluster name and Kubernetes resource
+name
+  * Defaults: `{resource}-rw`
+  * Environment: `$STSENTINEL_KUBE_SERVICE_NAME`
+* `--kube-service-port` -
+  Kubernetes Service port exposed for writable PostgreSQL traffic
+  * Defaults: `5432`
+  * Environment: `$STSENTINEL_KUBE_SERVICE_PORT`
+
 ### Metrics
 
 * `--metrics-listen-address` -
@@ -47,6 +64,11 @@ initialization, ignored if cluster is already initialized
   the k8s resource kind to be used to store stolon clusterdata
   * Environment: `$STSENTINEL_KUBE_RESOURCE_KIND`
   * Choices: `configmap, secret`
+* `--kube-resource-name` -
+  Kubernetes resource name template for cluster data and sentinel election
+objects; {cluster} is replaced with the cluster name
+  * Defaults: `stolon-cluster-{cluster}`
+  * Environment: `$STSENTINEL_KUBE_RESOURCE_NAME`
 * `--kube-context` -
   name of the kubeconfig context to use
   * Environment: `$STSENTINEL_KUBE_CONTEXT`

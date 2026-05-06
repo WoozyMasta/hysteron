@@ -5,6 +5,8 @@
 # sentinel/stolonctl: get, create, update configmaps or secrets, depending on
 # the configured --kube-resource-kind
 # sentinel: get, create, update leases for leader election
+# sentinel: get, create, update services and endpointslices when Kubernetes
+# service publishing is enabled
 # sentinel/stolonctl: list components pods
 # sentinel/stolonctl: get components pods annotations
 
@@ -20,7 +22,14 @@ rules:
   - pods
   - configmaps
   - secrets
+  - services
   - events
+  verbs:
+  - "*"
+- apiGroups:
+  - discovery.k8s.io
+  resources:
+  - endpointslices
   verbs:
   - "*"
 - apiGroups:

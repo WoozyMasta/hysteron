@@ -31,7 +31,7 @@ import (
 func TestKubeStoreConfigMapClusterDataRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	kubecli := fake.NewSimpleClientset()
-	store, err := NewKubeStore(kubecli, "pod-01", "default", "test", "configmap")
+	store, err := NewKubeStore(kubecli, "pod-01", "default", "test", "configmap", "stolon-cluster-test")
 	if err != nil {
 		t.Fatalf("NewKubeStore() error = %v", err)
 	}
@@ -66,12 +66,15 @@ func TestKubeStoreConfigMapClusterDataRoundTrip(t *testing.T) {
 	if cm.Annotations[util.KubeClusterDataAnnotation] == "" {
 		t.Fatalf("ConfigMap annotation %q is empty", util.KubeClusterDataAnnotation)
 	}
+	if cm.Labels[util.KubeClusterLabel] != "test" {
+		t.Fatalf("ConfigMap cluster label = %q, want test", cm.Labels[util.KubeClusterLabel])
+	}
 }
 
 func TestKubeStoreSecretClusterDataRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	kubecli := fake.NewSimpleClientset()
-	store, err := NewKubeStore(kubecli, "pod-01", "default", "test", "secret")
+	store, err := NewKubeStore(kubecli, "pod-01", "default", "test", "secret", "custom-resource")
 	if err != nil {
 		t.Fatalf("NewKubeStore() error = %v", err)
 	}
@@ -99,19 +102,22 @@ func TestKubeStoreSecretClusterDataRoundTrip(t *testing.T) {
 		t.Fatalf("GetClusterData() mismatch (-want +got):\n%s", diff)
 	}
 
-	secret, err := kubecli.CoreV1().Secrets("default").Get(ctx, "stolon-cluster-test", metav1.GetOptions{})
+	secret, err := kubecli.CoreV1().Secrets("default").Get(ctx, "custom-resource", metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("Secrets.Get() error = %v", err)
 	}
 	if len(secret.Data[util.KubeClusterDataKey]) == 0 {
 		t.Fatalf("Secret data key %q is empty", util.KubeClusterDataKey)
 	}
+	if secret.Labels[util.KubeClusterLabel] != "test" {
+		t.Fatalf("Secret cluster label = %q, want test", secret.Labels[util.KubeClusterLabel])
+	}
 }
 
 func TestKubeStoreSecretAtomicPutClusterData(t *testing.T) {
 	ctx := context.Background()
 	kubecli := fake.NewSimpleClientset()
-	store, err := NewKubeStore(kubecli, "pod-01", "default", "test", "secret")
+	store, err := NewKubeStore(kubecli, "pod-01", "default", "test", "secret", "stolon-cluster-test")
 	if err != nil {
 		t.Fatalf("NewKubeStore() error = %v", err)
 	}
@@ -135,7 +141,7 @@ func TestKubeStoreSecretAtomicPutClusterData(t *testing.T) {
 func TestKubeElectionUsesLeaseLock(t *testing.T) {
 	ctx := context.Background()
 	kubecli := fake.NewSimpleClientset()
-	election, err := NewKubeElection(kubecli, "pod-01", "default", "test", "sentinel-01")
+	election, err := NewKubeElection(kubecli, "pod-01", "default", "stolon-cluster-test", "sentinel-01")
 	if err != nil {
 		t.Fatalf("NewKubeElection() error = %v", err)
 	}

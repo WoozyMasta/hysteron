@@ -1,7 +1,7 @@
 # Kubernetes Service Publishing
 
-`stolon-sentinel` can publish the current writable PostgreSQL endpoint
-through a Kubernetes Service and EndpointSlice instead of
+`stolon-sentinel` can publish writable and read-only PostgreSQL endpoints
+through Kubernetes Services and EndpointSlice objects instead of
 requiring `stolon-proxy` in the client path.
 
 This mode is optional and only works with `--store-backend=kubernetes`.
@@ -10,18 +10,17 @@ This mode is optional and only works with `--store-backend=kubernetes`.
 
 When enabled, the sentinel leader creates or updates:
 
-* a Kubernetes Service without a selector;
-* one EndpointSlice managed by Stolon and linked to that Service.
+* selectorless Kubernetes Service objects;
+* one Stolon-managed EndpointSlice per Service.
 
-The EndpointSlice contains the current writable PostgreSQL endpoint
-selected by the sentinel.
-When there is no safe writable endpoint,
-the EndpointSlice is kept with an empty endpoint list.
+The writable EndpointSlice contains the current primary endpoint selected
+by the sentinel. When there is no safe writable endpoint, it is kept with
+an empty endpoint list.
 
-The Service name defaults to `{resource}-rw`, where `{resource}`
+The writable Service name defaults to `{resource}`, where `{resource}`
 is the resolved Kubernetes resource name from `--kube-resource-name`.
 The default resource name template
-is `stolon-cluster-{cluster}` for compatibility.
+is `stolon-{cluster}` for compatibility.
 
 ```sh
 stolon-sentinel \
@@ -49,7 +48,7 @@ stolon-sentinel \
   --cluster-name kube-stolon \
   --store-backend kubernetes \
   --kube-service-publishing \
-  --kube-service-name postgres-rw \
+  --kube-service-name postgres \
   --kube-service-port 5432
 ```
 
@@ -77,9 +76,9 @@ This creates independent Kubernetes resources:
 
 ```text
 pg-app-a        Secret or ConfigMap, plus Lease
-pg-app-a-rw     writable Service
+pg-app-a        writable Service
 pg-app-b        Secret or ConfigMap, plus Lease
-pg-app-b-rw     writable Service
+pg-app-b        writable Service
 ```
 
 Override the Service name with a template when the default is not suitable:
@@ -91,8 +90,37 @@ stolon-sentinel \
   --store-backend kubernetes \
   --kube-resource-name pg-{cluster} \
   --kube-service-publishing \
-  --kube-service-name postgres-{cluster}-rw
+  --kube-service-name postgres-{cluster}
 ```
+
+## Read-Only Service
+
+Enable read-only publishing with a separate Service:
+
+```sh
+stolon-sentinel \
+  --cluster-name kube-stolon \
+  --store-backend kubernetes \
+  --kube-service-publishing \
+  --kube-read-only-service-publishing
+```
+
+Defaults:
+
+* writable Service name: `{resource}`;
+* read-only Service name: `{resource}-ro`;
+* both Service ports: `5432`.
+
+Read-only endpoint selection follows the same policy as `stolon-proxy`:
+
+* only healthy standby databases with matching generation are eligible;
+* standby lag is filtered by `--kube-read-only-max-lag`;
+* priority policy is set by `--kube-read-only-replica-priority`
+  (`sync`, `async`, `any`);
+* fallback to primary is enabled by default and can be disabled with
+  `--kube-read-only-no-fallback`;
+* `--kube-read-only-include-primary` adds primary to the normal read-only
+  pool and is mutually exclusive with `--kube-read-only-no-fallback`.
 
 ## Why EndpointSlice
 
@@ -134,11 +162,3 @@ The sentinel ServiceAccount needs namespace-scoped access to:
 The Service managed by Stolon must not define a selector.
 If a Service with the configured name already exists and has a selector,
 the sentinel refuses to manage it.
-
-## Read-Only Service
-
-Read-only Service publishing is not implemented yet.
-It should reuse the same EndpointSlice mechanism
-and the read-only selection policy already used by `stolon-proxy`:
-standby lag filtering, sync or async priority, optional primary fallback,
-and optional primary inclusion.

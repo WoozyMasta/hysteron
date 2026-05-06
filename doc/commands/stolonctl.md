@@ -43,7 +43,7 @@
 * `--kube-resource-name` -
   Kubernetes resource name template for cluster data and sentinel election
   objects; {cluster} is replaced with the cluster name
-  * Defaults: `stolon-cluster-{cluster}`
+  * Defaults: `stolon-{cluster}`
   * Environment: `$STOLONCTL_KUBE_RESOURCE_NAME`
 * `--kube-context` -
   name of the kubeconfig context to use

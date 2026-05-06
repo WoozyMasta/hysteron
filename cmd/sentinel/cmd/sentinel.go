@@ -2606,8 +2606,8 @@ func (s *Sentinel) clusterSentinelCheck(pctx context.Context) {
 		}
 	}
 	if s.kubeServicePublisher != nil {
-		if err := s.kubeServicePublisher.PublishWritable(pctx, newcd); err != nil {
-			s.log.Error().Err(err).Msg("failed to publish writable Kubernetes Service")
+		if err := s.kubeServicePublisher.Publish(pctx, newcd); err != nil {
+			s.log.Error().Err(err).Msg("failed to publish Kubernetes Services")
 			return
 		}
 	}
@@ -2836,8 +2836,18 @@ func sentinel(_ *flags.Parser) {
 }
 
 func checkSentinelConfig(cfg *config) error {
-	if cfg.KubeService.Enabled && cfg.Store.Backend != "kubernetes" {
+	if (cfg.KubeService.Enabled || cfg.KubeService.ReadOnlyEnabled) &&
+		cfg.Store.Backend != "kubernetes" {
 		return errors.New("kubernetes service publishing requires --store-backend=kubernetes")
+	}
+	if cfg.KubeService.ReadOnlyIncludePrimary && cfg.KubeService.ReadOnlyNoFallback {
+		return errors.New("kubernetes read-only include-primary and no-fallback options are mutually exclusive")
+	}
+	if cfg.KubeService.Enabled &&
+		cfg.KubeService.ReadOnlyEnabled &&
+		cfg.KubeService.ServiceName == cfg.KubeService.ReadOnlyServiceName &&
+		cfg.KubeService.ServicePort == cfg.KubeService.ReadOnlyServicePort {
+		return errors.New("kubernetes writable and read-only services cannot use the same name and port")
 	}
 	return nil
 }

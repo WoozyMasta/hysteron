@@ -121,7 +121,11 @@ The format is based on [Keep a Changelog][], and this project adheres to
   PostgreSQL endpoint using a selectorless Service and EndpointSlice,
   with collision-safe naming via `--kube-resource-name`
   and configurable publishing options through
-  `--kube-service-name`/`--kube-service-port`.
+  `--kube-service-name`/`--kube-service-port` (default writable name:
+  `{resource}`); add optional read-only
+  publishing with `--kube-read-only-service-*` flags and proxy-style standby
+  selection controls (`replica-priority`, `max-lag`, `no-fallback`,
+  `include-primary`).
 
 ## v0.17.0
 

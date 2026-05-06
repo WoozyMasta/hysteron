@@ -83,7 +83,7 @@ type MetricsOptions struct {
 type KubeOptions struct {
 	Config       string `long:"kubeconfig" env:"KUBECONFIG" description:"path to kubeconfig file. Overrides $KUBECONFIG"`
 	ResourceKind string `long:"kube-resource-kind" env:"KUBE_RESOURCE_KIND" choices:"configmap;secret" description:"the k8s resource kind to be used to store stolon clusterdata"`
-	ResourceName string `long:"kube-resource-name" env:"KUBE_RESOURCE_NAME" default:"stolon-cluster-{cluster}" description:"Kubernetes resource name template for cluster data and sentinel election objects; {cluster} is replaced with the cluster name"`
+	ResourceName string `long:"kube-resource-name" env:"KUBE_RESOURCE_NAME" default:"stolon-{cluster}" description:"Kubernetes resource name template for cluster data and sentinel election objects; {cluster} is replaced with the cluster name"`
 	Context      string `long:"kube-context" env:"KUBE_CONTEXT" description:"name of the kubeconfig context to use"`
 	Namespace    string `long:"kube-namespace" env:"KUBE_NAMESPACE" description:"name of the kubernetes namespace to use"`
 }

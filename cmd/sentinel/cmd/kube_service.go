@@ -22,12 +22,14 @@ import (
 	"maps"
 	"net"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/rs/zerolog"
 	commoncmd "github.com/sorintlab/stolon/cmd"
 	"github.com/sorintlab/stolon/internal/cluster"
+	"github.com/sorintlab/stolon/internal/common"
 	"github.com/sorintlab/stolon/internal/util"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
@@ -45,18 +47,32 @@ const (
 )
 
 type kubeServicePublishingOptions struct {
-	ServiceName string `long:"kube-service-name" env:"KUBE_SERVICE_NAME" default:"{resource}-rw" validate-non-empty:"true" description:"Kubernetes Service name used for writable PostgreSQL traffic; {cluster} and {resource} are replaced with the cluster name and Kubernetes resource name"`
-	ServicePort int32  `long:"kube-service-port" env:"KUBE_SERVICE_PORT" default:"5432" validate-min:"1" validate-max:"65535" description:"Kubernetes Service port exposed for writable PostgreSQL traffic"`
-	Enabled     bool   `long:"kube-service-publishing" env:"KUBE_SERVICE_PUBLISHING" description:"publish the current writable PostgreSQL endpoint through a Kubernetes Service and EndpointSlice"`
+	ServiceName             string                  `long:"kube-service-name" env:"KUBE_SERVICE_NAME" default:"{resource}" validate-non-empty:"true" description:"Kubernetes Service name used for writable PostgreSQL traffic; {cluster} and {resource} are replaced with the cluster name and Kubernetes resource name"`
+	ReadOnlyServiceName     string                  `long:"kube-read-only-service-name" env:"KUBE_READ_ONLY_SERVICE_NAME" default:"{resource}-ro" validate-non-empty:"true" description:"Kubernetes Service name used for read-only PostgreSQL traffic; {cluster} and {resource} are replaced with the cluster name and Kubernetes resource name"`
+	ReadOnlyReplicaPriority readOnlyReplicaPriority `long:"kube-read-only-replica-priority" env:"KUBE_READ_ONLY_REPLICA_PRIORITY" default:"sync" choices:"sync;async;any" description:"read-only replica priority policy"`
+	ReadOnlyMaxLag          uint64                  `long:"kube-read-only-max-lag" env:"KUBE_READ_ONLY_MAX_LAG" default:"0" description:"maximum standby WAL lag in bytes for read-only Service publishing"`
+	ServicePort             int32                   `long:"kube-service-port" env:"KUBE_SERVICE_PORT" default:"5432" validate-min:"1" validate-max:"65535" description:"Kubernetes Service port exposed for writable PostgreSQL traffic"`
+	ReadOnlyServicePort     int32                   `long:"kube-read-only-service-port" env:"KUBE_READ_ONLY_SERVICE_PORT" default:"5432" validate-min:"1" validate-max:"65535" description:"Kubernetes Service port exposed for read-only PostgreSQL traffic"`
+	Enabled                 bool                    `long:"kube-service-publishing" env:"KUBE_SERVICE_PUBLISHING" description:"publish the current writable PostgreSQL endpoint through a Kubernetes Service and EndpointSlice"`
+	ReadOnlyEnabled         bool                    `long:"kube-read-only-service-publishing" env:"KUBE_READ_ONLY_SERVICE_PUBLISHING" description:"publish read-only PostgreSQL endpoints through a Kubernetes Service and EndpointSlice"`
+	ReadOnlyNoFallback      bool                    `long:"kube-read-only-no-fallback" env:"KUBE_READ_ONLY_NO_FALLBACK" xor:"kube-read-only-primary-policy" description:"do not publish primary as read-only endpoint when no eligible standby exists"`
+	ReadOnlyIncludePrimary  bool                    `long:"kube-read-only-include-primary" env:"KUBE_READ_ONLY_INCLUDE_PRIMARY" xor:"kube-read-only-primary-policy" description:"include primary in the normal read-only endpoint pool"`
 }
 
 type kubeServicePublisher struct {
-	client      kubernetes.Interface
-	log         zerolog.Logger
-	namespace   string
-	clusterName string
-	serviceName string
-	servicePort int32
+	log                    zerolog.Logger
+	client                 kubernetes.Interface
+	namespace              string
+	clusterName            string
+	writableServiceName    string
+	readOnlyServiceName    string
+	readOnlyPriority       readOnlyReplicaPriority
+	readOnlyMaxLag         uint64
+	writableServicePort    int32
+	readOnlyServicePort    int32
+	readOnlyEnabled        bool
+	readOnlyNoFallback     bool
+	readOnlyIncludePrimary bool
 }
 
 type kubeEndpoint struct {
@@ -64,18 +80,35 @@ type kubeEndpoint struct {
 	port    int32
 }
 
+type readOnlyReplicaPriority string
+
+const (
+	readOnlyReplicaPrioritySync  readOnlyReplicaPriority = "sync"
+	readOnlyReplicaPriorityAsync readOnlyReplicaPriority = "async"
+	readOnlyReplicaPriorityAny   readOnlyReplicaPriority = "any"
+)
+
 func newKubeServicePublisher(cfg *config, clusterName string, logger zerolog.Logger) (*kubeServicePublisher, error) {
-	if !cfg.KubeService.Enabled {
+	if !cfg.KubeService.Enabled && !cfg.KubeService.ReadOnlyEnabled {
 		return nil, nil
 	}
 	resourceName, err := commoncmd.KubeResourceNameForCluster(&cfg.CommonConfig, clusterName)
 	if err != nil {
 		return nil, err
 	}
-	serviceName := strings.ReplaceAll(cfg.KubeService.ServiceName, "{cluster}", clusterName)
-	serviceName = strings.ReplaceAll(serviceName, "{resource}", resourceName)
-	if errs := k8svalidation.IsDNS1035Label(serviceName); len(errs) != 0 {
-		return nil, fmt.Errorf("invalid kubernetes writable service name %q: %s", serviceName, strings.Join(errs, "; "))
+	writableServiceName := strings.ReplaceAll(cfg.KubeService.ServiceName, "{cluster}", clusterName)
+	writableServiceName = strings.ReplaceAll(writableServiceName, "{resource}", resourceName)
+	if cfg.KubeService.Enabled {
+		if errs := k8svalidation.IsDNS1035Label(writableServiceName); len(errs) != 0 {
+			return nil, fmt.Errorf("invalid kubernetes writable service name %q: %s", writableServiceName, strings.Join(errs, "; "))
+		}
+	}
+	readOnlyServiceName := strings.ReplaceAll(cfg.KubeService.ReadOnlyServiceName, "{cluster}", clusterName)
+	readOnlyServiceName = strings.ReplaceAll(readOnlyServiceName, "{resource}", resourceName)
+	if cfg.KubeService.ReadOnlyEnabled {
+		if errs := k8svalidation.IsDNS1035Label(readOnlyServiceName); len(errs) != 0 {
+			return nil, fmt.Errorf("invalid kubernetes read-only service name %q: %s", readOnlyServiceName, strings.Join(errs, "; "))
+		}
 	}
 
 	kubeClientConfig := util.NewKubeClientConfig(cfg.Kube.Config, cfg.Kube.Context, cfg.Kube.Namespace)
@@ -93,41 +126,80 @@ func newKubeServicePublisher(cfg *config, clusterName string, logger zerolog.Log
 	}
 
 	return &kubeServicePublisher{
-		client:      client,
-		log:         logger,
-		namespace:   namespace,
-		clusterName: clusterName,
-		serviceName: serviceName,
-		servicePort: cfg.KubeService.ServicePort,
+		client:                 client,
+		log:                    logger,
+		namespace:              namespace,
+		clusterName:            clusterName,
+		writableServiceName:    writableServiceName,
+		writableServicePort:    cfg.KubeService.ServicePort,
+		readOnlyEnabled:        cfg.KubeService.ReadOnlyEnabled,
+		readOnlyServiceName:    readOnlyServiceName,
+		readOnlyServicePort:    cfg.KubeService.ReadOnlyServicePort,
+		readOnlyPriority:       cfg.KubeService.ReadOnlyReplicaPriority,
+		readOnlyMaxLag:         cfg.KubeService.ReadOnlyMaxLag,
+		readOnlyNoFallback:     cfg.KubeService.ReadOnlyNoFallback,
+		readOnlyIncludePrimary: cfg.KubeService.ReadOnlyIncludePrimary,
 	}, nil
 }
 
-func (p *kubeServicePublisher) PublishWritable(ctx context.Context, cd *cluster.ClusterData) error {
+func (p *kubeServicePublisher) Publish(ctx context.Context, cd *cluster.ClusterData) error {
 	if p == nil {
+		return nil
+	}
+	if err := p.publishWritable(ctx, cd); err != nil {
+		return err
+	}
+	if err := p.publishReadOnly(ctx, cd); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (p *kubeServicePublisher) publishWritable(ctx context.Context, cd *cluster.ClusterData) error {
+	if p.writableServiceName == "" {
 		return nil
 	}
 	endpoint, err := p.writableEndpoint(cd)
 	if err != nil {
 		return err
 	}
-	service, err := p.ensureWritableService(ctx)
+	service, err := p.ensureService(ctx, p.writableServiceName, p.writableServicePort, "writable")
 	if err != nil {
 		return err
 	}
-	if err := p.ensureWritableEndpointSlice(ctx, service, endpoint); err != nil {
+	if err := p.ensureEndpointSlice(ctx, service, []*kubeEndpoint{endpoint}, p.writableServicePort, "writable"); err != nil {
 		return err
 	}
 	if endpoint == nil {
 		p.log.Info().
-			Str("service_name", p.serviceName).
+			Str("service_name", p.writableServiceName).
 			Msg("published empty writable Kubernetes Service endpoints")
 		return nil
 	}
 	p.log.Info().
-		Str("service_name", p.serviceName).
+		Str("service_name", p.writableServiceName).
 		Str("endpoint_address", endpoint.address).
 		Int32("endpoint_port", endpoint.port).
 		Msg("published writable Kubernetes Service endpoint")
+	return nil
+}
+
+func (p *kubeServicePublisher) publishReadOnly(ctx context.Context, cd *cluster.ClusterData) error {
+	if !p.readOnlyEnabled {
+		return nil
+	}
+	endpoints := p.readOnlyEndpoints(cd)
+	service, err := p.ensureService(ctx, p.readOnlyServiceName, p.readOnlyServicePort, "read-only")
+	if err != nil {
+		return err
+	}
+	if err := p.ensureEndpointSlice(ctx, service, endpoints, p.readOnlyServicePort, "read-only"); err != nil {
+		return err
+	}
+	p.log.Info().
+		Str("service_name", p.readOnlyServiceName).
+		Int("endpoint_count", len(endpoints)).
+		Msg("published read-only Kubernetes Service endpoints")
 	return nil
 }
 
@@ -153,20 +225,20 @@ func (p *kubeServicePublisher) writableEndpoint(cd *cluster.ClusterData) (*kubeE
 	return &kubeEndpoint{address: ip.String(), port: int32(port)}, nil
 }
 
-func (p *kubeServicePublisher) ensureWritableService(ctx context.Context) (*corev1.Service, error) {
+func (p *kubeServicePublisher) ensureService(ctx context.Context, serviceName string, servicePort int32, mode string) (*corev1.Service, error) {
 	services := p.client.CoreV1().Services(p.namespace)
-	service, err := services.Get(ctx, p.serviceName, metav1.GetOptions{})
+	service, err := services.Get(ctx, serviceName, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
 		service = &corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:   p.serviceName,
+				Name:   serviceName,
 				Labels: p.labels(),
 			},
 			Spec: corev1.ServiceSpec{
 				Ports: []corev1.ServicePort{{
 					Name:     kubeServicePortName,
 					Protocol: corev1.ProtocolTCP,
-					Port:     p.servicePort,
+					Port:     servicePort,
 				}},
 				Type: corev1.ServiceTypeClusterIP,
 			},
@@ -174,16 +246,16 @@ func (p *kubeServicePublisher) ensureWritableService(ctx context.Context) (*core
 		return services.Create(ctx, service, metav1.CreateOptions{})
 	}
 	if err != nil {
-		return nil, fmt.Errorf("cannot get writable Kubernetes Service: %w", err)
+		return nil, fmt.Errorf("cannot get %s Kubernetes Service: %w", mode, err)
 	}
 	if len(service.Spec.Selector) != 0 {
-		return nil, fmt.Errorf("writable Kubernetes Service %q has a selector and cannot be managed by Stolon", p.serviceName)
+		return nil, fmt.Errorf("%s Kubernetes Service %q has a selector and cannot be managed by Stolon", mode, serviceName)
 	}
 
 	desiredPorts := []corev1.ServicePort{{
 		Name:     kubeServicePortName,
 		Protocol: corev1.ProtocolTCP,
-		Port:     p.servicePort,
+		Port:     servicePort,
 	}}
 	if reflect.DeepEqual(service.Spec.Ports, desiredPorts) && labelsContain(service.Labels, p.labels()) {
 		return service, nil
@@ -197,21 +269,24 @@ func (p *kubeServicePublisher) ensureWritableService(ctx context.Context) (*core
 	return services.Update(ctx, updated, metav1.UpdateOptions{})
 }
 
-func (p *kubeServicePublisher) ensureWritableEndpointSlice(
+func (p *kubeServicePublisher) ensureEndpointSlice(
 	ctx context.Context,
 	service *corev1.Service,
-	endpoint *kubeEndpoint,
+	endpoints []*kubeEndpoint,
+	servicePort int32,
+	mode string,
 ) error {
 	slices := p.client.DiscoveryV1().EndpointSlices(p.namespace)
-	name := p.endpointSliceName()
-	desired := p.endpointSlice(service, endpoint)
+	name := p.endpointSliceName(service.Name)
+	desired := p.endpointSlice(service, endpoints, servicePort)
+	var err error
 	current, err := slices.Get(ctx, name, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
 		_, err = slices.Create(ctx, desired, metav1.CreateOptions{})
 		return err
 	}
 	if err != nil {
-		return fmt.Errorf("cannot get writable Kubernetes EndpointSlice: %w", err)
+		return fmt.Errorf("cannot get %s Kubernetes EndpointSlice: %w", mode, err)
 	}
 
 	updated := current.DeepCopy()
@@ -231,27 +306,54 @@ func (p *kubeServicePublisher) ensureWritableEndpointSlice(
 	return err
 }
 
-func (p *kubeServicePublisher) endpointSlice(service *corev1.Service, endpoint *kubeEndpoint) *discoveryv1.EndpointSlice {
+func (p *kubeServicePublisher) endpointSlice(service *corev1.Service, endpoints []*kubeEndpoint, servicePort int32) *discoveryv1.EndpointSlice {
 	protocol := corev1.ProtocolTCP
 	portName := kubeServicePortName
-	endpointPort := p.servicePort
+	endpointPort := servicePort
 	addressType := discoveryv1.AddressTypeIPv4
-	endpoints := []discoveryv1.Endpoint{}
-	if endpoint != nil {
-		endpointPort = endpoint.port
-		if strings.Contains(endpoint.address, ":") {
+	sliceEndpoints := []discoveryv1.Endpoint{}
+	filtered := make([]*kubeEndpoint, 0, len(endpoints))
+	for _, endpoint := range endpoints {
+		if endpoint != nil {
+			filtered = append(filtered, endpoint)
+		}
+	}
+	if len(filtered) > 0 {
+		endpointPort = filtered[0].port
+		if strings.Contains(filtered[0].address, ":") {
 			addressType = discoveryv1.AddressTypeIPv6
 		}
-		ready := true
-		endpoints = append(endpoints, discoveryv1.Endpoint{
-			Addresses:  []string{endpoint.address},
-			Conditions: discoveryv1.EndpointConditions{Ready: &ready},
-		})
+		for _, endpoint := range filtered {
+			if endpoint.port != endpointPort {
+				p.log.Warn().
+					Str("service_name", service.Name).
+					Int32("expected_port", endpointPort).
+					Int32("endpoint_port", endpoint.port).
+					Msg("skipping endpoint with mismatched port for EndpointSlice")
+				continue
+			}
+			endpointType := discoveryv1.AddressTypeIPv4
+			if strings.Contains(endpoint.address, ":") {
+				endpointType = discoveryv1.AddressTypeIPv6
+			}
+			if endpointType != addressType {
+				p.log.Warn().
+					Str("service_name", service.Name).
+					Str("endpoint_address", endpoint.address).
+					Msg("skipping endpoint with mismatched address family for EndpointSlice")
+				continue
+			}
+			ready := true
+			sliceEndpoints = append(sliceEndpoints, discoveryv1.Endpoint{
+				Addresses:  []string{endpoint.address},
+				Conditions: discoveryv1.EndpointConditions{Ready: &ready},
+			})
+		}
 	}
 	return &discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:            p.endpointSliceName(),
-			Labels:          p.endpointSliceLabels(),
+			Name:            p.endpointSliceName(service.Name),
+			Labels:          p.endpointSliceLabels(service.Name),
 			OwnerReferences: p.ownerReferences(service),
 		},
 		AddressType: addressType,
@@ -260,19 +362,19 @@ func (p *kubeServicePublisher) endpointSlice(service *corev1.Service, endpoint *
 			Protocol: &protocol,
 			Port:     &endpointPort,
 		}},
-		Endpoints: endpoints,
+		Endpoints: sliceEndpoints,
 	}
 }
 
-func (p *kubeServicePublisher) endpointSliceName() string {
-	name := p.serviceName + kubeEndpointSliceSuffix
+func (p *kubeServicePublisher) endpointSliceName(serviceName string) string {
+	name := serviceName + kubeEndpointSliceSuffix
 	if errs := k8svalidation.IsDNS1123Label(name); len(errs) == 0 {
 		return name
 	}
-	sum := sha256.Sum256([]byte(p.serviceName))
+	sum := sha256.Sum256([]byte(serviceName))
 	hash := hex.EncodeToString(sum[:])[:kubeEndpointSliceHashLength]
 	maxPrefix := 63 - len(hash) - 1
-	prefix := strings.TrimRight(p.serviceName[:min(len(p.serviceName), maxPrefix)], "-")
+	prefix := strings.TrimRight(serviceName[:min(len(serviceName), maxPrefix)], "-")
 	return prefix + "-" + hash
 }
 
@@ -284,9 +386,9 @@ func (p *kubeServicePublisher) labels() map[string]string {
 	}
 }
 
-func (p *kubeServicePublisher) endpointSliceLabels() map[string]string {
+func (p *kubeServicePublisher) endpointSliceLabels(serviceName string) map[string]string {
 	labels := p.labels()
-	labels[discoveryv1.LabelServiceName] = p.serviceName
+	labels[discoveryv1.LabelServiceName] = serviceName
 	labels[discoveryv1.LabelManagedBy] = kubeEndpointSliceManagedBy
 	return labels
 }
@@ -307,4 +409,128 @@ func labelsContain(have map[string]string, want map[string]string) bool {
 		}
 	}
 	return true
+}
+
+func (p *kubeServicePublisher) readOnlyEndpoints(cd *cluster.ClusterData) []*kubeEndpoint {
+	primary, ok := primaryDB(cd)
+	if !ok {
+		return nil
+	}
+
+	syncStandbys, asyncStandbys := p.readOnlyStandbyCandidates(cd, primary)
+	selected := readOnlyPrioritySelection(p.readOnlyPriority, syncStandbys, asyncStandbys)
+	if p.readOnlyIncludePrimary {
+		if endpoint, ok := endpointFromDB(primary); ok {
+			selected = append(selected, endpoint)
+		}
+	}
+	if len(selected) == 0 && !p.readOnlyNoFallback {
+		if endpoint, ok := endpointFromDB(primary); ok {
+			p.log.Info().
+				Str("service_name", p.readOnlyServiceName).
+				Str("db_uid", primary.UID).
+				Uint64("max_lag", p.readOnlyMaxLag).
+				Msg("read-only Kubernetes Service falling back to primary")
+			selected = append(selected, endpoint)
+		}
+	}
+	return selected
+}
+
+func (p *kubeServicePublisher) readOnlyStandbyCandidates(cd *cluster.ClusterData, primary *cluster.DB) ([]*kubeEndpoint, []*kubeEndpoint) {
+	syncStandbySet := map[string]struct{}{}
+	for _, dbUID := range primary.Status.SynchronousStandbys {
+		syncStandbySet[dbUID] = struct{}{}
+	}
+
+	dbUIDs := make([]string, 0, len(cd.DBs))
+	for dbUID := range cd.DBs {
+		dbUIDs = append(dbUIDs, dbUID)
+	}
+	sort.Strings(dbUIDs)
+
+	syncStandbys := make([]*kubeEndpoint, 0)
+	asyncStandbys := make([]*kubeEndpoint, 0)
+	for _, dbUID := range dbUIDs {
+		db := cd.DBs[dbUID]
+		if db == nil || db.UID == primary.UID || db.Spec == nil {
+			continue
+		}
+		if db.Spec.Role != common.RoleStandby || !readOnlyDBStatusEligible(db) {
+			continue
+		}
+		lag := xlogLag(primary.Status.XLogPos, db.Status.XLogPos)
+		if lag > p.readOnlyMaxLag {
+			continue
+		}
+		endpoint, ok := endpointFromDB(db)
+		if !ok {
+			continue
+		}
+		if _, ok := syncStandbySet[db.UID]; ok {
+			syncStandbys = append(syncStandbys, endpoint)
+		} else {
+			asyncStandbys = append(asyncStandbys, endpoint)
+		}
+	}
+	return syncStandbys, asyncStandbys
+}
+
+func readOnlyPrioritySelection(priority readOnlyReplicaPriority, syncStandbys, asyncStandbys []*kubeEndpoint) []*kubeEndpoint {
+	switch priority {
+	case readOnlyReplicaPriorityAny:
+		return append(append([]*kubeEndpoint{}, syncStandbys...), asyncStandbys...)
+	case readOnlyReplicaPriorityAsync:
+		if len(asyncStandbys) > 0 {
+			return asyncStandbys
+		}
+		return syncStandbys
+	case readOnlyReplicaPrioritySync:
+		fallthrough
+	default:
+		if len(syncStandbys) > 0 {
+			return syncStandbys
+		}
+		return asyncStandbys
+	}
+}
+
+func readOnlyDBStatusEligible(db *cluster.DB) bool {
+	return db.Status.Healthy &&
+		db.Status.CurrentGeneration == db.Generation &&
+		db.Status.ListenAddress != "" &&
+		db.Status.Port != ""
+}
+
+func xlogLag(primaryXLogPos, standbyXLogPos uint64) uint64 {
+	if primaryXLogPos > standbyXLogPos {
+		return primaryXLogPos - standbyXLogPos
+	}
+	return 0
+}
+
+func primaryDB(cd *cluster.ClusterData) (*cluster.DB, bool) {
+	if cd == nil || cd.Proxy == nil || cd.Proxy.Spec.MasterDBUID == "" {
+		return nil, false
+	}
+	db := cd.DBs[cd.Proxy.Spec.MasterDBUID]
+	if db == nil {
+		return nil, false
+	}
+	return db, true
+}
+
+func endpointFromDB(db *cluster.DB) (*kubeEndpoint, bool) {
+	if db == nil || db.Status.ListenAddress == "" || db.Status.Port == "" {
+		return nil, false
+	}
+	ip := net.ParseIP(db.Status.ListenAddress)
+	if ip == nil {
+		return nil, false
+	}
+	port, err := strconv.ParseInt(db.Status.Port, 10, 32)
+	if err != nil || port <= 0 || port > 65535 {
+		return nil, false
+	}
+	return &kubeEndpoint{address: ip.String(), port: int32(port)}, true
 }

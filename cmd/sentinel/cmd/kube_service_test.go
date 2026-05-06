@@ -47,14 +47,26 @@ func TestCheckSentinelConfigAllowsKubernetesBackendForServicePublishing(t *testi
 	}
 }
 
+func TestCheckSentinelConfigReadOnlyPolicyConflict(t *testing.T) {
+	cfg := &config{}
+	cfg.Store.Backend = "kubernetes"
+	cfg.KubeService.ReadOnlyEnabled = true
+	cfg.KubeService.ReadOnlyIncludePrimary = true
+	cfg.KubeService.ReadOnlyNoFallback = true
+
+	if err := checkSentinelConfig(cfg); err == nil {
+		t.Fatal("expected read-only policy conflict")
+	}
+}
+
 func TestKubeServicePublisherPublishesWritableEndpointSlice(t *testing.T) {
 	ctx := context.Background()
 	client := fake.NewSimpleClientset()
 	publisher := testKubeServicePublisher(client, "stolon-cluster-test-rw")
 	cd := testKubeServiceClusterData("10.1.2.3", "5433")
 
-	if err := publisher.PublishWritable(ctx, cd); err != nil {
-		t.Fatalf("PublishWritable() error = %v", err)
+	if err := publisher.Publish(ctx, cd); err != nil {
+		t.Fatalf("Publish() error = %v", err)
 	}
 
 	service, err := client.CoreV1().Services("default").Get(ctx, "stolon-cluster-test-rw", metav1.GetOptions{})
@@ -92,12 +104,12 @@ func TestKubeServicePublisherClearsWritableEndpoints(t *testing.T) {
 	publisher := testKubeServicePublisher(client, "stolon-cluster-test-rw")
 	cd := testKubeServiceClusterData("10.1.2.3", "5432")
 
-	if err := publisher.PublishWritable(ctx, cd); err != nil {
-		t.Fatalf("PublishWritable() create error = %v", err)
+	if err := publisher.Publish(ctx, cd); err != nil {
+		t.Fatalf("Publish() create error = %v", err)
 	}
 	cd.Proxy.Spec.MasterDBUID = ""
-	if err := publisher.PublishWritable(ctx, cd); err != nil {
-		t.Fatalf("PublishWritable() clear error = %v", err)
+	if err := publisher.Publish(ctx, cd); err != nil {
+		t.Fatalf("Publish() clear error = %v", err)
 	}
 
 	slice, err := client.DiscoveryV1().EndpointSlices("default").Get(ctx, "stolon-cluster-test-rw-stolon", metav1.GetOptions{})
@@ -120,19 +132,103 @@ func TestKubeServicePublisherRejectsSelectorService(t *testing.T) {
 	})
 	publisher := testKubeServicePublisher(client, "stolon-cluster-test-rw")
 
-	if err := publisher.PublishWritable(ctx, testKubeServiceClusterData("10.1.2.3", "5432")); err == nil {
+	if err := publisher.Publish(ctx, testKubeServiceClusterData("10.1.2.3", "5432")); err == nil {
 		t.Fatal("expected selector service error")
+	}
+}
+
+func TestKubeServicePublisherPublishesReadOnlyEndpoints(t *testing.T) {
+	ctx := context.Background()
+	client := fake.NewSimpleClientset()
+	publisher := testKubeServicePublisher(client, "stolon-cluster-test-rw")
+	publisher.readOnlyEnabled = true
+	publisher.readOnlyServiceName = "stolon-cluster-test-ro"
+	publisher.readOnlyServicePort = 5432
+	publisher.readOnlyMaxLag = 10
+	cd := testKubeServiceClusterData("10.1.2.3", "5432")
+	cd.DBs["db-02"] = &cluster.DB{
+		UID:        "db-02",
+		Generation: 1,
+		Spec: &cluster.DBSpec{
+			KeeperUID: "keeper-02",
+			Role:      common.RoleStandby,
+		},
+		Status: cluster.DBStatus{
+			Healthy:           true,
+			CurrentGeneration: 1,
+			ListenAddress:     "10.1.2.4",
+			Port:              "5432",
+			XLogPos:           95,
+		},
+	}
+	cd.DBs["db-01"].Generation = 1
+	cd.DBs["db-01"].Status.CurrentGeneration = 1
+	cd.DBs["db-01"].Status.XLogPos = 100
+	cd.DBs["db-01"].Status.SynchronousStandbys = []string{"db-02"}
+
+	if err := publisher.Publish(ctx, cd); err != nil {
+		t.Fatalf("Publish() error = %v", err)
+	}
+
+	slice, err := client.DiscoveryV1().EndpointSlices("default").Get(ctx, "stolon-cluster-test-ro-stolon", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("EndpointSlices.Get() error = %v", err)
+	}
+	if len(slice.Endpoints) != 1 || slice.Endpoints[0].Addresses[0] != "10.1.2.4" {
+		t.Fatalf("read-only EndpointSlice endpoints = %#v", slice.Endpoints)
+	}
+}
+
+func TestKubeServicePublisherReadOnlyFallbackToPrimary(t *testing.T) {
+	ctx := context.Background()
+	client := fake.NewSimpleClientset()
+	publisher := testKubeServicePublisher(client, "stolon-cluster-test-rw")
+	publisher.readOnlyEnabled = true
+	publisher.readOnlyServiceName = "stolon-cluster-test-ro"
+	publisher.readOnlyServicePort = 5432
+	publisher.readOnlyNoFallback = false
+	publisher.readOnlyMaxLag = 0
+	cd := testKubeServiceClusterData("10.1.2.3", "5432")
+	cd.DBs["db-01"].Generation = 1
+	cd.DBs["db-01"].Status.CurrentGeneration = 1
+	cd.DBs["db-01"].Status.XLogPos = 100
+	cd.DBs["db-02"] = &cluster.DB{
+		UID:        "db-02",
+		Generation: 1,
+		Spec: &cluster.DBSpec{
+			KeeperUID: "keeper-02",
+			Role:      common.RoleStandby,
+		},
+		Status: cluster.DBStatus{
+			Healthy:           true,
+			CurrentGeneration: 1,
+			ListenAddress:     "10.1.2.4",
+			Port:              "5432",
+			XLogPos:           50,
+		},
+	}
+
+	if err := publisher.Publish(ctx, cd); err != nil {
+		t.Fatalf("Publish() error = %v", err)
+	}
+
+	slice, err := client.DiscoveryV1().EndpointSlices("default").Get(ctx, "stolon-cluster-test-ro-stolon", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("EndpointSlices.Get() error = %v", err)
+	}
+	if len(slice.Endpoints) != 1 || slice.Endpoints[0].Addresses[0] != "10.1.2.3" {
+		t.Fatalf("read-only fallback EndpointSlice endpoints = %#v", slice.Endpoints)
 	}
 }
 
 func testKubeServicePublisher(client *fake.Clientset, serviceName string) *kubeServicePublisher {
 	return &kubeServicePublisher{
-		client:      client,
-		log:         zerolog.Nop(),
-		namespace:   "default",
-		clusterName: "test",
-		serviceName: serviceName,
-		servicePort: 5432,
+		client:              client,
+		log:                 zerolog.Nop(),
+		namespace:           "default",
+		clusterName:         "test",
+		writableServiceName: serviceName,
+		writableServicePort: 5432,
 	}
 }
 

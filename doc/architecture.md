@@ -94,7 +94,7 @@ more reliable and avoid the proxies closing connection and impacting you
 application availability.
 
 By default, clusterdata is stored in a ConfigMap resource named
-`stolon-cluster-$CLUSTERNAME`. Pay attention to don't delete this ConfigMap
+`stolon-$CLUSTERNAME`. Pay attention to don't delete this ConfigMap
 or you'll lose your cluster data. The legacy ConfigMap backend stores
 clusterdata inside a metadata annotation called `stolon-clusterdata`. Users
 should not manually modify this resource.
@@ -104,13 +104,13 @@ clusterdata and sentinel leader election. The value supports `{cluster}` as
 a cluster-name placeholder and must be a valid Kubernetes DNS label.
 
 As an alternative, `--kube-resource-kind=secret` stores clusterdata in an
-opaque Secret with the same `stolon-cluster-$CLUSTERNAME` name, using the
+opaque Secret with the same `stolon-$CLUSTERNAME` name, using the
 `clusterdata` data key. This allows a different Kubernetes RBAC policy and
 reduces accidental visibility, but it is not a replacement for Kubernetes
 encryption-at-rest.
 
 Sentinel leader election uses a `coordination.k8s.io/Lease` resource with
-the same `stolon-cluster-$CLUSTERNAME` name. Kubernetes RBAC must allow the
+the same `stolon-$CLUSTERNAME` name. Kubernetes RBAC must allow the
 sentinel to get, create, and update leases.
 
 To discovery stolon components (keepers, proxies, sentinels) a lookup with

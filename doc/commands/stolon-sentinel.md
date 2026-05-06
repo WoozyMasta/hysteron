@@ -38,16 +38,44 @@
 * `--kube-service-name` -
   Kubernetes Service name used for writable PostgreSQL traffic; {cluster} and
   {resource} are replaced with the cluster name and Kubernetes resource name
-  * Defaults: `{resource}-rw`
+  * Defaults: `{resource}`
   * Environment: `$STSENTINEL_KUBE_SERVICE_NAME`
+* `--kube-read-only-service-name` -
+  Kubernetes Service name used for read-only PostgreSQL traffic; {cluster} and
+  {resource} are replaced with the cluster name and Kubernetes resource name
+  * Defaults: `{resource}-ro`
+  * Environment: `$STSENTINEL_KUBE_READ_ONLY_SERVICE_NAME`
+* `--kube-read-only-replica-priority` -
+  read-only replica priority policy
+  * Defaults: `sync`
+  * Environment: `$STSENTINEL_KUBE_READ_ONLY_REPLICA_PRIORITY`
+  * Choices: `sync, async, any`
+* `--kube-read-only-max-lag` -
+  maximum standby WAL lag in bytes for read-only Service publishing
+  * Defaults: `0`
+  * Environment: `$STSENTINEL_KUBE_READ_ONLY_MAX_LAG`
 * `--kube-service-port` -
   Kubernetes Service port exposed for writable PostgreSQL traffic
   * Defaults: `5432`
   * Environment: `$STSENTINEL_KUBE_SERVICE_PORT`
+* `--kube-read-only-service-port` -
+  Kubernetes Service port exposed for read-only PostgreSQL traffic
+  * Defaults: `5432`
+  * Environment: `$STSENTINEL_KUBE_READ_ONLY_SERVICE_PORT`
 * `--kube-service-publishing` -
   publish the current writable PostgreSQL endpoint through a Kubernetes Service
   and EndpointSlice
   * Environment: `$STSENTINEL_KUBE_SERVICE_PUBLISHING`
+* `--kube-read-only-service-publishing` -
+  publish read-only PostgreSQL endpoints through a Kubernetes Service and
+  EndpointSlice
+  * Environment: `$STSENTINEL_KUBE_READ_ONLY_SERVICE_PUBLISHING`
+* `--kube-read-only-no-fallback` -
+  do not publish primary as read-only endpoint when no eligible standby exists
+  * Environment: `$STSENTINEL_KUBE_READ_ONLY_NO_FALLBACK`
+* `--kube-read-only-include-primary` -
+  include primary in the normal read-only endpoint pool
+  * Environment: `$STSENTINEL_KUBE_READ_ONLY_INCLUDE_PRIMARY`
 
 ### Metrics
 
@@ -67,7 +95,7 @@
 * `--kube-resource-name` -
   Kubernetes resource name template for cluster data and sentinel election
   objects; {cluster} is replaced with the cluster name
-  * Defaults: `stolon-cluster-{cluster}`
+  * Defaults: `stolon-{cluster}`
   * Environment: `$STSENTINEL_KUBE_RESOURCE_NAME`
 * `--kube-context` -
   name of the kubeconfig context to use

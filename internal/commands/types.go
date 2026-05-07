@@ -20,16 +20,16 @@ type rootCommand struct {
 	Keeper   runtimeCommand    `command:"keeper" command-group:"Runtime Commands" description:"Run keeper runtime components"`
 	Sentinel runtimeCommand    `command:"sentinel" command-group:"Runtime Commands" description:"Run sentinel runtime components"`
 	Proxy    runtimeCommand    `command:"proxy" command-group:"Runtime Commands" description:"Run proxy runtime components"`
-	Cluster  clusterCommand    `command:"cluster" command-group:"Management Commands" description:"Manage cluster control operations"`
 	Global   rootGlobalOptions `group:"Global"`
 	Failover failoverCommand   `command:"failover" command-group:"Management Commands" description:"Manage failover operations"`
+	Cluster  clusterCommand    `command:"cluster" command-group:"Management Commands" description:"Manage cluster control operations"`
 }
 
 type runtimeCommand struct {
-	Common     runtimeCommonOptions     `group:"Common"`
-	Etcd       runtimeEtcdCommand       `command:"etcd" alias:"etcdv3" description:"Run component with etcd backend"`
 	Kubernetes runtimeKubernetesCommand `command:"kubernetes" alias:"k8s" description:"Run component with kubernetes backend"`
 	Component  string                   `no-flag:"true"`
+	Common     runtimeCommonOptions     `group:"Common"`
+	Etcd       runtimeEtcdCommand       `command:"etcd" alias:"etcdv3" description:"Run component with etcd backend"`
 }
 
 type clusterCommand struct {
@@ -68,8 +68,8 @@ type runtimeEtcdCommand struct {
 
 type runtimeKubernetesCommand struct {
 	K8s       k8sStoreOptions      `group:"Kubernetes" namespace:"k8s" env-namespace:"K8S"`
-	Common    runtimeCommonOptions `no-flag:"true"`
 	Component string               `no-flag:"true"`
+	Common    runtimeCommonOptions `no-flag:"true"`
 }
 
 type clusterInitializeCommand struct {

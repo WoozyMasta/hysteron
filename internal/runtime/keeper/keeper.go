@@ -116,7 +116,7 @@ type config struct {
 	CanBeMaster             bool `long:"can-be-master"                      env:"CAN_BE_MASTER"                      description:"allow keeper to be elected as master (default true)"`
 	CanBeSynchronousReplica bool `long:"can-be-synchronous-replica"         env:"CAN_BE_SYNCHRONOUS_REPLICA"         description:"allow keeper to be chosen as synchronous replica (default true)"`
 	DisableDataDirLocking   bool `long:"disable-data-dir-locking"           env:"DISABLE_DATA_DIR_LOCKING"           description:"disable locking on data dir. Warning! It'll cause data corruptions if two keepers are concurrently running with the same data dir."`
-	AllowUnsupportedPG      bool `long:"allow-unsupported-postgres-version" env:"ALLOW_UNSUPPORTED_POSTGRES_VERSION" description:"allow running with PostgreSQL versions outside the default supported major versions. This is best-effort and may break recovery, replication slots, configuration rendering, or file layout handling."`
+	AllowNewerPG            bool `long:"allow-newer-postgres-version"       env:"ALLOW_NEWER_POSTGRES_VERSION"       description:"allow running with PostgreSQL major versions newer than the highest default-supported major. Older-than-supported versions are always rejected."`
 }
 
 // postgresOptions groups PostgreSQL connection settings managed by the
@@ -194,7 +194,8 @@ func readPasswordFromFile(filepath string) (string, error) {
 	}
 
 	if fi.Mode() > 0600 {
-		//TODO: enforce this by exiting with an error. Kubernetes makes this file too open today.
+		// Keep warning-only behavior for now: some Kubernetes volume projections
+		// use file modes more permissive than 0600.
 		keeperRootLog(nil).Warn().
 			Str("file", filepath).
 			Str("mode", fmt.Sprintf("%#o", fi.Mode())).
@@ -212,34 +213,13 @@ func readPasswordFromFile(filepath string) (string, error) {
 	return string(pwBytes), nil
 }
 
-// walLevel returns the wal_level value to use.
-// if there's an user provided wal_level pg parameters and if its value is
-// "logical" then returns it, otherwise returns the default ("hot_standby" for
-// pg < 9.6 or "replica" for pg >= 9.6).
+// walLevel returns wal_level value to use.
+// If user provided wal_level is "logical" return it, otherwise use "replica".
 func (p *PostgresKeeper) walLevel(db *cluster.DB) string {
 	var additionalValidWalLevels = []string{
-		"logical", // pg >= 10
+		"logical",
 	}
-
-	major, minor, err := p.binaryVersion()
-	if err != nil {
-		// in case we fail to parse the binary version then log it and just use "hot_standby" that works for all versions
-		p.baseLog().
-			Warn().
-			Err(err).
-			Msg("could not read PostgreSQL binary version from installation")
-		return "hot_standby"
-	}
-
-	// set default wal_level
-	walLevel := "hot_standby"
-	if major == 9 {
-		if minor >= 6 {
-			walLevel = "replica"
-		}
-	} else if major >= 10 {
-		walLevel = "replica"
-	}
+	walLevel := "replica"
 
 	if db.Spec.PGParameters != nil {
 		if l, ok := db.Spec.PGParameters["wal_level"]; ok {
@@ -828,18 +808,28 @@ func (p *PostgresKeeper) validatePostgresVersion() error {
 			err,
 		)
 	}
-	if err := pg.ValidateSupportedMajorVersion(major); err != nil {
-		if p.cfg.AllowUnsupportedPG {
+	if err := pg.ValidateKnownMajorVersion(major); err != nil {
+		if p.cfg.AllowNewerPG && major > pg.MaxKnownMajorVersion() {
 			p.baseLog().Warn().
 				Str("pg_version", fmt.Sprintf("%d.%d", major, minor)).
 				Str("supported_major_versions", pg.SupportedMajorVersionsString()).
-				Msg("unsupported PostgreSQL version allowed by configuration")
+				Str("legacy_major_versions", pg.SupportedLegacyMajorVersionsString()).
+				Msg("newer unsupported PostgreSQL version allowed by configuration")
 			return nil
 		}
 		return fmt.Errorf(
-			"%w; use --allow-unsupported-postgres-version to bypass this check at your own risk",
+			"%w; use --allow-newer-postgres-version only for newer majors than %d",
 			err,
+			pg.MaxKnownMajorVersion(),
 		)
+	}
+	if pg.IsLegacySupportedMajorVersion(major) {
+		p.baseLog().Warn().
+			Str("pg_version", fmt.Sprintf("%d.%d", major, minor)).
+			Str("supported_major_versions", pg.SupportedMajorVersionsString()).
+			Str("legacy_major_versions", pg.SupportedLegacyMajorVersionsString()).
+			Msg("PostgreSQL major version is legacy best-effort; behavior is not guaranteed")
+		return nil
 	}
 	p.baseLog().
 		Info().
@@ -1202,7 +1192,7 @@ func (p *PostgresKeeper) resync(
 		}
 	}
 
-	major, minor, err := p.binaryVersion()
+	_, _, err := p.binaryVersion()
 	if err != nil {
 		// in case we fail to parse the binary version then log it and just don't use replSlot
 		p.baseLog().
@@ -1210,10 +1200,7 @@ func (p *PostgresKeeper) resync(
 			Err(err).
 			Msg("could not read PostgreSQL binary version from installation")
 	}
-	replSlot := ""
-	if (major == 9 && minor >= 6) || major > 10 {
-		replSlot = common.HysteronName(db.UID)
-	}
+	replSlot := common.HysteronName(db.UID)
 
 	if err := pgm.RemoveAll(); err != nil {
 		return fmt.Errorf(

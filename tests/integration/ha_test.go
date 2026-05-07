@@ -1588,29 +1588,9 @@ func testKeeperRemovalHysteronCluster(t *testing.T, syncRepl bool) {
 
 	master, standbys := waitMasterStandbysReady(t, sm, tks)
 
-	maj, min, err := master.PGDataVersion()
-	if err != nil {
-		t.Fatalf("unexpected err: %v", err)
-	}
-	// on postgresql <= 9.5 we can have only 1 synchronous standby
 	if syncRepl {
-		if maj == 9 && min <= 5 {
-			ok := false
-			if err := WaitClusterDataSynchronousStandbys([]string{standbys[0].uid}, sm, 30*time.Second); err == nil {
-				ok = true
-			}
-			if !ok {
-				if err := WaitClusterDataSynchronousStandbys([]string{standbys[1].uid}, sm, 30*time.Second); err == nil {
-					ok = true
-				}
-			}
-			if !ok {
-				t.Fatalf("expected synchronous standbys")
-			}
-		} else {
-			if err := WaitClusterDataSynchronousStandbys([]string{standbys[0].uid, standbys[1].uid}, sm, 30*time.Second); err != nil {
-				t.Fatalf("expected synchronous standbys")
-			}
+		if err := WaitClusterDataSynchronousStandbys([]string{standbys[0].uid, standbys[1].uid}, sm, 30*time.Second); err != nil {
+			t.Fatalf("expected synchronous standbys")
 		}
 	}
 

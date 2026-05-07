@@ -130,19 +130,7 @@ func BenchmarkManagerWriteConf(b *testing.B) {
 
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		if err := manager.writeConf(false, true); err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func BenchmarkManagerWriteRecoveryConf(b *testing.B) {
-	manager := benchmarkManager(b)
-	manager.SetRecoveryOptions(benchmarkRecoveryOptions())
-
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		if err := manager.writeRecoveryConf(); err != nil {
+		if err := manager.writeConf(false); err != nil {
 			b.Fatal(err)
 		}
 	}

@@ -236,13 +236,13 @@ type StandbyConfig struct {
 	ArchiveRecoverySettings *ArchiveRecoverySettings `json:"archiveRecoverySettings,omitempty"`
 }
 
-// ArchiveRecoverySettings defines the archive recovery settings in the recovery.conf file (https://www.postgresql.org/docs/9.6/static/archive-recovery-settings.html )
+// ArchiveRecoverySettings defines archive recovery settings.
 type ArchiveRecoverySettings struct {
 	// value for restore_command
 	RestoreCommand string `json:"restoreCommand,omitempty"`
 }
 
-// RecoveryTargetSettings defines the recovery target settings in the recovery.conf file (https://www.postgresql.org/docs/9.6/static/recovery-target-settings.html )
+// RecoveryTargetSettings defines recovery target settings.
 type RecoveryTargetSettings struct {
 	// RecoveryTarget is generic recovery target selector.
 	RecoveryTarget string `json:"recoveryTarget,omitempty"`
@@ -258,7 +258,7 @@ type RecoveryTargetSettings struct {
 	RecoveryTargetTimeline string `json:"recoveryTargetTimeline,omitempty"`
 }
 
-// StandbySettings defines the standby settings in the recovery.conf file (https://www.postgresql.org/docs/9.6/static/standby-settings.html )
+// StandbySettings defines standby settings.
 type StandbySettings struct {
 	// PrimaryConninfo is primary connection string.
 	PrimaryConninfo string `json:"primaryConninfo,omitempty"`

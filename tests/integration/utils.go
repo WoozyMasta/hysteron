@@ -617,16 +617,7 @@ func (tk *TestKeeper) ReplConnParams() pg.ConnParams {
 }
 
 func (tk *TestKeeper) SwitchWals(times int) error {
-	maj, _, err := tk.PGDataVersion()
-	if err != nil {
-		return err
-	}
-	var switchLogFunc string
-	if maj < 10 {
-		switchLogFunc = "select pg_switch_xlog()"
-	} else {
-		switchLogFunc = "select pg_switch_wal()"
-	}
+	switchLogFunc := "select pg_switch_wal()"
 
 	_, _ = tk.Exec("DROP TABLE switchwal")
 	if _, err := tk.Exec("CREATE TABLE switchwal(ID INT PRIMARY KEY NOT NULL)"); err != nil {

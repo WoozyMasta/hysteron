@@ -1386,7 +1386,6 @@ func (s *Sentinel) updateCluster(
 
 		if curMasterDBUID == wantedMasterDBUID {
 			masterDB := newcd.DBs[curMasterDBUID]
-			masterDBKeeper := newcd.Keepers[masterDB.Spec.KeeperUID]
 
 			if newcd.Proxy.Spec.MasterDBUID == "" {
 				// if the Proxy.Spec.MasterDBUID is empty we have to wait for all
@@ -1545,24 +1544,6 @@ func (s *Sentinel) updateCluster(
 						*clusterSpec.MaxSynchronousStandbys,
 					)
 					merge := true
-					// PostgresSQL <= 9.5 only supports one sync standby at a
-					// time (defining multiple sync standbys is like doing "1
-					// (standby1, standby2)" on postgres >= 9.6 and so we won't
-					// be able to know which is the real in sync standby.
-					//
-					// So we always have to define 1 standby in
-					// masterDB.Spec.SynchronousStandbys with the downside that
-					// can there be a time window where we cannot elect the
-					// synchronous standby as a new primary if it's not yet in
-					// sync
-					if masterDBKeeper.Status.PostgresBinaryVersion.Maj != 0 {
-						if masterDBKeeper.Status.PostgresBinaryVersion.Maj == 9 &&
-							masterDBKeeper.Status.PostgresBinaryVersion.Min <= 5 {
-							minSynchronousStandbys = 1
-							maxSynchronousStandbys = 1
-							merge = false
-						}
-					}
 
 					// if the current known in sync syncstandbys are different than the required ones wait for them and remove non good ones
 					if !slicesutil.CompareStringSliceNoOrder(

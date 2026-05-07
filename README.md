@@ -1,8 +1,8 @@
-# hysteron - PostgreSQL cloud native High Availability
-
-![Hysteron Logo](doc/hysteron.svg)
+# Hysteron
 
 hysteron is a cloud native PostgreSQL manager for PostgreSQL high availability. It's cloud native because it'll let you keep an high available PostgreSQL inside your containers (kubernetes integration) but also on every other kind of infrastructure (cloud IaaS, old style infrastructures etc...)
+
+![Hysteron Logo](doc/hysteron.svg)
 
 For an introduction to hysteron you can also take a look at [this post](https://sgotti.dev/post/hysteron-introduction/)
 

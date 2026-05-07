@@ -225,6 +225,20 @@ func TestValidateSupportedMajorVersion(t *testing.T) {
 	}
 }
 
+func TestValidateKnownMajorVersion(t *testing.T) {
+	for _, major := range append(SupportedLegacyMajorVersions(), SupportedMajorVersions()...) {
+		if err := ValidateKnownMajorVersion(major); err != nil {
+			t.Fatalf("expected PostgreSQL %d to be known-supported: %v", major, err)
+		}
+	}
+
+	for _, major := range []int{11, 19} {
+		if err := ValidateKnownMajorVersion(major); err == nil {
+			t.Fatalf("expected PostgreSQL %d to be unknown", major)
+		}
+	}
+}
+
 func TestReplicationConnParams(t *testing.T) {
 	input := ConnParams{
 		"user":   "postgres",

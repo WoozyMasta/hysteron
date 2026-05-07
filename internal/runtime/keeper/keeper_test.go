@@ -112,20 +112,22 @@ func TestParseSynchronousStandbyNames(t *testing.T) {
 
 func TestValidatePostgresVersion(t *testing.T) {
 	tests := []struct {
-		name             string
-		major            int
-		allowUnsupported bool
-		wantErr          bool
+		name       string
+		major      int
+		allowNewer bool
+		wantErr    bool
 	}{
 		{name: "supported", major: 18},
-		{name: "unsupported denied", major: 13, wantErr: true},
-		{name: "unsupported allowed", major: 13, allowUnsupported: true},
+		{name: "legacy best-effort", major: 13},
+		{name: "older unsupported denied", major: 11, wantErr: true},
+		{name: "newer unsupported denied", major: 19, wantErr: true},
+		{name: "newer unsupported allowed", major: 19, allowNewer: true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			p := &PostgresKeeper{
-				cfg: &config{AllowUnsupportedPG: tt.allowUnsupported},
+				cfg: &config{AllowNewerPG: tt.allowNewer},
 				pgBinaryVersion: func() (int, int, error) {
 					return tt.major, 0, nil
 				},

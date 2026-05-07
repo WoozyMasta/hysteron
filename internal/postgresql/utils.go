@@ -41,7 +41,8 @@ const (
 )
 
 var (
-	supportedMajorVersions = []int{14, 15, 16, 17, 18}
+	supportedMajorVersions       = []int{14, 15, 16, 17, 18}
+	supportedLegacyMajorVersions = []int{12, 13}
 
 	// ValidReplSlotName validates PostgreSQL replication slot names.
 	ValidReplSlotName           = regexp.MustCompile("^[a-z0-9_]+$")
@@ -205,16 +206,8 @@ func alterPasswordlessRole(ctx context.Context, connParams ConnParams, username 
 	return err
 }
 
-// getReplicatinSlots return existing replication slots. On PostgreSQL > 10 we
-// skip temporary slots.
-func getReplicationSlots(ctx context.Context, connParams ConnParams, maj int) ([]string, error) {
-	var q string
-	if maj < 10 {
-		q = "select slot_name from pg_replication_slots"
-	} else {
-		q = "select slot_name from pg_replication_slots where temporary is false"
-	}
-
+// getReplicatinSlots returns existing non-temporary replication slots.
+func getReplicationSlots(ctx context.Context, connParams ConnParams) ([]string, error) {
 	db, err := openDB(connParams)
 	if err != nil {
 		return nil, err
@@ -223,7 +216,7 @@ func getReplicationSlots(ctx context.Context, connParams ConnParams, maj int) ([
 
 	replSlots := []string{}
 
-	rows, err := query(ctx, db, q)
+	rows, err := query(ctx, db, "select slot_name from pg_replication_slots where temporary is false")
 	if err != nil {
 		return nil, err
 	}
@@ -591,9 +584,80 @@ func IsSupportedMajorVersion(major int) bool {
 	return slices.Contains(supportedMajorVersions, major)
 }
 
+// IsLegacySupportedMajorVersion reports whether major has legacy best-effort support.
+func IsLegacySupportedMajorVersion(major int) bool {
+	return slices.Contains(supportedLegacyMajorVersions, major)
+}
+
 // SupportedMajorVersions returns PostgreSQL major versions with default support.
 func SupportedMajorVersions() []int {
 	return slices.Clone(supportedMajorVersions)
+}
+
+// SupportedLegacyMajorVersions returns PostgreSQL major versions with
+// best-effort legacy support.
+func SupportedLegacyMajorVersions() []int {
+	return slices.Clone(supportedLegacyMajorVersions)
+}
+
+// MinSupportedMajorVersion returns the minimum supported PostgreSQL major.
+func MinSupportedMajorVersion() int {
+	if len(supportedMajorVersions) == 0 {
+		return 0
+	}
+	min := supportedMajorVersions[0]
+	for _, v := range supportedMajorVersions[1:] {
+		if v < min {
+			min = v
+		}
+	}
+	return min
+}
+
+// MaxSupportedMajorVersion returns the maximum supported PostgreSQL major.
+func MaxSupportedMajorVersion() int {
+	if len(supportedMajorVersions) == 0 {
+		return 0
+	}
+	max := supportedMajorVersions[0]
+	for _, v := range supportedMajorVersions[1:] {
+		if v > max {
+			max = v
+		}
+	}
+	return max
+}
+
+// MinKnownMajorVersion returns the minimum known PostgreSQL major version from
+// supported and legacy-supported sets.
+func MinKnownMajorVersion() int {
+	all := append(SupportedLegacyMajorVersions(), SupportedMajorVersions()...)
+	if len(all) == 0 {
+		return 0
+	}
+	min := all[0]
+	for _, v := range all[1:] {
+		if v < min {
+			min = v
+		}
+	}
+	return min
+}
+
+// MaxKnownMajorVersion returns the maximum known PostgreSQL major version from
+// supported and legacy-supported sets.
+func MaxKnownMajorVersion() int {
+	all := append(SupportedLegacyMajorVersions(), SupportedMajorVersions()...)
+	if len(all) == 0 {
+		return 0
+	}
+	max := all[0]
+	for _, v := range all[1:] {
+		if v > max {
+			max = v
+		}
+	}
+	return max
 }
 
 // ValidateSupportedMajorVersion checks whether major has default support.
@@ -604,10 +668,34 @@ func ValidateSupportedMajorVersion(major int) error {
 	return fmt.Errorf("unsupported PostgreSQL major version %d; supported major versions are %s", major, SupportedMajorVersionsString())
 }
 
+// ValidateKnownMajorVersion checks whether major is known either as default
+// support or legacy best-effort support.
+func ValidateKnownMajorVersion(major int) error {
+	if IsSupportedMajorVersion(major) || IsLegacySupportedMajorVersion(major) {
+		return nil
+	}
+	return fmt.Errorf(
+		"unsupported PostgreSQL major version %d; supported major versions are %s; legacy best-effort majors are %s",
+		major,
+		SupportedMajorVersionsString(),
+		SupportedLegacyMajorVersionsString(),
+	)
+}
+
 // SupportedMajorVersionsString returns the supported major versions for messages.
 func SupportedMajorVersionsString() string {
 	versions := make([]string, 0, len(supportedMajorVersions))
 	for _, version := range supportedMajorVersions {
+		versions = append(versions, strconv.Itoa(version))
+	}
+	return strings.Join(versions, ", ")
+}
+
+// SupportedLegacyMajorVersionsString returns the legacy best-effort supported
+// major versions for messages.
+func SupportedLegacyMajorVersionsString() string {
+	versions := make([]string, 0, len(supportedLegacyMajorVersions))
+	for _, version := range supportedLegacyMajorVersions {
 		versions = append(versions, strconv.Itoa(version))
 	}
 	return strings.Join(versions, ", ")

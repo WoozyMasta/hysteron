@@ -43,10 +43,8 @@ import (
 
 const (
 	postgresConf           = "postgresql.conf"
-	postgresRecoveryConf   = "recovery.conf"
 	postgresStandbySignal  = "standby.signal"
 	postgresRecoverySignal = "recovery.signal"
-	postgresRecoveryDone   = "recovery.done"
 	postgresAutoConf       = "postgresql.auto.conf"
 	tmpPostgresConf        = "hysteron-temp-postgresql.conf"
 
@@ -368,14 +366,10 @@ func (p *Manager) Start() error {
 // Note that also on error an instance may still be active and, if needed,
 // should be manually stopped calling Stop.
 func (p *Manager) start(args ...string) error {
-	// pg_ctl for postgres < 10 with -w will exit after the timeout and return 0
-	// also if the instance isn't ready to accept connections, while for
-	// postgres >= 10 it will return a non 0 exit code making it impossible to
-	// distinguish between problems starting an instance (i.e. wrong parameters)
-	// or an instance started but not ready to accept connections.
-	// To work with all the versions and since we want to distinguish between a
-	// failed start and a started but not ready instance we are forced to not
-	// use pg_ctl and write part of its logic here (I hate to do this).
+	// We intentionally start postgres directly here to distinguish between:
+	// - failed startup (process exits)
+	// - started but not yet ready (for example waiting for WAL)
+	// This gives deterministic behavior across supported PostgreSQL majors.
 
 	// A difference between directly calling postgres instead of pg_ctl is that
 	// the instance parent is the keeper instead of the defined system reaper
@@ -593,34 +587,16 @@ func (p *Manager) WaitReady(timeout time.Duration) error {
 
 // WaitRecoveryDone waits until recovery mode exits.
 func (p *Manager) WaitRecoveryDone(timeout time.Duration) error {
-	maj, _, err := p.BinaryVersion()
-	if err != nil {
-		return fmt.Errorf("error fetching pg version: %v", err)
-	}
-
 	start := time.Now()
-	if maj >= 12 {
-		for timeout == 0 || time.Since(start) < timeout {
-			_, err := os.Stat(filepath.Join(p.dataDir, postgresRecoverySignal))
-			if err != nil && !os.IsNotExist(err) {
-				return err
-			}
-			if os.IsNotExist(err) {
-				return nil
-			}
-			time.Sleep(1 * time.Second)
+	for timeout == 0 || time.Since(start) < timeout {
+		_, err := os.Stat(filepath.Join(p.dataDir, postgresRecoverySignal))
+		if err != nil && !os.IsNotExist(err) {
+			return err
 		}
-	} else {
-		for timeout == 0 || time.Since(start) < timeout {
-			_, err := os.Stat(filepath.Join(p.dataDir, postgresRecoveryDone))
-			if err != nil && !os.IsNotExist(err) {
-				return err
-			}
-			if !os.IsNotExist(err) {
-				return nil
-			}
-			time.Sleep(1 * time.Second)
+		if os.IsNotExist(err) {
+			return nil
 		}
+		time.Sleep(1 * time.Second)
 	}
 
 	return errors.New("timeout waiting for db recovery")
@@ -698,14 +674,9 @@ func (p *Manager) GetSyncStandbys() ([]string, error) {
 
 // GetReplicationSlots returns replication slot names currently present.
 func (p *Manager) GetReplicationSlots() ([]string, error) {
-	maj, _, err := p.PGDataVersion()
-	if err != nil {
-		return nil, err
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeoutValue())
 	defer cancel()
-	return getReplicationSlots(ctx, p.localConnParams, maj)
+	return getReplicationSlots(ctx, p.localConnParams)
 }
 
 // CreateReplicationSlot creates a physical replication slot.
@@ -764,10 +735,6 @@ func (p *Manager) IsInitialized() (bool, error) {
 	if !exists {
 		return false, nil
 	}
-	maj, _, err := p.PGDataVersion()
-	if err != nil {
-		return false, err
-	}
 	requiredFiles := []string{
 		"PG_VERSION",
 		"base",
@@ -786,19 +753,10 @@ func (p *Manager) IsInitialized() (bool, error) {
 		"pg_twophase",
 		"global/pg_control",
 	}
-	// in postgres 10 pc_clog has been renamed to pg_xact and pc_xlog has been
-	// renamed to pg_wal
-	if maj < 10 {
-		requiredFiles = append(requiredFiles, []string{
-			"pg_clog",
-			"pg_xlog",
-		}...)
-	} else {
-		requiredFiles = append(requiredFiles, []string{
-			"pg_xact",
-			"pg_wal",
-		}...)
-	}
+	requiredFiles = append(requiredFiles, []string{
+		"pg_xact",
+		"pg_wal",
+	}...)
 	for _, f := range requiredFiles {
 		exists, err := fileExists(filepath.Join(p.dataDir, f))
 		if err != nil {
@@ -813,26 +771,10 @@ func (p *Manager) IsInitialized() (bool, error) {
 
 // GetRole return the current instance role
 func (p *Manager) GetRole() (common.Role, error) {
-	maj, _, err := p.BinaryVersion()
-	if err != nil {
-		return "", fmt.Errorf("error fetching pg version: %v", err)
-	}
-
-	if maj >= 12 {
-		// if standby.signal file exists then consider it as a standby
-		_, err := os.Stat(filepath.Join(p.dataDir, postgresStandbySignal))
-		if err != nil && !os.IsNotExist(err) {
-			return "", fmt.Errorf("error determining if %q file exists: %v", postgresStandbySignal, err)
-		}
-		if os.IsNotExist(err) {
-			return common.RoleMaster, nil
-		}
-		return common.RoleStandby, nil
-	}
-	// if recovery.conf file exists then consider it as a standby
-	_, err = os.Stat(filepath.Join(p.dataDir, postgresRecoveryConf))
+	// if standby.signal file exists then consider it as a standby
+	_, err := os.Stat(filepath.Join(p.dataDir, postgresStandbySignal))
 	if err != nil && !os.IsNotExist(err) {
-		return "", fmt.Errorf("error determining if %q file exists: %v", postgresRecoveryConf, err)
+		return "", fmt.Errorf("error determining if %q file exists: %v", postgresStandbySignal, err)
 	}
 	if os.IsNotExist(err) {
 		return common.RoleMaster, nil
@@ -841,35 +783,22 @@ func (p *Manager) GetRole() (common.Role, error) {
 }
 
 func (p *Manager) writeConfs(useTmpPostgresConf bool) error {
-	maj, _, err := p.BinaryVersion()
-	if err != nil {
-		return fmt.Errorf("error fetching pg version: %v", err)
-	}
-
-	writeRecoveryParamsInPostgresConf := maj >= 12
-
-	if err := p.writeConf(useTmpPostgresConf, writeRecoveryParamsInPostgresConf); err != nil {
+	if err := p.writeConf(useTmpPostgresConf); err != nil {
 		return fmt.Errorf("error writing %s file: %v", postgresConf, err)
 	}
 	if err := p.writePgHba(); err != nil {
 		return fmt.Errorf("error writing pg_hba.conf file: %v", err)
 	}
-	if !writeRecoveryParamsInPostgresConf {
-		if err := p.writeRecoveryConf(); err != nil {
-			return fmt.Errorf("error writing %s file: %v", postgresRecoveryConf, err)
-		}
-	} else {
-		if err := p.writeStandbySignal(); err != nil {
-			return fmt.Errorf("error writing %s file: %v", postgresStandbySignal, err)
-		}
-		if err := p.writeRecoverySignal(); err != nil {
-			return fmt.Errorf("error writing %s file: %v", postgresRecoverySignal, err)
-		}
+	if err := p.writeStandbySignal(); err != nil {
+		return fmt.Errorf("error writing %s file: %v", postgresStandbySignal, err)
+	}
+	if err := p.writeRecoverySignal(); err != nil {
+		return fmt.Errorf("error writing %s file: %v", postgresRecoverySignal, err)
 	}
 	return nil
 }
 
-func (p *Manager) writeConf(useTmpPostgresConf, writeRecoveryParams bool) error {
+func (p *Manager) writeConf(useTmpPostgresConf bool) error {
 	confFile := postgresConf
 	if useTmpPostgresConf {
 		confFile = tmpPostgresConf
@@ -897,39 +826,15 @@ func (p *Manager) writeConf(useTmpPostgresConf, writeRecoveryParams bool) error 
 				}
 			}
 
-			if writeRecoveryParams {
-				// write recovery parameters only if recoveryMode is not none
-				if p.recoveryOptions.RecoveryMode != RecoveryModeNone {
-					for n, v := range p.recoveryOptions.RecoveryParameters {
-						if _, err := fmt.Fprintf(f, "%s = '%s'\n", n, v); err != nil {
-							return err
-						}
+			// write recovery parameters only if recoveryMode is not none
+			if p.recoveryOptions.RecoveryMode != RecoveryModeNone {
+				for n, v := range p.recoveryOptions.RecoveryParameters {
+					if _, err := fmt.Fprintf(f, "%s = '%s'\n", n, v); err != nil {
+						return err
 					}
 				}
 			}
 
-			return nil
-		})
-}
-
-func (p *Manager) writeRecoveryConf() error {
-	// write recovery.conf only if recoveryMode is not none
-	if p.recoveryOptions.RecoveryMode == RecoveryModeNone {
-		return nil
-	}
-
-	return fs.WriteFileAtomicFunc(filepath.Join(p.dataDir, postgresRecoveryConf), 0600,
-		func(f io.Writer) error {
-			if p.recoveryOptions.RecoveryMode == RecoveryModeStandby {
-				if _, err := f.Write([]byte("standby_mode = 'on'\n")); err != nil {
-					return err
-				}
-			}
-			for n, v := range p.recoveryOptions.RecoveryParameters {
-				if _, err := fmt.Fprintf(f, "%s = '%s'\n", n, v); err != nil {
-					return err
-				}
-			}
 			return nil
 		})
 }
@@ -1151,17 +1056,7 @@ func (p *Manager) Ping() error {
 
 // OlderWalFile returns the oldest WAL filename needed by configured replication.
 func (p *Manager) OlderWalFile() (string, error) {
-	maj, _, err := p.PGDataVersion()
-	if err != nil {
-		return "", err
-	}
-	var walDir string
-	if maj < 10 {
-		walDir = "pg_xlog"
-	} else {
-		walDir = "pg_wal"
-	}
-
+	walDir := "pg_wal"
 	f, err := os.Open(filepath.Join(p.dataDir, walDir))
 	if err != nil {
 		return "", err
@@ -1195,17 +1090,8 @@ func (p *Manager) OlderWalFile() (string, error) {
 
 // IsRestartRequired returns if a postgres restart is necessary
 func (p *Manager) IsRestartRequired(changedParams []string) (bool, error) {
-	major, minor, err := p.BinaryVersion()
-	if err != nil {
-		return false, fmt.Errorf("error fetching pg version: %v", err)
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeoutValue())
 	defer cancel()
-
-	if major == 9 && minor < 5 {
-		return isRestartRequiredUsingPgSettingsContext(ctx, p.localConnParams, changedParams)
-	}
 	return isRestartRequiredUsingPendingRestart(ctx, p.localConnParams)
 }
 

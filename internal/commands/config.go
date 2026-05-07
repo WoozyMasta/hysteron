@@ -22,8 +22,8 @@ import (
 )
 
 type runtimeCommonOptions struct {
-	clusterSelectionOptions
 	Metrics runtimeMetricsOpts `group:"Metrics"`
+	clusterSelectionOptions
 }
 
 type rootGlobalOptions struct {

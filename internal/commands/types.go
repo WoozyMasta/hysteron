@@ -17,12 +17,12 @@ package commands
 import "github.com/sorintlab/stolon/internal/output"
 
 type rootCommand struct {
-	Global   rootGlobalOptions `group:"Global"`
 	Keeper   runtimeCommand    `command:"keeper" command-group:"Runtime Commands" description:"Run keeper runtime components"`
 	Sentinel runtimeCommand    `command:"sentinel" command-group:"Runtime Commands" description:"Run sentinel runtime components"`
 	Proxy    runtimeCommand    `command:"proxy" command-group:"Runtime Commands" description:"Run proxy runtime components"`
-	Failover failoverCommand   `command:"failover" command-group:"Management Commands" description:"Manage failover operations"`
 	Cluster  clusterCommand    `command:"cluster" command-group:"Management Commands" description:"Manage cluster control operations"`
+	Global   rootGlobalOptions `group:"Global"`
+	Failover failoverCommand   `command:"failover" command-group:"Management Commands" description:"Manage failover operations"`
 }
 
 type runtimeCommand struct {
@@ -39,9 +39,9 @@ type clusterCommand struct {
 	Data          clusterDataCommand          `command:"data" description:"Read and mutate cluster data documents"`
 	Initialize    clusterInitializeCommand    `command:"initialize" alias:"init" description:"Initialize a new cluster"`
 	Update        clusterUpdateCommand        `command:"update" description:"Replace or patch the current cluster specification"`
+	Specification clusterSpecificationCommand `command:"specification" alias:"spec" description:"Retrieve the current cluster specification"`
 	Common        managementCommonOptions     `group:"Common"`
 	Promote       clusterPromoteCommand       `command:"promote" description:"Promote a standby cluster to primary"`
-	Specification clusterSpecificationCommand `command:"specification" alias:"spec" description:"Retrieve the current cluster specification"`
 }
 
 type failoverCommand struct {
@@ -61,9 +61,9 @@ type clusterKeeperCommand struct {
 }
 
 type runtimeEtcdCommand struct {
-	Etcd      runtimeEtcdOptions   `group:"Etcd" namespace:"etcd" env-namespace:"ETCD"`
 	Common    runtimeCommonOptions `no-flag:"true"`
 	Component string               `no-flag:"true"`
+	Etcd      runtimeEtcdOptions   `group:"Etcd" namespace:"etcd" env-namespace:"ETCD"`
 }
 
 type runtimeKubernetesCommand struct {

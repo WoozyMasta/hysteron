@@ -254,20 +254,6 @@ func TestReplicationConnParams(t *testing.T) {
 	}
 }
 
-func TestStringArrayParam(t *testing.T) {
-	input := []string{"max_connections", "shared_buffers"}
-	got := stringArrayParam(input)
-
-	if len(got) != len(input) {
-		t.Fatalf("got %d elements, wanted %d", len(got), len(input))
-	}
-	for i := range input {
-		if got.Index(i) != input[i] {
-			t.Fatalf("index %d: got %#v, wanted %#v", i, got.Index(i), input[i])
-		}
-	}
-}
-
 func TestIsWalFileName(t *testing.T) {
 	tests := []struct {
 		name  string

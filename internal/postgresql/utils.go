@@ -28,8 +28,6 @@ import (
 
 	"github.com/woozymasta/hysteron/internal/common"
 
-	"github.com/jackc/pgx/v5/pgtype"
-
 	"os"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -86,10 +84,6 @@ func replicationConnParams(connParams ConnParams) ConnParams {
 	replConnParams := connParams.Copy()
 	replConnParams["replication"] = "1"
 	return replConnParams
-}
-
-func stringArrayParam(values []string) pgtype.FlatArray[string] {
-	return pgtype.FlatArray[string](values)
 }
 
 func ping(ctx context.Context, connParams ConnParams) error {
@@ -516,38 +510,6 @@ func isRestartRequiredUsingPendingRestart(ctx context.Context, connParams ConnPa
 	return isRestartRequired, nil
 }
 
-func isRestartRequiredUsingPgSettingsContext(ctx context.Context, connParams ConnParams, changedParams []string) (bool, error) {
-	isRestartRequired := false
-	db, err := openDB(connParams)
-	if err != nil {
-		return isRestartRequired, err
-	}
-	defer ignoreClose(db)
-
-	stmt, err := db.PrepareContext(ctx, "select count(*) > 0 from pg_settings where context = 'postmaster' and name = ANY($1)")
-
-	if err != nil {
-		return false, err
-	}
-	defer func() { _ = stmt.Close() }()
-
-	rows, err := stmt.QueryContext(ctx, stringArrayParam(changedParams))
-	if err != nil {
-		return isRestartRequired, err
-	}
-	defer func() { _ = rows.Close() }()
-	if rows.Next() {
-		if err := rows.Scan(&isRestartRequired); err != nil {
-			return isRestartRequired, err
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return isRestartRequired, err
-	}
-
-	return isRestartRequired, nil
-}
-
 // ParseBinaryVersion parses postgres --version output.
 func ParseBinaryVersion(v string) (int, int, error) {
 	// extract version (removing beta*, rc* etc...)
@@ -605,13 +567,13 @@ func MinSupportedMajorVersion() int {
 	if len(supportedMajorVersions) == 0 {
 		return 0
 	}
-	min := supportedMajorVersions[0]
+	minVersion := supportedMajorVersions[0]
 	for _, v := range supportedMajorVersions[1:] {
-		if v < min {
-			min = v
+		if v < minVersion {
+			minVersion = v
 		}
 	}
-	return min
+	return minVersion
 }
 
 // MaxSupportedMajorVersion returns the maximum supported PostgreSQL major.
@@ -619,13 +581,13 @@ func MaxSupportedMajorVersion() int {
 	if len(supportedMajorVersions) == 0 {
 		return 0
 	}
-	max := supportedMajorVersions[0]
+	maxVersion := supportedMajorVersions[0]
 	for _, v := range supportedMajorVersions[1:] {
-		if v > max {
-			max = v
+		if v > maxVersion {
+			maxVersion = v
 		}
 	}
-	return max
+	return maxVersion
 }
 
 // MinKnownMajorVersion returns the minimum known PostgreSQL major version from
@@ -635,13 +597,13 @@ func MinKnownMajorVersion() int {
 	if len(all) == 0 {
 		return 0
 	}
-	min := all[0]
+	minVersion := all[0]
 	for _, v := range all[1:] {
-		if v < min {
-			min = v
+		if v < minVersion {
+			minVersion = v
 		}
 	}
-	return min
+	return minVersion
 }
 
 // MaxKnownMajorVersion returns the maximum known PostgreSQL major version from
@@ -651,13 +613,13 @@ func MaxKnownMajorVersion() int {
 	if len(all) == 0 {
 		return 0
 	}
-	max := all[0]
+	maxVersion := all[0]
 	for _, v := range all[1:] {
-		if v > max {
-			max = v
+		if v > maxVersion {
+			maxVersion = v
 		}
 	}
-	return max
+	return maxVersion
 }
 
 // ValidateSupportedMajorVersion checks whether major has default support.

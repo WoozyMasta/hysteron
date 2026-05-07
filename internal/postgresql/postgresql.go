@@ -735,7 +735,8 @@ func (p *Manager) IsInitialized() (bool, error) {
 	if !exists {
 		return false, nil
 	}
-	requiredFiles := []string{
+	requiredFiles := make([]string, 0, 18)
+	requiredFiles = append(requiredFiles,
 		"PG_VERSION",
 		"base",
 		"global",
@@ -752,11 +753,9 @@ func (p *Manager) IsInitialized() (bool, error) {
 		"pg_tblspc",
 		"pg_twophase",
 		"global/pg_control",
-	}
-	requiredFiles = append(requiredFiles, []string{
 		"pg_xact",
 		"pg_wal",
-	}...)
+	)
 	for _, f := range requiredFiles {
 		exists, err := fileExists(filepath.Join(p.dataDir, f))
 		if err != nil {
@@ -1089,7 +1088,7 @@ func (p *Manager) OlderWalFile() (string, error) {
 }
 
 // IsRestartRequired returns if a postgres restart is necessary
-func (p *Manager) IsRestartRequired(changedParams []string) (bool, error) {
+func (p *Manager) IsRestartRequired(_ []string) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeoutValue())
 	defer cancel()
 	return isRestartRequiredUsingPendingRestart(ctx, p.localConnParams)

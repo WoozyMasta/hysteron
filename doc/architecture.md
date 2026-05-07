@@ -72,8 +72,20 @@ storage space exhaustion. Hysteron doesn't need historical key values but
 won't compact the etcdv3 store since this operation is global and the etcd
 cluster could be shared with other products that requires historical values.
 Compaction could be triggered in multiple ways. If possible we suggest to
-just enable automatic compaction (see etcd options). Please refer to the
-[official etcd doc](https://coreos.com/etcd/docs/latest/op-guide/maintenance.html).
+enable automatic compaction (revision or periodic policy based on your etcd
+operations baseline).
+
+Compaction alone does not immediately return disk space to the host filesystem.
+Run etcd defragmentation as part of regular maintenance (normally during
+low-traffic windows and one member at a time, following etcd operational
+guidance).
+
+If your etcd cluster is shared with other systems, define compaction retention
+for the whole cluster intentionally, because this is a global policy and may
+affect workloads that rely on key history.
+
+Refer to the current etcd maintenance documentation:
+https://etcd.io/docs/v3.5/op-guide/maintenance/
 
 ## kubernetes store backend
 

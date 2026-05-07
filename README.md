@@ -58,6 +58,14 @@ Anyway it's quite easy to reset a cluster from scratch keeping the current maste
 * OS: currently hysteron is tested on GNU/Linux, with reports of people using it
   also on Solaris, *BSD and Darwin.
 
+## etcd maintenance
+
+When using the etcd v3 backend, periodic compaction and defragmentation are
+required operational tasks. Hysteron does not run global etcd maintenance
+operations automatically.
+
+See [etcd v3 compaction](doc/architecture.md#etcdv3-compaction).
+
 ## High availability
 
 Hysteron tries to be resilient to any partitioning problem. The cluster view is computed by the leader sentinel and is useful to avoid data loss (one example over all avoid that old dead masters coming back are elected as the new master).

@@ -749,9 +749,6 @@ type DBStatus struct {
 	// SystemID is PostgreSQL system identifier.
 	SystemID string `json:"systemdID,omitempty"`
 
-	// NOTE(sgotti) we currently don't report the external synchronous standbys.
-	// If/when needed lets add a new ExternalSynchronousStandbys field
-
 	// OlderWalFile is the oldest required WAL segment filename.
 	OlderWalFile string `json:"olderWalFile,omitempty"`
 	// TimelinesHistory is timeline history known by the instance.
@@ -760,10 +757,12 @@ type DBStatus struct {
 	// DBUIDs of the internal standbys currently reported as in sync by the instance
 	CurSynchronousStandbys []string `json:"-"`
 
-	// DBUIDs of the internal standbys that we know are in sync.
+	// SynchronousStandbys stores DBUIDs of internal standbys that we know are
+	// in sync.
 	// They could be currently down but we know that they were reported as in
 	// sync in the past and they are defined inside synchronous_standby_names
 	// so the instance will wait for acknowledge from them.
+	// External synchronous standbys are not currently reported in DBStatus.
 	SynchronousStandbys []string `json:"synchronousStandbys"`
 
 	// CurrentGeneration is DB generation currently reported by PostgreSQL.

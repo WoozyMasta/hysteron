@@ -468,8 +468,8 @@ func (s *Sentinel) setDBSpecFromClusterSpec(cd *cluster.ClusterData) {
 			db.Spec.AdditionalReplicationSlots = clusterSpec.AdditionalMasterReplicationSlots
 		case dbTypeStandby:
 			db.Spec.AdditionalReplicationSlots = nil
-			// TODO(sgotti). Update when there'll be an option to define
-			// additional replication slots on standbys
+			// Standby additional slot policy is currently master-only.
+			// See plan.md: "TODO: Replication Slots On Failover".
 		}
 	}
 }

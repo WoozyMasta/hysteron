@@ -1176,11 +1176,9 @@ func (p *PostgresKeeper) resync(
 		PrimarySlotName: common.HysteronName(db.UID),
 	}
 
-	// TODO(sgotti) Actually we don't check if pg_rewind is installed or if
-	// postgresql version is > 9.5 since someone can also use an externally
-	// installed pg_rewind for postgres 9.4. If a pg_rewind executable
-	// doesn't exists pgm.SyncFromFollowedPGRewind will return an error and
-	// fallback to pg_basebackup
+	// We intentionally do not hard-fail on pg_rewind capability checks here.
+	// If pg_rewind is missing or unusable, SyncFromFollowedPGRewind returns an
+	// error and we fall back to pg_basebackup.
 	if tryPgrewind && p.usePgrewind(db) {
 		// pg_rewind doesn't support running against a database that is in recovery, as it
 		// builds temporary tables and this is not supported on a hot-standby. Hysteron doesn't
@@ -1833,11 +1831,9 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 				tryPgrewind = false
 			}
 
-			// TODO(sgotti) pg_rewind considers databases on the same timeline
-			// as in sync and doesn't check if they diverged at different
-			// position in previous timelines.
-			// So check that the db as been synced or resync again with
-			// pg_rewind disabled. Will need to report this upstream.
+			// pg_rewind can leave a node on a diverged branch in edge cases.
+			// Verify branch alignment after rewind and force full resync when
+			// divergence is still detected.
 
 			// TODO(sgotti) The rewinded standby needs wal from the master
 			// starting from the common ancestor, if they aren't available the

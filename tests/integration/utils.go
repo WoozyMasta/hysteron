@@ -182,7 +182,8 @@ func waitHysteronReplicationSlots(q Querier, replSlots []string, timeout time.Du
 	for time.Now().Add(-timeout).Before(start) {
 		allReplSlots, err := getReplicationSlots(q)
 		if err != nil {
-			goto end
+			time.Sleep(2 * time.Second)
+			continue
 		}
 		curReplSlots = []string{}
 		for _, s := range allReplSlots {
@@ -194,7 +195,6 @@ func waitHysteronReplicationSlots(q Querier, replSlots []string, timeout time.Du
 		if reflect.DeepEqual(replSlots, curReplSlots) {
 			return nil
 		}
-	end:
 		time.Sleep(2 * time.Second)
 	}
 	return fmt.Errorf("timeout waiting for replSlots %v, got: %v, last err: %v", replSlots, curReplSlots, err)
@@ -209,7 +209,8 @@ func waitNotHysteronReplicationSlots(q Querier, replSlots []string, timeout time
 	for time.Now().Add(-timeout).Before(start) {
 		allReplSlots, err := getReplicationSlots(q)
 		if err != nil {
-			goto end
+			time.Sleep(2 * time.Second)
+			continue
 		}
 		curReplSlots = []string{}
 		for _, s := range allReplSlots {
@@ -221,7 +222,6 @@ func waitNotHysteronReplicationSlots(q Querier, replSlots []string, timeout time
 		if reflect.DeepEqual(replSlots, curReplSlots) {
 			return nil
 		}
-	end:
 		time.Sleep(2 * time.Second)
 	}
 	return fmt.Errorf("timeout waiting for replSlots %v, got: %v, last err: %v", replSlots, curReplSlots, err)
@@ -816,13 +816,13 @@ func (tk *TestKeeper) WaitPGParameter(parameter, value string, timeout time.Dura
 	for time.Now().Add(-timeout).Before(start) {
 		pgParameters, err := GetPGParameters(tk)
 		if err != nil {
-			goto end
+			time.Sleep(sleepInterval)
+			continue
 		}
 		latestValue = pgParameters[parameter]
 		if latestValue == value {
 			return nil
 		}
-	end:
 		time.Sleep(sleepInterval)
 	}
 	return fmt.Errorf("timeout waiting for pgParamater %q (%q) to equal %q", parameter, latestValue, value)
@@ -1354,13 +1354,9 @@ func WaitClusterDataUpdated(e *store.KVBackedStore, timeout time.Duration) error
 	start := time.Now()
 	for time.Now().Add(-timeout).Before(start) {
 		cd, _, err := e.GetClusterData(context.TODO())
-		if err != nil || cd == nil {
-			goto end
-		}
-		if !reflect.DeepEqual(icd, cd) {
+		if err == nil && cd != nil && !reflect.DeepEqual(icd, cd) {
 			return nil
 		}
-	end:
 		time.Sleep(sleepInterval)
 	}
 	return fmt.Errorf("timeout")
@@ -1370,13 +1366,9 @@ func WaitClusterDataWithMaster(e *store.KVBackedStore, timeout time.Duration) (s
 	start := time.Now()
 	for time.Now().Add(-timeout).Before(start) {
 		cd, _, err := e.GetClusterData(context.TODO())
-		if err != nil || cd == nil {
-			goto end
-		}
-		if cd.Cluster.Status.Phase == cluster.ClusterPhaseNormal && cd.Cluster.Status.Master != "" {
+		if err == nil && cd != nil && cd.Cluster.Status.Phase == cluster.ClusterPhaseNormal && cd.Cluster.Status.Master != "" {
 			return cd.DBs[cd.Cluster.Status.Master].Spec.KeeperUID, nil
 		}
-	end:
 		time.Sleep(sleepInterval)
 	}
 	return "", fmt.Errorf("timeout")
@@ -1386,15 +1378,11 @@ func WaitClusterDataMaster(master string, e *store.KVBackedStore, timeout time.D
 	start := time.Now()
 	for time.Now().Add(-timeout).Before(start) {
 		cd, _, err := e.GetClusterData(context.TODO())
-		if err != nil || cd == nil {
-			goto end
-		}
-		if cd.Cluster.Status.Phase == cluster.ClusterPhaseNormal && cd.Cluster.Status.Master != "" {
+		if err == nil && cd != nil && cd.Cluster.Status.Phase == cluster.ClusterPhaseNormal && cd.Cluster.Status.Master != "" {
 			if cd.DBs[cd.Cluster.Status.Master].Spec.KeeperUID == master {
 				return nil
 			}
 		}
-	end:
 		time.Sleep(sleepInterval)
 	}
 	return fmt.Errorf("timeout")
@@ -1404,18 +1392,16 @@ func WaitClusterDataKeeperInitialized(keeperUID string, e *store.KVBackedStore, 
 	start := time.Now()
 	for time.Now().Add(-timeout).Before(start) {
 		cd, _, err := e.GetClusterData(context.TODO())
-		if err != nil || cd == nil {
-			goto end
-		}
-		// Check for db on keeper to be initialized
-		for _, db := range cd.DBs {
-			if db.Spec.KeeperUID == keeperUID {
-				if db.Status.CurrentGeneration >= cluster.InitialGeneration {
-					return nil
+		if err == nil && cd != nil {
+			// Check for db on keeper to be initialized
+			for _, db := range cd.DBs {
+				if db.Spec.KeeperUID == keeperUID {
+					if db.Status.CurrentGeneration >= cluster.InitialGeneration {
+						return nil
+					}
 				}
 			}
 		}
-	end:
 		time.Sleep(sleepInterval)
 	}
 	return fmt.Errorf("timeout")
@@ -1429,10 +1415,7 @@ func WaitClusterDataSynchronousStandbys(synchronousStandbys []string, e *store.K
 	start := time.Now()
 	for time.Now().Add(-timeout).Before(start) {
 		cd, _, err := e.GetClusterData(context.TODO())
-		if err != nil || cd == nil {
-			goto end
-		}
-		if cd.Cluster.Status.Phase == cluster.ClusterPhaseNormal && cd.Cluster.Status.Master != "" {
+		if err == nil && cd != nil && cd.Cluster.Status.Phase == cluster.ClusterPhaseNormal && cd.Cluster.Status.Master != "" {
 			masterDB := cd.DBs[cd.Cluster.Status.Master]
 			// get keepers for db spec synchronousStandbys
 			keepersUIDs := []string{}
@@ -1444,7 +1427,8 @@ func WaitClusterDataSynchronousStandbys(synchronousStandbys []string, e *store.K
 			}
 			sort.Strings(keepersUIDs)
 			if !reflect.DeepEqual(synchronousStandbys, keepersUIDs) {
-				goto end
+				time.Sleep(sleepInterval)
+				continue
 			}
 
 			// get keepers for db status synchronousStandbys
@@ -1456,12 +1440,10 @@ func WaitClusterDataSynchronousStandbys(synchronousStandbys []string, e *store.K
 				}
 			}
 			sort.Strings(keepersUIDs)
-			if !reflect.DeepEqual(synchronousStandbys, keepersUIDs) {
-				goto end
+			if reflect.DeepEqual(synchronousStandbys, keepersUIDs) {
+				return nil
 			}
-			return nil
 		}
-	end:
 		time.Sleep(sleepInterval)
 	}
 	return fmt.Errorf("timeout")
@@ -1471,13 +1453,9 @@ func WaitClusterPhase(e *store.KVBackedStore, phase cluster.ClusterPhase, timeou
 	start := time.Now()
 	for time.Now().Add(-timeout).Before(start) {
 		cd, _, err := e.GetClusterData(context.TODO())
-		if err != nil || cd == nil {
-			goto end
-		}
-		if cd.Cluster.Status.Phase == phase {
+		if err == nil && cd != nil && cd.Cluster.Status.Phase == phase {
 			return nil
 		}
-	end:
 		time.Sleep(sleepInterval)
 	}
 	return fmt.Errorf("timeout")
@@ -1487,13 +1465,9 @@ func WaitNumDBs(e *store.KVBackedStore, n int, timeout time.Duration) error {
 	start := time.Now()
 	for time.Now().Add(-timeout).Before(start) {
 		cd, _, err := e.GetClusterData(context.TODO())
-		if err != nil || cd == nil {
-			goto end
-		}
-		if len(cd.DBs) == n {
+		if err == nil && cd != nil && len(cd.DBs) == n {
 			return nil
 		}
-	end:
 		time.Sleep(sleepInterval)
 	}
 	return fmt.Errorf("timeout")
@@ -1503,19 +1477,16 @@ func WaitStandbyKeeper(e *store.KVBackedStore, keeperUID string, timeout time.Du
 	start := time.Now()
 	for time.Now().Add(-timeout).Before(start) {
 		cd, _, err := e.GetClusterData(context.TODO())
-		if err != nil || cd == nil {
-			goto end
-		}
-
-		for _, db := range cd.DBs {
-			if db.UID == cd.Cluster.Status.Master {
-				continue
-			}
-			if db.Spec.KeeperUID == keeperUID && db.Spec.Role == common.RoleStandby {
-				return nil
+		if err == nil && cd != nil {
+			for _, db := range cd.DBs {
+				if db.UID == cd.Cluster.Status.Master {
+					continue
+				}
+				if db.Spec.KeeperUID == keeperUID && db.Spec.Role == common.RoleStandby {
+					return nil
+				}
 			}
 		}
-	end:
 		time.Sleep(sleepInterval)
 	}
 	return fmt.Errorf("timeout")
@@ -1525,20 +1496,23 @@ func WaitClusterDataKeepers(keepersUIDs []string, e *store.KVBackedStore, timeou
 	start := time.Now()
 	for time.Now().Add(-timeout).Before(start) {
 		cd, _, err := e.GetClusterData(context.TODO())
-		if err != nil || cd == nil {
-			goto end
-		}
-		if len(keepersUIDs) != len(cd.Keepers) {
-			goto end
-		}
-		// Check for db on keeper to be initialized
-		for _, keeper := range cd.Keepers {
-			if !slices.Contains(keepersUIDs, keeper.UID) {
-				goto end
+		if err == nil && cd != nil {
+			if len(keepersUIDs) != len(cd.Keepers) {
+				time.Sleep(sleepInterval)
+				continue
+			}
+			// Check for db on keeper to be initialized
+			missing := false
+			for _, keeper := range cd.Keepers {
+				if !slices.Contains(keepersUIDs, keeper.UID) {
+					missing = true
+					break
+				}
+			}
+			if !missing {
+				return nil
 			}
 		}
-		return nil
-	end:
 		time.Sleep(sleepInterval)
 	}
 	return fmt.Errorf("timeout")
@@ -1559,54 +1533,87 @@ func WaitClusterSyncedXLogPos(keepers []*TestKeeper, xLogPos uint64, e *store.KV
 		c := 0
 		curXLogPos := uint64(0)
 		cd, _, err := e.GetClusterData(context.TODO())
-		if err != nil || cd == nil {
-			goto end
-		}
-		// Check for db on keeper to be initialized
-		for _, keeper := range cd.Keepers {
-			if !slices.Contains(keepersUIDs, keeper.UID) {
-				continue
-			}
-			for _, db := range cd.DBs {
-				if db.Spec.KeeperUID == keeper.UID {
-					if db.Status.XLogPos < xLogPos {
-						goto end
-					}
-					if c == 0 {
-						curXLogPos = db.Status.XLogPos
-					} else {
-						if db.Status.XLogPos != curXLogPos {
-							goto end
+		if err == nil && cd != nil {
+			valid := true
+			// Check for db on keeper to be initialized
+			for _, keeper := range cd.Keepers {
+				if !slices.Contains(keepersUIDs, keeper.UID) {
+					continue
+				}
+				for _, db := range cd.DBs {
+					if db.Spec.KeeperUID == keeper.UID {
+						if db.Status.XLogPos < xLogPos {
+							valid = false
+							break
+						}
+						if c == 0 {
+							curXLogPos = db.Status.XLogPos
+						} else if db.Status.XLogPos != curXLogPos {
+							valid = false
+							break
 						}
 					}
 				}
+				if !valid {
+					break
+				}
+				c++
 			}
-			c++
+			if valid && c == len(keepersUIDs) {
+				return nil
+			}
 		}
-		if c == len(keepersUIDs) {
-			return nil
-		}
-	end:
 		time.Sleep(sleepInterval)
 	}
 	return fmt.Errorf("timeout")
 }
 
 func WaitClusterDataEnabledProxiesNum(e *store.KVBackedStore, n int, timeout time.Duration) error {
-	// TODO(sgotti) find a way to retrieve the proxies internally generated uids
-	// and check for them instead of relying only on the number of proxies
 	start := time.Now()
 	for time.Now().Add(-timeout).Before(start) {
 		cd, _, err := e.GetClusterData(context.TODO())
-		if err != nil || cd == nil {
-			goto end
-		}
-		if len(cd.Proxy.Spec.EnabledProxies) == n {
+		if err == nil && cd != nil && len(cd.Proxy.Spec.EnabledProxies) == n {
 			return nil
 		}
-	end:
 		time.Sleep(sleepInterval)
 	}
+	return fmt.Errorf("timeout")
+}
+
+func WaitClusterDataEnabledProxies(e *store.KVBackedStore, expected []string, timeout time.Duration) error {
+	want := slices.Clone(expected)
+	sort.Strings(want)
+	start := time.Now()
+
+	for time.Now().Add(-timeout).Before(start) {
+		cd, _, err := e.GetClusterData(context.TODO())
+		if err == nil && cd != nil {
+			got := slices.Clone(cd.Proxy.Spec.EnabledProxies)
+			sort.Strings(got)
+			if reflect.DeepEqual(want, got) {
+				return nil
+			}
+		}
+		time.Sleep(sleepInterval)
+	}
+
+	return fmt.Errorf("timeout")
+}
+
+func WaitSentinelLeader(kvStore store.KVStore, clusterName, sentinelUID string, timeout time.Duration) error {
+	electionKey := filepath.Join(common.StorePrefix, clusterName, common.SentinelLeaderKey)
+	start := time.Now()
+
+	for time.Now().Add(-timeout).Before(start) {
+		ctx, cancel := context.WithTimeout(context.Background(), defaultStoreTimeout)
+		pair, err := kvStore.Get(ctx, electionKey)
+		cancel()
+		if err == nil && string(pair.Value) == sentinelUID {
+			return nil
+		}
+		time.Sleep(sleepInterval)
+	}
+
 	return fmt.Errorf("timeout")
 }
 

@@ -109,14 +109,12 @@ func TestSentinelEnabledProxies(t *testing.T) {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
-	// check that the sentinel has become leader (cluster data is changed since
-	// it's updating keepers status) TODO(sgotti) find a better way to determine
-	// if the sentinel is the leader and is updating the clusterdata
-	if err := WaitClusterDataUpdated(sm, 30*time.Second); err != nil {
+	// Wait for election state to show this sentinel as current leader.
+	if err := WaitSentinelLeader(tstore.store, clusterName, ts.uid, 30*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
-	t.Logf("clusterdata changed")
+	t.Logf("sentinel leadership acquired")
 
 	// check that the enabled proxies aren't changed (same Proxy Generation and same EnabledProxies)
 	cd, _, err = sm.GetClusterData(context.TODO())
@@ -145,6 +143,14 @@ func TestSentinelEnabledProxies(t *testing.T) {
 	if err := WaitClusterDataEnabledProxiesNum(sm, 2, 3*initialClusterSpec.SleepInterval.Duration); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
+	cd, _, err = sm.GetClusterData(context.TODO())
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	enabledProxiesTwo := cd.Proxy.Spec.EnabledProxies
+	if len(enabledProxiesTwo) != 2 {
+		t.Fatalf("expected 2 enabled proxies, got %d", len(enabledProxiesTwo))
+	}
 
 	// freeze the proxy
 	t.Logf("freezing proxy: %s", tp2.uid)
@@ -155,6 +161,9 @@ func TestSentinelEnabledProxies(t *testing.T) {
 	if err := WaitClusterDataEnabledProxiesNum(sm, 1, 3*cluster.DefaultProxyTimeout); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
+	if err := WaitClusterDataEnabledProxies(sm, enabledProxies, 3*cluster.DefaultProxyTimeout); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
 
 	// unfreeze the proxy
 	t.Logf("resuming proxy: %s", tp2.uid)
@@ -163,6 +172,9 @@ func TestSentinelEnabledProxies(t *testing.T) {
 	}
 
 	if err := WaitClusterDataEnabledProxiesNum(sm, 2, 6*initialClusterSpec.SleepInterval.Duration); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := WaitClusterDataEnabledProxies(sm, enabledProxiesTwo, 6*initialClusterSpec.SleepInterval.Duration); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 }

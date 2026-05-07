@@ -133,6 +133,8 @@ The format is based on [Keep a Changelog][], and this project adheres to
   publishing with `--kube-read-only-service-*` flags and proxy-style standby
   selection controls (`replica-priority`, `max-lag`, `no-fallback`,
   `include-primary`).
+* Remove legacy internal cluster v0 model package (`internal/cluster/v0`) as
+  part of new cleanup; no backward-compatibility layer is kept in-tree.
 
 ## v0.17.0
 

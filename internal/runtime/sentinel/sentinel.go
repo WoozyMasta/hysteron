@@ -464,9 +464,9 @@ func (s *Sentinel) setDBSpecFromClusterSpec(cd *cluster.ClusterData) {
 			continue
 		}
 		switch dt {
-		case dbTypeMaster:
+		case dbTypePrimaryLine:
 			db.Spec.AdditionalReplicationSlots = clusterSpec.AdditionalMasterReplicationSlots
-		case dbTypeStandby:
+		case dbTypeReplicaLine:
 			db.Spec.AdditionalReplicationSlots = nil
 			// Standby additional slot policy is currently master-only.
 			// See plan.md: "TODO: Replication Slots On Failover".
@@ -568,10 +568,11 @@ type dbValidity int
 type dbStatus int
 
 const (
-	// TODO(sgotti) change "master" and "standby" to different name to
-	// better differentiate with with master and standby db roles.
-	dbTypeMaster dbType = iota
-	dbTypeStandby
+	// dbTypePrimaryLine is a writer lineage root in sentinel topology logic.
+	// It may map to role=master or to an external-follow standby root.
+	dbTypePrimaryLine dbType = iota
+	// dbTypeReplicaLine is an internal-follow replica in sentinel topology logic.
+	dbTypeReplicaLine
 
 	dbValidityValid dbValidity = iota
 	dbValidityInvalid
@@ -597,13 +598,13 @@ func (s *Sentinel) dbType(
 	}
 	switch db.Spec.Role {
 	case common.RoleMaster:
-		return dbTypeMaster, nil
+		return dbTypePrimaryLine, nil
 	case common.RoleStandby:
 		if db.Spec.FollowConfig != nil &&
 			db.Spec.FollowConfig.Type == cluster.FollowTypeExternal {
-			return dbTypeMaster, nil
+			return dbTypePrimaryLine, nil
 		}
-		return dbTypeStandby, nil
+		return dbTypeReplicaLine, nil
 	default:
 		return 0, fmt.Errorf("invalid db role in spec for db %q", dbUID)
 	}
@@ -686,7 +687,7 @@ func (s *Sentinel) dbCanSync(
 	if err != nil {
 		return false, err
 	}
-	if dt != dbTypeStandby {
+	if dt != dbTypeReplicaLine {
 		return true, nil
 	}
 
@@ -792,13 +793,13 @@ func (s *Sentinel) dbStatus(
 func (s *Sentinel) validMastersByStatus(
 	cd *cluster.ClusterData,
 ) (map[string]*cluster.DB, map[string]*cluster.DB, map[string]*cluster.DB) {
-	return s.validDBsByStatus(cd, dbTypeMaster, "master")
+	return s.validDBsByStatus(cd, dbTypePrimaryLine, "master")
 }
 
 func (s *Sentinel) validStandbysByStatus(
 	cd *cluster.ClusterData,
 ) (map[string]*cluster.DB, map[string]*cluster.DB, map[string]*cluster.DB) {
-	return s.validDBsByStatus(cd, dbTypeStandby, "standby")
+	return s.validDBsByStatus(cd, dbTypeReplicaLine, "standby")
 }
 
 func (s *Sentinel) validDBsByStatus(
@@ -1451,7 +1452,7 @@ func (s *Sentinel) updateCluster(
 							Msg("skipping old master cleanup because database type cannot be determined")
 						continue
 					}
-					if dt != dbTypeMaster {
+					if dt != dbTypePrimaryLine {
 						continue
 					}
 					s.log.Info().
@@ -1922,7 +1923,7 @@ func (s *Sentinel) updateCluster(
 								Msg("skipping standby cleanup because database type cannot be determined")
 							continue
 						}
-						if dt != dbTypeStandby {
+						if dt != dbTypeReplicaLine {
 							continue
 						}
 						// Don't remove standbys marked as synchronous standbys
@@ -2001,7 +2002,7 @@ func (s *Sentinel) updateCluster(
 							Msg("skipping standby reconfiguration because database type cannot be determined")
 						continue
 					}
-					if dt != dbTypeStandby {
+					if dt != dbTypeReplicaLine {
 						continue
 					}
 

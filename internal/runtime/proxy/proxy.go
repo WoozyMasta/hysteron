@@ -582,10 +582,9 @@ func (c *ClusterChecker) Start() error {
 		readOnlyEndCh = c.readOnly.endTCPProxyCh
 	}
 
-	// TODO(sgotti) TimeoutCecker is needed to forcefully close connection also
-	// if the Check method is blocked somewhere.
-	// The idiomatic/cleaner solution will be to use a context instead of this
-	// TimeoutChecker, but that requires broader store and checker plumbing.
+	// TimeoutChecker force-closes destinations if Check blocks or stops
+	// succeeding. A future context-driven checker flow could replace this
+	// watchdog once store/check plumbing is fully context-aware.
 	go c.TimeoutChecker(checkOkCh)
 
 	for {

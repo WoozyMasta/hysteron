@@ -27,6 +27,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -107,6 +108,8 @@ type Manager struct {
 	curHba []string
 	// Request timeout for PostgreSQL operations.
 	requestTimeout time.Duration
+	// Guards request timeout updates/read across concurrent keeper loops.
+	requestTimeoutMu sync.RWMutex
 }
 
 // RecoveryMode defines PostgreSQL startup recovery mode.
@@ -214,6 +217,20 @@ func (p *Manager) CurRecoveryOptions() *RecoveryOptions {
 // SetHba sets desired pg_hba entries.
 func (p *Manager) SetHba(hba []string) {
 	p.hba = hba
+}
+
+// SetRequestTimeout updates timeout used by PostgreSQL operations.
+func (p *Manager) SetRequestTimeout(timeout time.Duration) {
+	p.requestTimeoutMu.Lock()
+	p.requestTimeout = timeout
+	p.requestTimeoutMu.Unlock()
+}
+
+func (p *Manager) requestTimeoutValue() time.Duration {
+	p.requestTimeoutMu.RLock()
+	timeout := p.requestTimeout
+	p.requestTimeoutMu.RUnlock()
+	return timeout
 }
 
 // CurHba returns the current tracked pg_hba entries.
@@ -633,7 +650,7 @@ func (p *Manager) Promote() error {
 
 // SetupRoles ensures required superuser and replication roles exist.
 func (p *Manager) SetupRoles() error {
-	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeoutValue())
 	defer cancel()
 
 	if p.suUsername == p.replUsername {
@@ -674,7 +691,7 @@ func (p *Manager) SetupRoles() error {
 
 // GetSyncStandbys returns synchronous standby names currently reported by PostgreSQL.
 func (p *Manager) GetSyncStandbys() ([]string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeoutValue())
 	defer cancel()
 	return getSyncStandbys(ctx, p.localConnParams)
 }
@@ -686,21 +703,21 @@ func (p *Manager) GetReplicationSlots() ([]string, error) {
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeoutValue())
 	defer cancel()
 	return getReplicationSlots(ctx, p.localConnParams, maj)
 }
 
 // CreateReplicationSlot creates a physical replication slot.
 func (p *Manager) CreateReplicationSlot(name string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeoutValue())
 	defer cancel()
 	return createReplicationSlot(ctx, p.localConnParams, name)
 }
 
 // DropReplicationSlot removes a replication slot.
 func (p *Manager) DropReplicationSlot(name string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeoutValue())
 	defer cancel()
 	return dropReplicationSlot(ctx, p.localConnParams, name)
 }
@@ -1108,28 +1125,28 @@ func (p *Manager) RemoveAll() error {
 
 // GetSystemData returns current PostgreSQL system data.
 func (p *Manager) GetSystemData() (*SystemData, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeoutValue())
 	defer cancel()
 	return GetSystemData(ctx, p.replConnParams)
 }
 
 // GetTimelinesHistory returns timeline history records up to timeline.
 func (p *Manager) GetTimelinesHistory(timeline uint64) ([]*TimelineHistory, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeoutValue())
 	defer cancel()
 	return getTimelinesHistory(ctx, timeline, p.replConnParams)
 }
 
 // GetConfigFilePGParameters returns PostgreSQL parameters read from config files.
 func (p *Manager) GetConfigFilePGParameters() (common.Parameters, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeoutValue())
 	defer cancel()
 	return getConfigFilePGParameters(ctx, p.localConnParams)
 }
 
 // Ping checks PostgreSQL readiness through a local connection.
 func (p *Manager) Ping() error {
-	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeoutValue())
 	defer cancel()
 	return ping(ctx, p.localConnParams)
 }
@@ -1185,7 +1202,7 @@ func (p *Manager) IsRestartRequired(changedParams []string) (bool, error) {
 		return false, fmt.Errorf("error fetching pg version: %v", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeoutValue())
 	defer cancel()
 
 	if major == 9 && minor < 5 {

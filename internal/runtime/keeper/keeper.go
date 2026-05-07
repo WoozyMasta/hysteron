@@ -959,6 +959,32 @@ func (p *PostgresKeeper) getLastPGState() *cluster.PostgresState {
 	return pgState
 }
 
+func (p *PostgresKeeper) applyRuntimeConfigFromClusterData(cd *cluster.ClusterData) {
+	if cd == nil || cd.Cluster == nil {
+		return
+	}
+	spec := cd.Cluster.DefSpec()
+	newSleepInterval := spec.SleepInterval.Duration
+	newRequestTimeout := spec.RequestTimeout.Duration
+	if p.sleepInterval != newSleepInterval {
+		p.baseLog().Info().
+			Dur("sleep_interval_old", p.sleepInterval).
+			Dur("sleep_interval_new", newSleepInterval).
+			Msg("updating keeper sleep interval from cluster spec")
+		p.sleepInterval = newSleepInterval
+	}
+	if p.requestTimeout != newRequestTimeout {
+		p.baseLog().Info().
+			Dur("request_timeout_old", p.requestTimeout).
+			Dur("request_timeout_new", newRequestTimeout).
+			Msg("updating keeper request timeout from cluster spec")
+		p.requestTimeout = newRequestTimeout
+		if p.pgm != nil {
+			p.pgm.SetRequestTimeout(newRequestTimeout)
+		}
+	}
+}
+
 // Start runs keeper reconciliation loops until the context is canceled.
 func (p *PostgresKeeper) Start(ctx context.Context) {
 	endSMCh := make(chan struct{})
@@ -979,10 +1005,8 @@ func (p *PostgresKeeper) Start(ctx context.Context) {
 				Error().
 				Uint64("version", cd.FormatVersion).
 				Msg("unsupported clusterdata format version")
-		} else if cd.Cluster != nil {
-			p.sleepInterval = cd.Cluster.DefSpec().SleepInterval.Duration
-			p.requestTimeout = cd.Cluster.DefSpec().RequestTimeout.Duration
 		}
+		p.applyRuntimeConfigFromClusterData(cd)
 	}
 
 	p.baseLog().
@@ -990,8 +1014,6 @@ func (p *PostgresKeeper) Start(ctx context.Context) {
 		Fields(cluster.LogSummaryClusterData(cd)).
 		Msg("cluster data snapshot at keeper start")
 
-	// TODO(sgotti) reconfigure the various configurations options
-	// (RequestTimeout) after a changed cluster config
 	pgm := pg.NewManager(
 		p.pgBinPath,
 		p.dataDir,
@@ -1325,8 +1347,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 	clusterdataLastValidUpdateSeconds.SetToCurrentTime()
 
 	if cd.Cluster != nil {
-		p.sleepInterval = cd.Cluster.DefSpec().SleepInterval.Duration
-		p.requestTimeout = cd.Cluster.DefSpec().RequestTimeout.Duration
+		p.applyRuntimeConfigFromClusterData(cd)
 
 		if p.keeperLocalState.ClusterUID != cd.Cluster.UID {
 			p.keeperLocalState.ClusterUID = cd.Cluster.UID

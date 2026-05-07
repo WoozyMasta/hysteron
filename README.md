@@ -38,13 +38,6 @@ For more details and requirements see [Hysteron Architecture and Requirements](d
 
 [Documentation Index](doc/README.md)
 
-## Installation
-
-Hysteron is available in [brew](https://brew.sh/). It is **unofficial and not supported** by the project.
-So check the version before installing using `brew`.
-
-[Step to install using brew](doc/unofficial_packages.md)
-
 ## Quick start and examples
 
 * [Simple cluster example](doc/simplecluster.md)
@@ -61,19 +54,9 @@ Anyway it's quite easy to reset a cluster from scratch keeping the current maste
 
 * PostgreSQL 18, 17, 16, 15, 14 by default. PostgreSQL 12 and newer are
   best-effort compatibility targets when explicitly allowed and verified.
-
 * etcd v3 or Kubernetes, based on the store backend you're going to use.
-
 * OS: currently hysteron is tested on GNU/Linux, with reports of people using it
   also on Solaris, *BSD and Darwin.
-
-## build
-
-To build hysteron we usually test and support the latest two major versions of Go like in the [Go release policy](https://golang.org/doc/devel/release.html#policy).
-
-```
-make
-```
 
 ## High availability
 
@@ -89,8 +72,3 @@ See [here](doc/faq.md) for a list of faq. If you have additional questions pleas
 
 hysteron is an open source project under the Apache 2.0 license, and contributions are gladly welcomed!
 To submit your changes please open a pull request.
-
-## Contacts
-
-* For general discussion about using and developing hysteron, join the [hysteron forum](https://talk.hysteron.io)
-* For bugs and feature requests file an [issue](https://github.com/woozymasta/hysteron/issues/new/choose)

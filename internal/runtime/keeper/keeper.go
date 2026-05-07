@@ -34,6 +34,7 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	"unicode"
 
 	"github.com/mitchellh/copystructure"
 	"github.com/woozymasta/hysteron/internal/cluster"
@@ -268,18 +269,74 @@ func (p *PostgresKeeper) walKeepSegments(db *cluster.DB) int {
 }
 
 func (p *PostgresKeeper) walKeepSize(db *cluster.DB) string {
-	// assume default 16Mib wal segment size
-	walKeepSize := strconv.Itoa(minWalKeepSegments * 16)
-
-	// TODO(sgotti) currently we ignore if wal_keep_size value is less than our
-	// min value or wrong and just return it as is
+	// Assume default PostgreSQL segment size unless explicit segment-size support
+	// is introduced in cluster contracts.
+	minMiB := uint64(minWalKeepSegments) * uint64(pg.WalSegSize/(1024*1024))
+	defaultWalKeepSize := strconv.FormatUint(minMiB, 10) + "MB"
 	if db.Spec.PGParameters != nil {
 		if v, ok := db.Spec.PGParameters["wal_keep_size"]; ok {
-			return v
+			sizeBytes, err := parseWalKeepSizeBytes(v)
+			if err != nil {
+				p.baseLog().Warn().
+					Str("wal_keep_size", v).
+					Err(err).
+					Msg("invalid wal_keep_size, using minimum safe value")
+				return defaultWalKeepSize
+			}
+			minBytes := minMiB * 1024 * 1024
+			if sizeBytes < minBytes {
+				p.baseLog().Warn().
+					Str("wal_keep_size", v).
+					Uint64("minimum_bytes", minBytes).
+					Msg("wal_keep_size below minimum safe value, clamping")
+				return defaultWalKeepSize
+			}
+			return strings.TrimSpace(v)
 		}
 	}
 
-	return walKeepSize
+	return defaultWalKeepSize
+}
+
+func parseWalKeepSizeBytes(value string) (uint64, error) {
+	v := strings.TrimSpace(value)
+	if v == "" {
+		return 0, errors.New("empty wal_keep_size")
+	}
+
+	i := 0
+	for i < len(v) && unicode.IsDigit(rune(v[i])) {
+		i++
+	}
+	if i == 0 {
+		return 0, fmt.Errorf("invalid wal_keep_size %q", value)
+	}
+
+	n, err := strconv.ParseUint(v[:i], 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("parse wal_keep_size value: %w", err)
+	}
+
+	unit := strings.TrimSpace(v[i:])
+	if unit == "" {
+		// PostgreSQL wal_keep_size defaults to MB when no unit is specified.
+		return n * 1024 * 1024, nil
+	}
+
+	switch strings.ToUpper(unit) {
+	case "B":
+		return n, nil
+	case "KB":
+		return n * 1024, nil
+	case "MB":
+		return n * 1024 * 1024, nil
+	case "GB":
+		return n * 1024 * 1024 * 1024, nil
+	case "TB":
+		return n * 1024 * 1024 * 1024 * 1024, nil
+	}
+
+	return 0, fmt.Errorf("unsupported wal_keep_size unit %q", unit)
 }
 
 func (p *PostgresKeeper) binaryVersion() (int, int, error) {

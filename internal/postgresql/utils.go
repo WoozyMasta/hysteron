@@ -633,13 +633,13 @@ func IsWalFileName(name string) bool {
 	return true
 }
 
-// XlogPosToWalFileNameNoTimeline converts an LSN to WAL file suffix without timeline.
-func XlogPosToWalFileNameNoTimeline(xLogPos uint64) string {
+// XlogPosToWalFileNameNoTimeline converts an LSN to WAL file suffix without
+// timeline using the provided WAL segment size.
+func XlogPosToWalFileNameNoTimeline(xLogPos uint64, walSegSize uint32) string {
 	id := uint32(xLogPos >> 32)
 	// The WAL segment offset is defined by the lower 32 bits of the LSN.
 	offset := uint32(xLogPos) //nolint:gosec
-	// TODO(sgotti) for now we assume wal size is the default 16M size
-	seg := offset / WalSegSize
+	seg := offset / walSegSize
 	return fmt.Sprintf("%08X%08X", id, seg)
 }
 

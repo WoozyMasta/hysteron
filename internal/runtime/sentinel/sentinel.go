@@ -711,7 +711,7 @@ func (s *Sentinel) dbCanSync(
 		return true, nil
 	}
 
-	required := pg.XlogPosToWalFileNameNoTimeline(db.Status.XLogPos)
+	required := pg.XlogPosToWalFileNameNoTimeline(db.Status.XLogPos, pg.WalSegSize)
 	older, err := pg.WalFileNameNoTimeLine(masterDB.Status.OlderWalFile)
 	if err != nil {
 		// warn on wrong file name (shouldn't happen...)

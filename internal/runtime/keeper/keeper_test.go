@@ -466,3 +466,43 @@ func TestGetTimeLinesHistory(t *testing.T) {
 		}
 	})
 }
+
+func TestParseWalKeepSizeBytes(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		value   string
+		want    uint64
+		wantErr bool
+	}{
+		{name: "default unit mb", value: "16", want: 16 * 1024 * 1024},
+		{name: "mb explicit", value: "16MB", want: 16 * 1024 * 1024},
+		{name: "mb lowercase and spaces", value: " 16 mb ", want: 16 * 1024 * 1024},
+		{name: "kb", value: "1024kB", want: 1024 * 1024},
+		{name: "gb", value: "1GB", want: 1024 * 1024 * 1024},
+		{name: "bad unit", value: "10MiB", wantErr: true},
+		{name: "bad value", value: "abc", wantErr: true},
+		{name: "empty", value: " ", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := parseWalKeepSizeBytes(tt.value)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected error for %q", tt.value)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error for %q: %v", tt.value, err)
+			}
+			if got != tt.want {
+				t.Fatalf("value %q parsed bytes mismatch: got %d want %d", tt.value, got, tt.want)
+			}
+		})
+	}
+}

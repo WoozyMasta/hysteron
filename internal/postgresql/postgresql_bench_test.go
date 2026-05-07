@@ -116,7 +116,7 @@ func BenchmarkXlogPosToWalFileNameNoTimeline(b *testing.B) {
 
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		name := XlogPosToWalFileNameNoTimeline(xlogPos)
+		name := XlogPosToWalFileNameNoTimeline(xlogPos, WalSegSize)
 		if name == "" {
 			b.Fatal("empty wal file name")
 		}

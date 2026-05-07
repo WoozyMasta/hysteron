@@ -26,20 +26,20 @@ const (
 	// KubePodName is the pod-name environment variable key.
 	KubePodName = "POD_NAME"
 
-	// KubeResourcePrefix is the name prefix for Stolon Kubernetes resources.
-	KubeResourcePrefix = "stolon-cluster"
+	// KubeResourcePrefix is the name prefix for Hysteron Kubernetes resources.
+	KubeResourcePrefix = "hysteron-cluster"
 
 	// KubeClusterLabel is the label key for cluster name association.
-	KubeClusterLabel = "stolon-cluster"
+	KubeClusterLabel = "hysteron-cluster"
 
 	// KubeClusterDataAnnotation stores serialized cluster data.
-	KubeClusterDataAnnotation = "stolon-clusterdata"
+	KubeClusterDataAnnotation = "hysteron-clusterdata"
 
 	// KubeClusterDataKey stores serialized cluster data in Kubernetes object data.
 	KubeClusterDataKey = "clusterdata"
 
 	// KubeStatusAnnnotation stores serialized component status data.
-	KubeStatusAnnnotation = "stolon-status"
+	KubeStatusAnnnotation = "hysteron-status"
 )
 
 // PodName returns the current pod name from environment.

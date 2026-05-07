@@ -14,5 +14,5 @@
 
 package postgresql
 
-// SQLDriverName is the registered database/sql driver used by Stolon.
+// SQLDriverName is the registered database/sql driver used by Hysteron.
 const SQLDriverName = "pgx"

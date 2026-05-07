@@ -31,17 +31,17 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/sorintlab/stolon/internal/cluster"
-	"github.com/sorintlab/stolon/internal/common"
-	stconfig "github.com/sorintlab/stolon/internal/config"
-	"github.com/sorintlab/stolon/internal/configfile"
-	slog "github.com/sorintlab/stolon/internal/log"
-	pg "github.com/sorintlab/stolon/internal/postgresql"
-	runtimecommon "github.com/sorintlab/stolon/internal/runtime/common"
-	"github.com/sorintlab/stolon/internal/store"
-	"github.com/sorintlab/stolon/internal/utils/id"
-	slicesutil "github.com/sorintlab/stolon/internal/utils/slices"
-	"github.com/sorintlab/stolon/internal/utils/timer"
+	"github.com/woozymasta/hysteron/internal/cluster"
+	"github.com/woozymasta/hysteron/internal/common"
+	stconfig "github.com/woozymasta/hysteron/internal/config"
+	"github.com/woozymasta/hysteron/internal/configfile"
+	slog "github.com/woozymasta/hysteron/internal/log"
+	pg "github.com/woozymasta/hysteron/internal/postgresql"
+	runtimecommon "github.com/woozymasta/hysteron/internal/runtime/common"
+	"github.com/woozymasta/hysteron/internal/store"
+	"github.com/woozymasta/hysteron/internal/utils/id"
+	slicesutil "github.com/woozymasta/hysteron/internal/utils/slices"
+	"github.com/woozymasta/hysteron/internal/utils/timer"
 
 	"github.com/mitchellh/copystructure"
 	"github.com/rs/zerolog"
@@ -56,7 +56,7 @@ func init() {
 }
 
 const (
-	fakeStandbyName = "stolonfakestandby"
+	fakeStandbyName = "hysteronfakestandby"
 
 	msgPGTimelineDiffersFromMaster = "ignoring keeper since its pg timeline " +
 		"is different than master timeline"
@@ -2449,7 +2449,7 @@ func (s *Sentinel) Start(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			s.log.Info().Msg("stopping stolon sentinel")
+			s.log.Info().Msg("stopping hysteron sentinel")
 			if s.end != nil {
 				s.end <- true
 			}
@@ -2747,7 +2747,7 @@ func runSentinelOnce(ctx context.Context, s *Sentinel) (err error) {
 // commands remain available; subcommands are optional because the
 // sentinel is a daemon.
 func newParser() *flags.Parser {
-	parser := runtimecommon.NewParser("stolon sentinel", "STOLON", &cfg, 0)
+	parser := runtimecommon.NewParser("hysteron sentinel", "HYSTERON", &cfg, 0)
 	parser.SubcommandsOptional = true
 	return parser
 }

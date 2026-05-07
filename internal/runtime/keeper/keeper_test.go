@@ -25,12 +25,12 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
-	pgmocks "github.com/sorintlab/stolon/internal/mock/postgresql"
-	pg "github.com/sorintlab/stolon/internal/postgresql"
+	pgmocks "github.com/woozymasta/hysteron/internal/mock/postgresql"
+	pg "github.com/woozymasta/hysteron/internal/postgresql"
 
-	"github.com/sorintlab/stolon/internal/cluster"
-	"github.com/sorintlab/stolon/internal/common"
-	slog "github.com/sorintlab/stolon/internal/log"
+	"github.com/woozymasta/hysteron/internal/cluster"
+	"github.com/woozymasta/hysteron/internal/common"
+	slog "github.com/woozymasta/hysteron/internal/log"
 )
 
 func parseSynchronousStandbyNames(s string) ([]string, error) {
@@ -65,20 +65,20 @@ func TestParseSynchronousStandbyNames(t *testing.T) {
 		err error
 	}{
 		{
-			in:  "2 (stolon_2c3870f3,stolon_c874a3cb)",
-			out: []string{"stolon_2c3870f3", "stolon_c874a3cb"},
+			in:  "2 (hysteron_2c3870f3,hysteron_c874a3cb)",
+			out: []string{"hysteron_2c3870f3", "hysteron_c874a3cb"},
 		},
 		{
-			in:  "2 ( stolon_2c3870f3 , stolon_c874a3cb )",
-			out: []string{"stolon_2c3870f3", "stolon_c874a3cb"},
+			in:  "2 ( hysteron_2c3870f3 , hysteron_c874a3cb )",
+			out: []string{"hysteron_2c3870f3", "hysteron_c874a3cb"},
 		},
 		{
-			in:  "21 (\" stolon_2c3870f3\",stolon_c874a3cb)",
-			out: []string{"\" stolon_2c3870f3\"", "stolon_c874a3cb"},
+			in:  "21 (\" hysteron_2c3870f3\",hysteron_c874a3cb)",
+			out: []string{"\" hysteron_2c3870f3\"", "hysteron_c874a3cb"},
 		},
 		{
-			in:  "stolon_2c3870f3,stolon_c874a3cb",
-			out: []string{"stolon_2c3870f3", "stolon_c874a3cb"},
+			in:  "hysteron_2c3870f3,hysteron_c874a3cb",
+			out: []string{"hysteron_2c3870f3", "hysteron_c874a3cb"},
 		},
 		{
 			in:  "node1",

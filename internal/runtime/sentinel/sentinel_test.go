@@ -22,9 +22,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sorintlab/stolon/internal/cluster"
-	"github.com/sorintlab/stolon/internal/common"
-	"github.com/sorintlab/stolon/internal/utils/timer"
+	"github.com/woozymasta/hysteron/internal/cluster"
+	"github.com/woozymasta/hysteron/internal/common"
+	"github.com/woozymasta/hysteron/internal/utils/timer"
 
 	"github.com/google/go-cmp/cmp"
 )
@@ -5016,7 +5016,7 @@ func TestUpdateCluster(t *testing.T) {
 							Role:                        common.RoleMaster,
 							Followers:                   []string{"db2"},
 							SynchronousStandbys:         []string{},
-							ExternalSynchronousStandbys: []string{"stolonfakestandby"},
+							ExternalSynchronousStandbys: []string{"hysteronfakestandby"},
 						},
 						Status: cluster.DBStatus{
 							Healthy:                true,
@@ -5110,7 +5110,7 @@ func TestUpdateCluster(t *testing.T) {
 							Role:                        common.RoleMaster,
 							Followers:                   []string{"db2"},
 							SynchronousStandbys:         []string{},
-							ExternalSynchronousStandbys: []string{"stolonfakestandby"},
+							ExternalSynchronousStandbys: []string{"hysteronfakestandby"},
 						},
 						Status: cluster.DBStatus{
 							Healthy:                true,
@@ -5961,7 +5961,7 @@ func TestUpdateCluster(t *testing.T) {
 							Role:                        common.RoleMaster,
 							Followers:                   []string{"db2"},
 							SynchronousStandbys:         []string{},
-							ExternalSynchronousStandbys: []string{"stolonfakestandby"},
+							ExternalSynchronousStandbys: []string{"hysteronfakestandby"},
 						},
 						Status: cluster.DBStatus{
 							Healthy:                true,

@@ -19,7 +19,7 @@ import (
 	"strings"
 	"testing"
 
-	stconfig "github.com/sorintlab/stolon/internal/config"
+	stconfig "github.com/woozymasta/hysteron/internal/config"
 )
 
 func TestRunRequiresCommonConfig(t *testing.T) {

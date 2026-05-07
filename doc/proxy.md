@@ -1,6 +1,6 @@
-# Stolon Proxy
+# Hysteron Proxy
 
-`stolon proxy` routes PostgreSQL client connections to the current cluster
+`hysteron proxy` routes PostgreSQL client connections to the current cluster
 topology discovered from the store.
 
 The proxy can expose a writable listener, a read-only listener, or both. The
@@ -16,14 +16,14 @@ In the unified CLI, proxy daemon options are passed after `--` so they are
 forwarded to the runtime component parser.
 
 For the full command reference, see
-[stolon command reference](commands/stolon.md).
+[hysteron command reference](commands/hysteron.md).
 
 ## Writable Proxy
 
 The writable listener is the default mode.
 
 ```sh
-stolon proxy etcd \
+hysteron proxy etcd \
   --etcd-endpoints http://127.0.0.1:2379 \
   -- \
   --cluster-name cluster1 \
@@ -42,7 +42,7 @@ The read-only listener is enabled by setting a read-only listen address or port.
 This keeps the default writable listener enabled.
 
 ```sh
-stolon proxy etcd \
+hysteron proxy etcd \
   --etcd-endpoints http://127.0.0.1:2379 \
   -- \
   --cluster-name cluster1 \
@@ -75,7 +75,7 @@ Specify writable flags explicitly when the writable listener should use a
 non-default address or port:
 
 ```sh
-stolon proxy etcd \
+hysteron proxy etcd \
   --etcd-endpoints http://127.0.0.1:2379 \
   -- \
   --cluster-name cluster1 \
@@ -94,7 +94,7 @@ Disable the writable listener when a process should only serve read-only
 traffic.
 
 ```sh
-stolon proxy etcd \
+hysteron proxy etcd \
   --etcd-endpoints http://127.0.0.1:2379 \
   -- \
   --cluster-name cluster1 \
@@ -120,7 +120,7 @@ Disable fallback when applications must never send read-only traffic to the
 primary:
 
 ```sh
-stolon proxy etcd \
+hysteron proxy etcd \
   --etcd-endpoints http://127.0.0.1:2379 \
   -- \
   --cluster-name cluster1 \
@@ -140,7 +140,7 @@ Use `--read-only-include-primary` to include the current primary in the
 read-only destination pool even when eligible standbys exist.
 
 ```sh
-stolon proxy etcd \
+hysteron proxy etcd \
   --etcd-endpoints http://127.0.0.1:2379 \
   -- \
   --cluster-name cluster1 \

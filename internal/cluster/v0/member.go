@@ -14,7 +14,7 @@
 
 package v0
 
-import "github.com/sorintlab/stolon/internal/common"
+import "github.com/woozymasta/hysteron/internal/common"
 
 // KeepersInfo maps keeper ID to legacy keeper info.
 type KeepersInfo map[string]*KeeperInfo

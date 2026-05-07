@@ -15,7 +15,7 @@
 package common
 
 import (
-	slog "github.com/sorintlab/stolon/internal/log"
+	slog "github.com/woozymasta/hysteron/internal/log"
 )
 
 // MustNot terminates the process with a structured fatal log when an internal

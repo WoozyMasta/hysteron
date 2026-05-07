@@ -19,7 +19,7 @@ import (
 	"io"
 
 	"github.com/jedib0t/go-pretty/v6/table"
-	"github.com/sorintlab/stolon/internal/app"
+	"github.com/woozymasta/hysteron/internal/app"
 )
 
 // WriteStatus renders cluster status with the selected format.

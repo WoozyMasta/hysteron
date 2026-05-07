@@ -19,7 +19,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/sorintlab/stolon/internal/cluster"
+	"github.com/woozymasta/hysteron/internal/cluster"
 )
 
 //go:generate mockgen -destination=../mock/store/store.go -source=$GOFILE

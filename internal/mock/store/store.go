@@ -7,8 +7,8 @@ package mock_store
 import (
 	context "context"
 	gomock "github.com/golang/mock/gomock"
-	cluster "github.com/sorintlab/stolon/internal/cluster"
-	store "github.com/sorintlab/stolon/internal/store"
+	cluster "github.com/woozymasta/hysteron/internal/cluster"
+	store "github.com/woozymasta/hysteron/internal/store"
 	reflect "reflect"
 	time "time"
 )

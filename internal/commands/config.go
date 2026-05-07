@@ -17,8 +17,8 @@ package commands
 import (
 	"time"
 
-	stconfig "github.com/sorintlab/stolon/internal/config"
-	stlog "github.com/sorintlab/stolon/internal/log"
+	stconfig "github.com/woozymasta/hysteron/internal/config"
+	stlog "github.com/woozymasta/hysteron/internal/log"
 )
 
 type runtimeCommonOptions struct {
@@ -49,14 +49,14 @@ type clusterStoreOption struct {
 type k8sStoreOptions struct {
 	Config       string `long:"config" env:"CONFIG" description:"path to kubeconfig file. Overrides $KUBECONFIG"`
 	ResourceKind string `long:"resource-kind" env:"RESOURCE_KIND" choices:"configmap;secret" description:"k8s resource kind used to store cluster data"`
-	ResourceName string `long:"resource-name" env:"RESOURCE_NAME" default:"stolon-{cluster}" description:"k8s resource name template; {cluster} is replaced with the cluster name"`
+	ResourceName string `long:"resource-name" env:"RESOURCE_NAME" default:"hysteron-{cluster}" description:"k8s resource name template; {cluster} is replaced with the cluster name"`
 	Context      string `long:"context" env:"CONTEXT" description:"kubeconfig context name"`
 	Namespace    string `long:"namespace" env:"NAMESPACE" description:"kubernetes namespace name"`
 }
 
 type storeConnectionOptions struct {
 	Endpoints     string        `long:"endpoints" env:"ENDPOINTS" description:"comma-separated list of store endpoints"`
-	Prefix        string        `long:"prefix" env:"PREFIX" default:"stolon/cluster" description:"store base prefix"`
+	Prefix        string        `long:"prefix" env:"PREFIX" default:"hysteron/cluster" description:"store base prefix"`
 	CertFile      string        `long:"cert-file" env:"CERT_FILE" description:"certificate file for store client identification"`
 	KeyFile       string        `long:"key" env:"KEY" description:"private key file for store client identification"`
 	CAFile        string        `long:"ca-file" env:"CA_FILE" description:"CA bundle for HTTPS-enabled store servers"`

@@ -18,7 +18,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/sorintlab/stolon/internal/cluster"
+	"github.com/woozymasta/hysteron/internal/cluster"
 )
 
 func TestSelectPriority(t *testing.T) {

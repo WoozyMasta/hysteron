@@ -14,7 +14,7 @@
 
 package runtime
 
-import stconfig "github.com/sorintlab/stolon/internal/config"
+import stconfig "github.com/woozymasta/hysteron/internal/config"
 
 // Target identifies a runtime component and selected backend.
 type Target struct {

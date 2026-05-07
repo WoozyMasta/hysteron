@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package configfile decodes user-facing Stolon configuration files.
+// Package configfile decodes user-facing Hysteron configuration files.
 //
 // The package supports both JSON and YAML inputs and applies bash-style
 // `${VAR}` expansion uniformly to every string scalar. Users can opt out
@@ -29,11 +29,11 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/sorintlab/stolon/internal/cluster"
+	"github.com/woozymasta/hysteron/internal/cluster"
 	"github.com/woozymasta/jamle"
 )
 
-// Unmarshal decodes YAML or JSON using json tags and Stolon expansion rules.
+// Unmarshal decodes YAML or JSON using json tags and Hysteron expansion rules.
 func Unmarshal(data []byte, v any) error {
 	return jamle.Unmarshal(data, v)
 }

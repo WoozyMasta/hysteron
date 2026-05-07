@@ -20,9 +20,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sorintlab/stolon/internal/cluster"
-	"github.com/sorintlab/stolon/internal/common"
-	readonly "github.com/sorintlab/stolon/internal/utils/readonly"
+	"github.com/woozymasta/hysteron/internal/cluster"
+	"github.com/woozymasta/hysteron/internal/common"
+	readonly "github.com/woozymasta/hysteron/internal/utils/readonly"
 )
 
 func TestValidateProxyListeners(t *testing.T) {

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package buildflags exposes build metadata shared by all Stolon binaries.
+// Package buildflags exposes build metadata shared by all Hysteron binaries.
 //
 // Values are populated via -ldflags="-X ..." at link time (see Makefile)
 // and consumed by the CLI parser to render `--version` and the built-in

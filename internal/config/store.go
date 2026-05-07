@@ -21,9 +21,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/sorintlab/stolon/internal/common"
-	"github.com/sorintlab/stolon/internal/store"
-	k8sutil "github.com/sorintlab/stolon/internal/utils/k8s"
+	"github.com/woozymasta/hysteron/internal/common"
+	"github.com/woozymasta/hysteron/internal/store"
+	k8sutil "github.com/woozymasta/hysteron/internal/utils/k8s"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8svalidation "k8s.io/apimachinery/pkg/util/validation"

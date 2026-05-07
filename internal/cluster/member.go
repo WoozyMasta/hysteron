@@ -17,7 +17,7 @@ package cluster
 import (
 	"time"
 
-	"github.com/sorintlab/stolon/internal/common"
+	"github.com/woozymasta/hysteron/internal/common"
 
 	"github.com/mitchellh/copystructure"
 )

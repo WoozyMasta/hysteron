@@ -24,21 +24,21 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/sorintlab/stolon/internal/cluster"
-	"github.com/sorintlab/stolon/internal/common"
-	"github.com/sorintlab/stolon/internal/store"
+	"github.com/woozymasta/hysteron/internal/cluster"
+	"github.com/woozymasta/hysteron/internal/common"
+	"github.com/woozymasta/hysteron/internal/store"
 )
 
 func TestInitStandbyCluster(t *testing.T) {
 	t.Parallel()
 
-	dir, err := os.MkdirTemp("", "stolon")
+	dir, err := os.MkdirTemp("", "hysteron")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 	defer os.RemoveAll(dir)
 
-	// Setup a remote stolon cluster (with just one keeper and one sentinel)
+	// Setup a remote hysteron cluster (with just one keeper and one sentinel)
 	primaryClusterName := uuid.NewString()
 
 	ptstore := setupStore(t, dir)
@@ -165,13 +165,13 @@ func TestInitStandbyCluster(t *testing.T) {
 func TestPromoteStandbyCluster(t *testing.T) {
 	t.Parallel()
 
-	dir, err := os.MkdirTemp("", "stolon")
+	dir, err := os.MkdirTemp("", "hysteron")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 	defer os.RemoveAll(dir)
 
-	// Setup a remote stolon cluster (with just one keeper and one sentinel)
+	// Setup a remote hysteron cluster (with just one keeper and one sentinel)
 	primaryClusterName := uuid.NewString()
 
 	ptstore := setupStore(t, dir)
@@ -295,7 +295,7 @@ func TestPromoteStandbyCluster(t *testing.T) {
 	}
 
 	// promote the standby cluster to a primary cluster
-	err = StolonCluster(t, clusterName, tstore.storeBackend, storeEndpoints, "promote", "-y")
+	err = HysteronCluster(t, clusterName, tstore.storeBackend, storeEndpoints, "promote", "-y")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -309,7 +309,7 @@ func TestPromoteStandbyCluster(t *testing.T) {
 func TestPromoteStandbyClusterArchiveRecovery(t *testing.T) {
 	t.Parallel()
 
-	dir, err := os.MkdirTemp("", "stolon")
+	dir, err := os.MkdirTemp("", "hysteron")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -320,7 +320,7 @@ func TestPromoteStandbyClusterArchiveRecovery(t *testing.T) {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
-	// Setup a remote stolon cluster (with just one keeper and one sentinel)
+	// Setup a remote hysteron cluster (with just one keeper and one sentinel)
 	primaryClusterName := uuid.NewString()
 
 	ptstore := setupStore(t, dir)
@@ -457,7 +457,7 @@ func TestPromoteStandbyClusterArchiveRecovery(t *testing.T) {
 	}
 
 	// promote the standby cluster to a primary cluster
-	err = StolonCluster(t, clusterName, tstore.storeBackend, storeEndpoints, "promote", "-y")
+	err = HysteronCluster(t, clusterName, tstore.storeBackend, storeEndpoints, "promote", "-y")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}

@@ -1,10 +1,10 @@
 # PostgreSQL upgrade
 
-This is an example of upgrading a stolon cluster from pg9.6 to pg10.0. It use pg_upgrade to
+This is an example of upgrading a hysteron cluster from pg9.6 to pg10.0. It use pg_upgrade to
 perform the upgrade.
 
 An alternative way to upgrade would be to dump (pg_dump) and restore the database on a new
-stolon cluster. This may be easier to perform, but on large database result in longer downtime.
+hysteron cluster. This may be easier to perform, but on large database result in longer downtime.
 
 The tricky part of the upgrade, is that pg_upgrade require both PostgreSQL 9.6 and
 PostgreSQL 10.0 binary to do the upgrade. Major upgrade of PostgreSQL on Docker is discussed
@@ -19,10 +19,10 @@ As usual, before processing with major upgrade, it is recommended to perform a b
 pg_upgrade require exclusive access to data files, shutdown the old PostgreSQL server.
 
 ```
-kubectl delete -f stolon-keeper.yaml
+kubectl delete -f hysteron-keeper.yaml
 ```
 
-Note: since stolon-keeper.yaml only contains the StatefulSet/stolon-keeper object, only this objects
+Note: since hysteron-keeper.yaml only contains the StatefulSet/hysteron-keeper object, only this objects
 and the created pods will be deleted. Not the persistent volume claim that contains data.
 
 Run a pod with `tianon/postgres-upgrade:9.6-to-10` on keeper-0 data and attach it:
@@ -32,33 +32,33 @@ cat << EOF | kubectl create -f -
 kind: Pod
 apiVersion: v1
 metadata:
-  name: stolon-upgrade
+  name: hysteron-upgrade
 spec:
   volumes:
-    - name: data-stolon-keeper-0
+    - name: data-hysteron-keeper-0
       persistentVolumeClaim:
-       claimName: data-stolon-keeper-0
+       claimName: data-hysteron-keeper-0
   containers:
-    - name: stolon-upgrade
+    - name: hysteron-upgrade
       args:
       - bash
       stdin: true
       tty: true
       image: tianon/postgres-upgrade:9.6-to-10
       volumeMounts:
-      - mountPath: "/stolon-data"
-        name: data-stolon-keeper-0
+      - mountPath: "/hysteron-data"
+        name: data-hysteron-keeper-0
 EOF
 
-kubectl attach -ti stolon-upgrade
+kubectl attach -ti hysteron-upgrade
 ```
 
-Inside this stolon-upgrade pod, create a stolon user that will run pg_upgrade (pg_upgrade refuse
+Inside this hysteron-upgrade pod, create a hysteron user that will run pg_upgrade (pg_upgrade refuse
 to run as root):
 
 ```
-useradd --uid 1000 stolon
-gosu stolon bash
+useradd --uid 1000 hysteron
+gosu hysteron bash
 ```
 
 pg_upgrade work by "copying" data from old PostgreSQL to new PostgreSQL (applying required
@@ -70,28 +70,28 @@ more details.
 Create the new PostgreSQL data folder:
 
 ```
-PGDATA=/stolon-data/postgres-new initdb
+PGDATA=/hysteron-data/postgres-new initdb
 ```
 
 pg_upgrade will start old and new database and require access to them. Use new pg_hba to allow
 local access for pg_upgrade:
 
 ```
-cp /stolon-data/postgres-new/pg_hba.conf /stolon-data/postgres/pg_hba.conf
+cp /hysteron-data/postgres-new/pg_hba.conf /hysteron-data/postgres/pg_hba.conf
 ```
 
 Run pg_upgrade
 
 ```
 cd /tmp
-pg_upgrade -d /stolon-data/postgres -D /stolon-data/postgres-new --link
+pg_upgrade -d /hysteron-data/postgres -D /hysteron-data/postgres-new --link
 ```
 
 Move postgres-new folder in place of postgres folder:
 
 ```
-rm -fr /stolon-data/postgres
-mv /stolon-data/postgres-new/ /stolon-data/postgres
+rm -fr /hysteron-data/postgres
+mv /hysteron-data/postgres-new/ /hysteron-data/postgres
 ```
 
 pg_upgrade said that two script were generated (at least for 9.6 to 10.0):
@@ -100,29 +100,30 @@ pg_upgrade said that two script were generated (at least for 9.6 to 10.0):
 * Another to update statistics (using vacuumdb once PostgreSQL will be running). This
   will be run later.
 
-Exit and delete this stolon-upgrade pod:
+Exit and delete this hysteron-upgrade pod:
 
 ```
-kubectl detele pod stolon-upgrade
+kubectl detele pod hysteron-upgrade
 ```
 
-For all other data volume of stolon-keeper, run the same step. Just update the yaml used in
+For all other data volume of hysteron-keeper, run the same step. Just update the yaml used in
 kubectl create. Tip: `kubectl get pvc` will list all persistent volume claim, thus all
 data volume that needs update.
 
 
-Once all data volume are updated, re-create the stolon-keeper using PostgreSQL 10 image:
+Once all data volume are updated, re-create the hysteron-keeper using PostgreSQL 10 image:
 
 ```
-sed -i 's/stolon:master-pg9.6/stolon:master-pg10.0/' stolon-keeper.yaml
-kubectl create -f stolon-keeper.yaml
+sed -i 's/hysteron:master-pg9.6/hysteron:master-pg10.0/' hysteron-keeper.yaml
+kubectl create -f hysteron-keeper.yaml
 ```
 
 The cluster should quickly resume its operation. Once done, find the current master and
 run the vaccumdb as pg_upgrade said:
 
 ```
-kubectl exec -ti stolon-keeper-0 bash  # this assume -0 is the master
-su - stolon
-vacuumdb --all --analyze-in-stages -h 127.0.0.1 -U stolon
+kubectl exec -ti hysteron-keeper-0 bash  # this assume -0 is the master
+su - hysteron
+vacuumdb --all --analyze-in-stages -h 127.0.0.1 -U hysteron
 ```
+

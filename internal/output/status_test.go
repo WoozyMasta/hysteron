@@ -20,7 +20,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sorintlab/stolon/internal/app"
+	"github.com/woozymasta/hysteron/internal/app"
 )
 
 func TestWriteStatusJSON(t *testing.T) {

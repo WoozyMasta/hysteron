@@ -6,7 +6,7 @@ Process-level integration tests live under `tests/integration` and are guarded
 by the explicit `integration` build tag. The default unit-test suite does not
 run them.
 
-The harness starts local Stolon binaries, an etcd v3 process, and PostgreSQL
+The harness starts local Hysteron binaries, an etcd v3 process, and PostgreSQL
 processes. It expects PostgreSQL binaries such as `postgres`, `pg_ctl`,
 `initdb`, `psql`, and related tools to be available on `PATH`.
 
@@ -14,7 +14,7 @@ processes. It expects PostgreSQL binaries such as `postgres`, `pg_ctl`,
 
 Build and run the integration suite against local PostgreSQL and etcd binaries:
 
-```sh
+```shell
 INTEGRATION_STORE_BACKEND=etcdv3 ETCD_BIN=etcd make integration
 ```
 
@@ -23,7 +23,7 @@ Useful variables:
 * `INTEGRATION_TIMEOUT`: Go test timeout, default `20m`.
 * `INTEGRATION_STORE_BACKEND`: storage backend for the suite, default `etcdv3`.
 * `ETCD_BIN`: etcd server binary, default `etcd`.
-* `DEBUG`: pass a non-empty value to enable debug logging in started Stolon
+* `DEBUG`: pass a non-empty value to enable debug logging in started Hysteron
   processes.
 
 ## Docker Compose Matrix
@@ -31,32 +31,32 @@ Useful variables:
 Use Docker Compose when local PostgreSQL binaries are missing or when checking
 multiple PostgreSQL majors:
 
-```sh
+```shell
 make integration-matrix
 ```
 
 The default matrix covers PostgreSQL `18 17 16 15 14`. Override it with
 `PG_MATRIX`:
 
-```sh
+```shell
 PG_MATRIX="18 16 14" make integration-matrix
 ```
 
 Run one specific major:
 
-```sh
+```shell
 PG_MAJOR=17 make integration-compose
 ```
 
 For CI, use the reduced matrix command (default `18 14`):
 
-```sh
+```shell
 make integration-matrix-ci
 ```
 
 Override the CI subset with `PG_MATRIX_CI` when needed:
 
-```sh
+```shell
 PG_MATRIX_CI="18" make integration-matrix-ci
 ```
 

@@ -19,8 +19,8 @@ import (
 	"testing"
 
 	"github.com/rs/zerolog"
-	"github.com/sorintlab/stolon/internal/cluster"
-	"github.com/sorintlab/stolon/internal/common"
+	"github.com/woozymasta/hysteron/internal/cluster"
+	"github.com/woozymasta/hysteron/internal/common"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -60,14 +60,14 @@ func TestCheckSentinelConfigAllowsK8sBackendAliasForServicePublishing(t *testing
 func TestKubeServicePublisherPublishesWritableEndpointSlice(t *testing.T) {
 	ctx := context.Background()
 	client := fake.NewSimpleClientset()
-	publisher := testKubeServicePublisher(client, "stolon-cluster-test-rw")
+	publisher := testKubeServicePublisher(client, "hysteron-cluster-test-rw")
 	cd := testKubeServiceClusterData("10.1.2.3", "5433")
 
 	if err := publisher.Publish(ctx, cd); err != nil {
 		t.Fatalf("Publish() error = %v", err)
 	}
 
-	service, err := client.CoreV1().Services("default").Get(ctx, "stolon-cluster-test-rw", metav1.GetOptions{})
+	service, err := client.CoreV1().Services("default").Get(ctx, "hysteron-cluster-test-rw", metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("Services.Get() error = %v", err)
 	}
@@ -78,7 +78,7 @@ func TestKubeServicePublisherPublishesWritableEndpointSlice(t *testing.T) {
 		t.Fatalf("Service ports = %#v, want one port 5432", service.Spec.Ports)
 	}
 
-	slice, err := client.DiscoveryV1().EndpointSlices("default").Get(ctx, "stolon-cluster-test-rw-stolon", metav1.GetOptions{})
+	slice, err := client.DiscoveryV1().EndpointSlices("default").Get(ctx, "hysteron-cluster-test-rw-hysteron", metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("EndpointSlices.Get() error = %v", err)
 	}
@@ -99,7 +99,7 @@ func TestKubeServicePublisherPublishesWritableEndpointSlice(t *testing.T) {
 func TestKubeServicePublisherClearsWritableEndpoints(t *testing.T) {
 	ctx := context.Background()
 	client := fake.NewSimpleClientset()
-	publisher := testKubeServicePublisher(client, "stolon-cluster-test-rw")
+	publisher := testKubeServicePublisher(client, "hysteron-cluster-test-rw")
 	cd := testKubeServiceClusterData("10.1.2.3", "5432")
 
 	if err := publisher.Publish(ctx, cd); err != nil {
@@ -110,7 +110,7 @@ func TestKubeServicePublisherClearsWritableEndpoints(t *testing.T) {
 		t.Fatalf("Publish() clear error = %v", err)
 	}
 
-	slice, err := client.DiscoveryV1().EndpointSlices("default").Get(ctx, "stolon-cluster-test-rw-stolon", metav1.GetOptions{})
+	slice, err := client.DiscoveryV1().EndpointSlices("default").Get(ctx, "hysteron-cluster-test-rw-hysteron", metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("EndpointSlices.Get() error = %v", err)
 	}
@@ -122,13 +122,13 @@ func TestKubeServicePublisherClearsWritableEndpoints(t *testing.T) {
 func TestKubeServicePublisherRejectsSelectorService(t *testing.T) {
 	ctx := context.Background()
 	client := fake.NewSimpleClientset(&corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{Name: "stolon-cluster-test-rw", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{Name: "hysteron-cluster-test-rw", Namespace: "default"},
 		Spec: corev1.ServiceSpec{
 			Selector: map[string]string{"app": "postgres"},
 			Ports:    []corev1.ServicePort{{Name: "postgres", Port: 5432}},
 		},
 	})
-	publisher := testKubeServicePublisher(client, "stolon-cluster-test-rw")
+	publisher := testKubeServicePublisher(client, "hysteron-cluster-test-rw")
 
 	if err := publisher.Publish(ctx, testKubeServiceClusterData("10.1.2.3", "5432")); err == nil {
 		t.Fatal("expected selector service error")
@@ -138,9 +138,9 @@ func TestKubeServicePublisherRejectsSelectorService(t *testing.T) {
 func TestKubeServicePublisherPublishesReadOnlyEndpoints(t *testing.T) {
 	ctx := context.Background()
 	client := fake.NewSimpleClientset()
-	publisher := testKubeServicePublisher(client, "stolon-cluster-test-rw")
+	publisher := testKubeServicePublisher(client, "hysteron-cluster-test-rw")
 	publisher.readOnlyEnabled = true
-	publisher.readOnlyServiceName = "stolon-cluster-test-ro"
+	publisher.readOnlyServiceName = "hysteron-cluster-test-ro"
 	publisher.readOnlyServicePort = 5432
 	publisher.readOnlyMaxLag = 10
 	cd := testKubeServiceClusterData("10.1.2.3", "5432")
@@ -168,7 +168,7 @@ func TestKubeServicePublisherPublishesReadOnlyEndpoints(t *testing.T) {
 		t.Fatalf("Publish() error = %v", err)
 	}
 
-	slice, err := client.DiscoveryV1().EndpointSlices("default").Get(ctx, "stolon-cluster-test-ro-stolon", metav1.GetOptions{})
+	slice, err := client.DiscoveryV1().EndpointSlices("default").Get(ctx, "hysteron-cluster-test-ro-hysteron", metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("EndpointSlices.Get() error = %v", err)
 	}
@@ -180,9 +180,9 @@ func TestKubeServicePublisherPublishesReadOnlyEndpoints(t *testing.T) {
 func TestKubeServicePublisherReadOnlyFallbackToPrimary(t *testing.T) {
 	ctx := context.Background()
 	client := fake.NewSimpleClientset()
-	publisher := testKubeServicePublisher(client, "stolon-cluster-test-rw")
+	publisher := testKubeServicePublisher(client, "hysteron-cluster-test-rw")
 	publisher.readOnlyEnabled = true
-	publisher.readOnlyServiceName = "stolon-cluster-test-ro"
+	publisher.readOnlyServiceName = "hysteron-cluster-test-ro"
 	publisher.readOnlyServicePort = 5432
 	publisher.readOnlyNoFallback = false
 	publisher.readOnlyMaxLag = 0
@@ -210,7 +210,7 @@ func TestKubeServicePublisherReadOnlyFallbackToPrimary(t *testing.T) {
 		t.Fatalf("Publish() error = %v", err)
 	}
 
-	slice, err := client.DiscoveryV1().EndpointSlices("default").Get(ctx, "stolon-cluster-test-ro-stolon", metav1.GetOptions{})
+	slice, err := client.DiscoveryV1().EndpointSlices("default").Get(ctx, "hysteron-cluster-test-ro-hysteron", metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("EndpointSlices.Get() error = %v", err)
 	}

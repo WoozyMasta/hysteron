@@ -14,7 +14,7 @@
 
 package readonly
 
-import "github.com/sorintlab/stolon/internal/cluster"
+import "github.com/woozymasta/hysteron/internal/cluster"
 
 // ReplicaPriority selects preferred read-only endpoint class.
 type ReplicaPriority string

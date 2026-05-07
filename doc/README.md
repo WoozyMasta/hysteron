@@ -1,16 +1,16 @@
-# Stolon Documentation
+# Hysteron Documentation
 
 We suggest that you first read the
-[Stolon Architecture and Requirements](architecture.md) to understand the
+[Hysteron Architecture and Requirements](architecture.md) to understand the
 primary concepts and avoid possible mistakes.
 
-* [Stolon Architecture and Requirements](architecture.md)
+* [Hysteron Architecture and Requirements](architecture.md)
 * [Commands Invocation](commands_invocation.md)
-* [Unified `stolon` Command Reference](commands/stolon.md)
+* [Unified `hysteron` Command Reference](commands/hysteron.md)
 * [Cluster Specification](cluster_spec.md)
 * [Config Variable Expansion](config_expansion.md)
 * [Cluster Initialization](initialization.md)
-* [Stolon Proxy](proxy.md)
+* [Hysteron Proxy](proxy.md)
 * [Kubernetes Service Publishing](kubernetes_service_publishing.md)
 * [Setting instance parameters](postgres_parameters.md)
 * [Custom pg_hba.conf entries](custom_pg_hba_entries.md)
@@ -38,3 +38,4 @@ primary concepts and avoid possible mistakes.
 * [Two (or more) nodes setup](twonodes.md)
 
 ## [FAQ](faq.md)
+

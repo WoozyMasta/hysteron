@@ -29,8 +29,9 @@ services:
       INTEGRATION_STORE_BACKEND: etcdv3
       INTEGRATION_TEST_ARGS: ${INTEGRATION_TEST_ARGS:-}
       INTEGRATION_MAX_STORES: ${INTEGRATION_MAX_STORES:-8}
-      OUTPUT_DIR: /tmp/stolon-build
+      OUTPUT_DIR: /tmp/hysteron-build
     user: postgres
     volumes:
       - ../..:/workspace
     working_dir: /workspace
+

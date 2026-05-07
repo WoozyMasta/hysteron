@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package main starts the unified stolon CLI.
+// Package main starts the unified hysteron CLI.
 package main
 
-import "github.com/sorintlab/stolon/internal/commands"
+import "github.com/woozymasta/hysteron/internal/commands"
 
 func main() {
 	commands.Execute()

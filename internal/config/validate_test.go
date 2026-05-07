@@ -39,7 +39,7 @@ func TestCheckCommonConfigK8sAliasWithRequiredFields(t *testing.T) {
 		},
 		K8s: K8sOptions{
 			ResourceKind: "configmap",
-			ResourceName: "stolon-{cluster}",
+			ResourceName: "hysteron-{cluster}",
 		},
 	}
 
@@ -54,7 +54,7 @@ func TestCheckClusterNamesK8sAliasRequiresClusterTokenForMultiCluster(t *testing
 			Backend: "k8s",
 		},
 		K8s: K8sOptions{
-			ResourceName: "stolon",
+			ResourceName: "hysteron",
 		},
 		ClusterNames: []string{"alpha", "beta"},
 	}

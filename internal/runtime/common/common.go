@@ -25,15 +25,15 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
-	"github.com/sorintlab/stolon/internal/common"
-	stconfig "github.com/sorintlab/stolon/internal/config"
-	stlog "github.com/sorintlab/stolon/internal/log"
-	"github.com/sorintlab/stolon/internal/store"
-	"github.com/sorintlab/stolon/internal/utils/buildflags"
 	"github.com/woozymasta/flags"
+	"github.com/woozymasta/hysteron/internal/common"
+	stconfig "github.com/woozymasta/hysteron/internal/config"
+	stlog "github.com/woozymasta/hysteron/internal/log"
+	"github.com/woozymasta/hysteron/internal/store"
+	"github.com/woozymasta/hysteron/internal/utils/buildflags"
 )
 
-// CommonConfig groups CLI/env options shared by every Stolon binary.
+// CommonConfig groups CLI/env options shared by every Hysteron binary.
 //
 // Related options are organized into nested groups so the parser can
 // derive long-name and env prefixes (`store`/`STORE`, `log`/`LOG`,
@@ -54,7 +54,7 @@ type CommonConfig struct {
 type StoreOptions struct {
 	Backend       string        `long:"backend" env:"BACKEND" choices:"etcd;etcdv3;kubernetes;k8s" validate-non-empty:"true" description:"store backend type"`
 	Endpoints     string        `long:"endpoints" env:"ENDPOINTS" description:"a comma-delimited list of store endpoints (use https scheme for tls communication) (defaults: http://127.0.0.1:2379 for etcdv3)"`
-	Prefix        string        `long:"prefix" env:"PREFIX" default:"stolon/cluster" description:"the store base prefix"`
+	Prefix        string        `long:"prefix" env:"PREFIX" default:"hysteron/cluster" description:"the store base prefix"`
 	CertFile      string        `long:"cert-file" env:"CERT_FILE" description:"certificate file for client identification to the store"`
 	KeyFile       string        `long:"key" env:"KEY" description:"private key file for client identification to the store"`
 	CAFile        string        `long:"ca-file" env:"CA_FILE" description:"verify certificates of HTTPS-enabled store servers using this CA bundle"`
@@ -62,7 +62,7 @@ type StoreOptions struct {
 	SkipTLSVerify bool          `long:"skip-tls-verify" env:"SKIP_TLS_VERIFY" description:"skip store certificate verification (insecure!!!)"`
 }
 
-// MetricsOptions configures metrics serving for Stolon binaries.
+// MetricsOptions configures metrics serving for Hysteron binaries.
 type MetricsOptions struct {
 	ListenAddress string `long:"metrics-listen-address" env:"METRICS_LISTEN_ADDRESS" description:"metrics listen address i.e \"0.0.0.0:8080\" (disabled by default)"`
 }
@@ -71,13 +71,13 @@ type MetricsOptions struct {
 // to keep the existing public CLI while grouping the options in help output.
 type KubeOptions struct {
 	Config       string `long:"kubeconfig" env:"KUBECONFIG" description:"path to kubeconfig file. Overrides $KUBECONFIG"`
-	ResourceKind string `long:"kube-resource-kind" env:"KUBE_RESOURCE_KIND" choices:"configmap;secret" description:"the k8s resource kind to be used to store stolon clusterdata"`
-	ResourceName string `long:"kube-resource-name" env:"KUBE_RESOURCE_NAME" default:"stolon-{cluster}" description:"Kubernetes resource name template for cluster data and sentinel election objects; {cluster} is replaced with the cluster name"`
+	ResourceKind string `long:"kube-resource-kind" env:"KUBE_RESOURCE_KIND" choices:"configmap;secret" description:"the k8s resource kind to be used to store hysteron clusterdata"`
+	ResourceName string `long:"kube-resource-name" env:"KUBE_RESOURCE_NAME" default:"hysteron-{cluster}" description:"Kubernetes resource name template for cluster data and sentinel election objects; {cluster} is replaced with the cluster name"`
 	Context      string `long:"kube-context" env:"KUBE_CONTEXT" description:"name of the kubeconfig context to use"`
 	Namespace    string `long:"kube-namespace" env:"KUBE_NAMESPACE" description:"name of the kubernetes namespace to use"`
 }
 
-// NewParser creates a Stolon command parser with repository-wide
+// NewParser creates a Hysteron command parser with repository-wide
 // defaults (help/version flags, env-prefix, build metadata) and scans
 // the data struct for option/command tags.
 func NewParser(name, envPrefix string, data any, opts flags.Options) *flags.Parser {
@@ -98,7 +98,7 @@ func NewParser(name, envPrefix string, data any, opts flags.Options) *flags.Pars
 	// Use a single dash instead of the default dot so that namespaced
 	// long flags read like a flat hyphenated name (e.g. `--store-backend`
 	// rather than `--store.backend`). EnvNamespaceDelimiter keeps its
-	// default underscore which already matches the Stolon convention.
+	// default underscore which already matches the Hysteron convention.
 	parser.NamespaceDelimiter = "-"
 	parser.SetVersion(buildflags.Version)
 	parser.SetVersionCommit(buildflags.Commit)
@@ -142,7 +142,7 @@ func CloseLogging(closer io.Closer, logger *zerolog.Logger) {
 
 var clusterIdentifier = prometheus.NewGaugeVec(
 	prometheus.GaugeOpts{
-		Name: "stolon_cluster_identifier",
+		Name: "hysteron_cluster_identifier",
 		Help: "Set to 1, is labelled with the cluster_name and component",
 	},
 	[]string{"cluster_name", "component"},

@@ -26,10 +26,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/sorintlab/stolon/internal/cluster"
-	"github.com/sorintlab/stolon/internal/common"
-	pg "github.com/sorintlab/stolon/internal/postgresql"
-	"github.com/sorintlab/stolon/internal/store"
+	"github.com/woozymasta/hysteron/internal/cluster"
+	"github.com/woozymasta/hysteron/internal/common"
+	pg "github.com/woozymasta/hysteron/internal/postgresql"
+	"github.com/woozymasta/hysteron/internal/store"
 )
 
 func TestProxyReadOnlyRouting(t *testing.T) {
@@ -431,7 +431,7 @@ type readOnlyProxyCluster struct {
 func setupReadOnlyProxyCluster(t *testing.T, proxyArgs ...string) *readOnlyProxyCluster {
 	t.Helper()
 
-	dir, err := os.MkdirTemp("", "stolon")
+	dir, err := os.MkdirTemp("", "hysteron")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}

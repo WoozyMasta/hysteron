@@ -25,9 +25,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sorintlab/stolon/internal/cluster"
-	"github.com/sorintlab/stolon/internal/common"
-	"github.com/sorintlab/stolon/internal/store"
+	"github.com/woozymasta/hysteron/internal/cluster"
+	"github.com/woozymasta/hysteron/internal/common"
+	"github.com/woozymasta/hysteron/internal/store"
 
 	"github.com/google/uuid"
 )
@@ -45,7 +45,7 @@ func TestPITRRecoveryTarget(t *testing.T) {
 }
 
 func testPITR(t *testing.T, recoveryTarget bool) {
-	dir, err := os.MkdirTemp("", "stolon")
+	dir, err := os.MkdirTemp("", "hysteron")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}

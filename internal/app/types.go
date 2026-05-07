@@ -14,12 +14,12 @@
 
 package app
 
-import runtimex "github.com/sorintlab/stolon/internal/runtime"
+import runtimex "github.com/woozymasta/hysteron/internal/runtime"
 
 // RuntimeTarget identifies a runtime component and selected backend.
 type RuntimeTarget = runtimex.Target
 
-// Status is the `stolon cluster status` output model.
+// Status is the `hysteron cluster status` output model.
 type Status struct {
 	Cluster   ClusterStatus    `json:"cluster"`
 	Sentinels []SentinelStatus `json:"sentinels"`

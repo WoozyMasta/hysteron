@@ -26,9 +26,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/sorintlab/stolon/internal/cluster"
-	"github.com/sorintlab/stolon/internal/common"
-	"github.com/sorintlab/stolon/internal/store"
+	"github.com/woozymasta/hysteron/internal/cluster"
+	"github.com/woozymasta/hysteron/internal/common"
+	"github.com/woozymasta/hysteron/internal/store"
 )
 
 func TestSentinelEnabledProxies(t *testing.T) {

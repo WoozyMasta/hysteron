@@ -26,7 +26,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/sorintlab/stolon/internal/common"
+	"github.com/woozymasta/hysteron/internal/common"
 
 	"github.com/jackc/pgx/v5/pgtype"
 

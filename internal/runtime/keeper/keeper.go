@@ -36,17 +36,17 @@ import (
 	"time"
 
 	"github.com/mitchellh/copystructure"
-	"github.com/sorintlab/stolon/internal/cluster"
-	"github.com/sorintlab/stolon/internal/common"
-	stconfig "github.com/sorintlab/stolon/internal/config"
-	slog "github.com/sorintlab/stolon/internal/log"
-	pg "github.com/sorintlab/stolon/internal/postgresql"
-	runtimecommon "github.com/sorintlab/stolon/internal/runtime/common"
-	"github.com/sorintlab/stolon/internal/store"
-	"github.com/sorintlab/stolon/internal/utils/fs"
-	"github.com/sorintlab/stolon/internal/utils/id"
-	"github.com/sorintlab/stolon/internal/utils/osuser"
-	slicesutil "github.com/sorintlab/stolon/internal/utils/slices"
+	"github.com/woozymasta/hysteron/internal/cluster"
+	"github.com/woozymasta/hysteron/internal/common"
+	stconfig "github.com/woozymasta/hysteron/internal/config"
+	slog "github.com/woozymasta/hysteron/internal/log"
+	pg "github.com/woozymasta/hysteron/internal/postgresql"
+	runtimecommon "github.com/woozymasta/hysteron/internal/runtime/common"
+	"github.com/woozymasta/hysteron/internal/store"
+	"github.com/woozymasta/hysteron/internal/utils/fs"
+	"github.com/woozymasta/hysteron/internal/utils/id"
+	"github.com/woozymasta/hysteron/internal/utils/osuser"
+	slicesutil "github.com/woozymasta/hysteron/internal/utils/slices"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog"
@@ -324,7 +324,7 @@ func (p *PostgresKeeper) getSUConnParams(
 		"user":             p.pgSUUsername,
 		"host":             followedDB.Status.ListenAddress,
 		"port":             followedDB.Status.Port,
-		"application_name": common.StolonName(db.UID),
+		"application_name": common.HysteronName(db.UID),
 		"dbname":           "postgres",
 		// prefer ssl if available (already the default for postgres libpq but not for golang lib pq)
 		"sslmode": "prefer",
@@ -342,7 +342,7 @@ func (p *PostgresKeeper) getReplConnParams(
 		"user":             p.pgReplUsername,
 		"host":             followedDB.Status.ListenAddress,
 		"port":             followedDB.Status.Port,
-		"application_name": common.StolonName(db.UID),
+		"application_name": common.HysteronName(db.UID),
 		// prefer ssl if available (already the default for postgres libpq but not for golang lib pq)
 		"sslmode": "prefer",
 	}
@@ -436,7 +436,7 @@ func (p *PostgresKeeper) createPGParameters(
 		for _, synchronousStandby := range db.Spec.SynchronousStandbys {
 			synchronousStandbys = append(
 				synchronousStandbys,
-				common.StolonName(synchronousStandby),
+				common.HysteronName(synchronousStandby),
 			)
 		}
 		synchronousStandbys = append(
@@ -794,7 +794,7 @@ func (p *PostgresKeeper) validatePostgresVersion() error {
 	return nil
 }
 
-// GetInSyncStandbys returns Stolon standby UIDs currently reported as synchronous.
+// GetInSyncStandbys returns Hysteron standby UIDs currently reported as synchronous.
 func (p *PostgresKeeper) GetInSyncStandbys() ([]string, error) {
 	inSyncStandbysFullName, err := p.pgm.GetSyncStandbys()
 	if err != nil {
@@ -806,10 +806,10 @@ func (p *PostgresKeeper) GetInSyncStandbys() ([]string, error) {
 
 	inSyncStandbys := []string{}
 	for _, s := range inSyncStandbysFullName {
-		if common.IsStolonName(s) {
+		if common.IsHysteronName(s) {
 			inSyncStandbys = append(
 				inSyncStandbys,
-				common.NameFromStolonName(s),
+				common.NameFromHysteronName(s),
 			)
 		}
 	}
@@ -1080,7 +1080,7 @@ func (p *PostgresKeeper) resync(
 	replConnParams := p.getReplConnParams(db, followedDB)
 	standbySettings := &cluster.StandbySettings{
 		PrimaryConninfo: replConnParams.ConnString(),
-		PrimarySlotName: common.StolonName(db.UID),
+		PrimarySlotName: common.HysteronName(db.UID),
 	}
 
 	// TODO(sgotti) Actually we don't check if pg_rewind is installed or if
@@ -1090,7 +1090,7 @@ func (p *PostgresKeeper) resync(
 	// fallback to pg_basebackup
 	if tryPgrewind && p.usePgrewind(db) {
 		// pg_rewind doesn't support running against a database that is in recovery, as it
-		// builds temporary tables and this is not supported on a hot-standby. Stolon doesn't
+		// builds temporary tables and this is not supported on a hot-standby. Hysteron doesn't
 		// currently support cascading replication, but we should be clear when issuing a
 		// rewind that it targets the current primary, rather than whatever database we
 		// follow.
@@ -1121,7 +1121,7 @@ func (p *PostgresKeeper) resync(
 	}
 	replSlot := ""
 	if (major == 9 && minor >= 6) || major > 10 {
-		replSlot = common.StolonName(db.UID)
+		replSlot = common.HysteronName(db.UID)
 	}
 
 	if err := pgm.RemoveAll(); err != nil {
@@ -1225,17 +1225,17 @@ func (p *PostgresKeeper) updateReplSlots(
 		if followerUID == uid {
 			continue
 		}
-		internalReplSlots[common.StolonName(followerUID)] = struct{}{}
+		internalReplSlots[common.HysteronName(followerUID)] = struct{}{}
 	}
 
 	// Add AdditionalReplicationSlots
 	for _, slot := range additionalReplSlots {
-		internalReplSlots[common.StolonName(slot)] = struct{}{}
+		internalReplSlots[common.HysteronName(slot)] = struct{}{}
 	}
 
 	// Drop internal replication slots
 	for _, slot := range curReplSlots {
-		if !common.IsStolonName(slot) {
+		if !common.IsHysteronName(slot) {
 			continue
 		}
 		if _, ok := internalReplSlots[slot]; !ok {
@@ -2058,7 +2058,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 			replConnParams := p.getReplConnParams(db, followedDB)
 			standbySettings = &cluster.StandbySettings{
 				PrimaryConninfo: replConnParams.ConnString(),
-				PrimarySlotName: common.StolonName(db.UID),
+				PrimarySlotName: common.HysteronName(db.UID),
 			}
 		case cluster.FollowTypeExternal:
 			standbySettings = db.Spec.FollowConfig.StandbySettings
@@ -2123,7 +2123,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 
 				standbySettings := &cluster.StandbySettings{
 					PrimaryConninfo: newReplConnParams.ConnString(),
-					PrimarySlotName: common.StolonName(db.UID),
+					PrimarySlotName: common.HysteronName(db.UID),
 				}
 
 				curRecoveryOptions := pgm.CurRecoveryOptions()
@@ -2421,7 +2421,7 @@ func (p *PostgresKeeper) generateHBA(
 	db *cluster.DB,
 	onlyInternal bool,
 ) []string {
-	// Minimal entries for local normal and replication connections needed by the stolon keeper
+	// Minimal entries for local normal and replication connections needed by the hysteron keeper
 	// Matched local connections are for postgres database and suUsername user with md5 auth
 	// Matched local replication connections are for replUsername user with md5 auth
 	computedHBA := []string{
@@ -2533,7 +2533,7 @@ func sigHandler(sigs chan os.Signal, cancel context.CancelFunc) {
 // commands remain available, but the keeper itself is a daemon so
 // subcommand selection is optional.
 func newParser() *flags.Parser {
-	parser := runtimecommon.NewParser("stolon keeper", "STOLON", &cfg, 0)
+	parser := runtimecommon.NewParser("hysteron keeper", "HYSTERON", &cfg, 0)
 	parser.SubcommandsOptional = true
 	return parser
 }

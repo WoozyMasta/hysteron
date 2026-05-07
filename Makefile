@@ -32,8 +32,8 @@ INTEGRATION_STORE_BACKEND ?= etcdv3
 ETCD_BIN                  ?= etcd
 INTEGRATION_RUN_ARG       := $(if $(INTEGRATION_RUN),-run '$(INTEGRATION_RUN)',)
 
-BINARY     ?= stolon
-PKG        ?= ./cmd/stolon
+BINARY     ?= hysteron
+PKG        ?= ./cmd/hysteron
 OUTPUT_DIR ?= build
 OUTPUT_ABS_DIR := $(abspath $(OUTPUT_DIR))
 
@@ -89,7 +89,7 @@ build: clean
 cli-docs:
 	@mkdir -p $(DOC_COMMANDS_DIR)
 	@bin="$(OUTPUT_DIR)/$(BINARY)$(NATIVE_EXTENSION)"; \
-	out="$(DOC_COMMANDS_DIR)/stolon.md"; \
+	out="$(DOC_COMMANDS_DIR)/hysteron.md"; \
 	echo ">> generating $$out"; \
 	"$$bin" docs md --style "$(DOC_RENDER_STYLE)" "$$out"
 
@@ -179,10 +179,10 @@ bench-reset:
 	rm -f "$(BENCH_REF)"
 
 integration: build
-	STOLON_TEST_STORE_BACKEND="$(INTEGRATION_STORE_BACKEND)" \
-	STOLON_INTEGRATION_MAX_STORES="$(INTEGRATION_MAX_STORES)" \
+	HYSTERON_TEST_STORE_BACKEND="$(INTEGRATION_STORE_BACKEND)" \
+	HYSTERON_INTEGRATION_MAX_STORES="$(INTEGRATION_MAX_STORES)" \
 	ETCD_BIN="$(ETCD_BIN)" \
-	STOLON_BIN="$(OUTPUT_ABS_DIR)/$(BINARY)$(NATIVE_EXTENSION)" \
+	HYSTERON_BIN="$(OUTPUT_ABS_DIR)/$(BINARY)$(NATIVE_EXTENSION)" \
 	$(GO) test -tags "$(INTEGRATION_TAGS)" -timeout "$(INTEGRATION_TIMEOUT)" \
 		-parallel "$(INTEGRATION_PARALLEL)" $(INTEGRATION_RUN_ARG) \
 		$(INTEGRATION_TEST_ARGS) \
@@ -246,3 +246,4 @@ container-build:
 	if [ -z "$${TAG}" ]; then echo 'TAG is undefined'; exit 1; fi; \
 	$(CRI) build --build-arg PGVERSION=$${PGVERSION} -t $${TAG} \
 		-f examples/kubernetes/image/docker/Dockerfile .
+

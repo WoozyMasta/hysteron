@@ -12,6 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package commands defines the unified stolon command tree and parser entry
+// Package commands defines the unified hysteron command tree and parser entry
 // points.
 package commands

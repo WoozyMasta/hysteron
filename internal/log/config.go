@@ -32,7 +32,7 @@ const (
 	DefaultTimeFormat = "2006-01-02T15:04:05.000Z07:00"
 )
 
-// Options configures the global zerolog logger used by Stolon binaries.
+// Options configures the global zerolog logger used by Hysteron binaries.
 type Options struct {
 	// Level is trace, debug, info, warn, or error.
 	Level string

@@ -2,34 +2,35 @@
 
 These are the steps to setup and test a simple cluster.
 
-This example assumes a running etcd 3.x server on localhost. We'll use the etcd v3 api to store stolon data inside etcd.
+This example assumes a running etcd 3.x server on localhost. We'll use the etcd v3 api to store hysteron data inside etcd.
 
 Note: under ubuntu the `initdb` command is not provided in the path. You
 should update the exported `PATH` env variable or provide the
-`--pg-bin-path` runtime option to `stolon keeper`.
+`--pg-bin-path` runtime option to `hysteron keeper`.
 
 ### Initialize the cluster
 
 The first step is to initialize a cluster with a cluster specification. For now we'll just initialize a cluster without providing a cluster specification but using a default one that will just start with an empty database cluster.
 
-```
-./bin/stolon cluster --cluster-name stolon-cluster --store-backend=etcdv3 \
+```shell
+./bin/hysteron cluster --cluster-name hysteron-cluster --store-backend=etcdv3 \
   --store-endpoints=http://127.0.0.1:2379 initialize
 ```
 
 If you want to automate this step you can pass an initial cluster
-specification to `stolon sentinel` using runtime passthrough options after
-`--`, for example `stolon sentinel etcd ... -- --initial-cluster-spec spec.json`.
+specification to `hysteron sentinel` using runtime passthrough options after
+`--`, for example `hysteron sentinel etcd ... -- --initial-cluster-spec spec.json`.
 
 ### Start a sentinel
 
-The sentinel will become the sentinels leader for the cluster named `stolon-cluster`.
-```
-./bin/stolon sentinel etcd --cluster-name stolon-cluster \
+The sentinel will become the sentinels leader for the cluster named `hysteron-cluster`.
+
+```shell
+./bin/hysteron sentinel etcd --cluster-name hysteron-cluster \
   --etcd-endpoints http://127.0.0.1:2379
 ```
 
-```
+```shell
 sentinel id id=66613766
 Trying to acquire sentinels leadership
 sentinel leadership acquired
@@ -37,17 +38,17 @@ sentinel leadership acquired
 
 ### Launch first keeper
 
-```
-./bin/stolon keeper etcd --cluster-name stolon-cluster \
+```shell
+./bin/hysteron keeper etcd --cluster-name hysteron-cluster \
   --etcd-endpoints http://127.0.0.1:2379 -- \
   --uid postgres0 --data-dir data/postgres0 \
   --pg-su-password=supassword --pg-repl-username=repluser \
   --pg-repl-password=replpassword --pg-listen-address=127.0.0.1
 ```
 
-This will start a stolon keeper with id `postgres0` listening by default on localhost:5431, it will setup and initialize a postgres instance inside `data/postgres0/postgres/`
+This will start a hysteron keeper with id `postgres0` listening by default on localhost:5431, it will setup and initialize a postgres instance inside `data/postgres0/postgres/`
 
-```
+```text
 exclusive lock on data dir taken
 keeper uid uid=postgres0
 stopping database
@@ -73,7 +74,7 @@ reloading database configuration
 
 The sentinel will elect it as the master instance:
 
-```
+```text
 trying to find initial master
 initializing cluster keeper=postgres0
 received db state for unexpected db uid receivedDB= db=2a87ea79
@@ -87,23 +88,22 @@ db initialized db=2a87ea79 keeper=postgres0
 
 Now we can start the proxy
 
-```
-./bin/stolon proxy etcd --cluster-name stolon-cluster \
+```shell
+./bin/hysteron proxy etcd --cluster-name hysteron-cluster \
   --etcd-endpoints http://127.0.0.1:2379 -- --port 25432
 ```
 
-```
+```shell
 proxy id id=63323266
 Starting proxying
 master address address=127.0.0.1:5432
 ```
 
-
 ### Connect to the proxy service
 
 Since this simple cluster is running on localhost, the current user (which started the first keeper) is the same superuser created at db initialization and the default pg_hba.conf trusts it, you can login without a password.
 
-```
+```shell
 psql --host localhost --port 25432 postgres
 psql (9.4.5, server 9.4.4)
 Type "help" for help.
@@ -115,7 +115,7 @@ postgres=#
 
 Connect to the db. Create a test table and do some inserts (we use the "postgres" database for these tests but usually this shouldn't be done).
 
-```
+```sql
 postgres=# create table test (id int primary key not null, value text not null);
 CREATE TABLE
 postgres=# insert into test values (1, 'value1');
@@ -127,10 +127,10 @@ postgres=# select * from test;
 (1 row)
 ```
 
-### Start another keeper:
+### Start another keeper
 
-```
-./bin/stolon keeper etcd --cluster-name stolon-cluster \
+```shell
+./bin/hysteron keeper etcd --cluster-name hysteron-cluster \
   --etcd-endpoints http://127.0.0.1:2379 -- \
   --uid postgres1 --data-dir data/postgres1 \
   --pg-su-password=supassword --pg-repl-username=repluser \
@@ -140,7 +140,7 @@ postgres=# select * from test;
 
 This instance will start replicating from the master (postgres0)
 
-```
+```text
 exclusive lock on data dir taken
 keeper uid uid=postgres1
 stopping database
@@ -168,8 +168,7 @@ You can now try killing the actual keeper managing the master postgres instance 
 * Wait for the new master to be ready.
 * Update the proxyconf with the new master address.
 
-
-```
+```text
 no keeper info available db=2a87ea79 keeper=postgres0
 no keeper info available db=2a87ea79 keeper=postgres0
 master db is failed db=2a87ea79 keeper=postgres0
@@ -179,7 +178,7 @@ electing db as the new master db=63343433 keeper=postgres1
 
 Now, inside the previous `psql` session you can redo the last select. The first time `psql` will report that the connection was closed and then it successfully reconnected:
 
-```
+```sql
 postgres=# select * from test;
 server closed the connection unexpectedly
         This probably means the server terminated abnormally
@@ -193,4 +192,3 @@ postgres=# select * from test;
 ```
 
 If you start the `postgres0` keeper it'll read the new cluster view and make the old master become a standby of the new master.
-

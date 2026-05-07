@@ -1,45 +1,45 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: stolon-proxy
+  name: hysteron-proxy
 spec:
   replicas: 2
   selector:
     matchLabels:
-      component: stolon-proxy
-      stolon-cluster: kube-stolon
+      component: hysteron-proxy
+      hysteron-cluster: kube-hysteron
   template:
     metadata:
       labels:
-        component: stolon-proxy
-        stolon-cluster: kube-stolon
+        component: hysteron-proxy
+        hysteron-cluster: kube-hysteron
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "8080"
     spec:
       containers:
-        - name: stolon-proxy
-          image: sorintlab/stolon:master-pg10
+        - name: hysteron-proxy
+          image: sorintlab/hysteron:master-pg10
           command:
             - "/bin/bash"
             - "-ec"
             - |
-              exec gosu stolon stolon proxy kubernetes -- --listen-address 0.0.0.0
+              exec gosu hysteron hysteron proxy kubernetes -- --listen-address 0.0.0.0
           env:
             - name: POD_NAME
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
-            - name: STOLON_CLUSTER_NAME
+            - name: HYSTERON_CLUSTER_NAME
               valueFrom:
                 fieldRef:
-                  fieldPath: metadata.labels['stolon-cluster']
-            - name: STOLON_K8S_RESOURCE_KIND
+                  fieldPath: metadata.labels['hysteron-cluster']
+            - name: HYSTERON_K8S_RESOURCE_KIND
               value: "configmap"
-            - name: STOLON_METRICS_LISTEN_ADDRESS
+            - name: HYSTERON_METRICS_LISTEN_ADDRESS
               value: "0.0.0.0:8080"
             ## Uncomment this to enable debug logs
-            #- name: STOLON_DEBUG
+            #- name: HYSTERON_DEBUG
             #  value: "true"
           ports:
             - containerPort: 5432
@@ -49,3 +49,4 @@ spec:
               port: 5432
             initialDelaySeconds: 10
             timeoutSeconds: 5
+

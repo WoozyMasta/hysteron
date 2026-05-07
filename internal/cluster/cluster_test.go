@@ -47,8 +47,8 @@ func TestValidateReplicationSlots(t *testing.T) {
 			err: errors.New(`wrong replication slot name: "badslotname "`),
 		},
 		{
-			in:  "stolon_c874a3cb",
-			err: errors.New(`replication slot name is reserved: "stolon_c874a3cb"`),
+			in:  "hysteron_c874a3cb",
+			err: errors.New(`replication slot name is reserved: "hysteron_c874a3cb"`),
 		},
 	}
 
@@ -193,8 +193,8 @@ func TestClusterSpecValidate(t *testing.T) {
 		},
 		{
 			name:    "reserved replication slot is rejected",
-			spec:    &ClusterSpec{InitMode: &newMode, AdditionalMasterReplicationSlots: []string{"stolon_reserved"}},
-			wantErr: `replication slot name is reserved: "stolon_reserved"`,
+			spec:    &ClusterSpec{InitMode: &newMode, AdditionalMasterReplicationSlots: []string{"hysteron_reserved"}},
+			wantErr: `replication slot name is reserved: "hysteron_reserved"`,
 		},
 		{
 			name:    "pg hba entries cannot contain newline characters",

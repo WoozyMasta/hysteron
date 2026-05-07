@@ -21,8 +21,8 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/sorintlab/stolon/internal/cluster"
-	k8sutil "github.com/sorintlab/stolon/internal/utils/k8s"
+	"github.com/woozymasta/hysteron/internal/cluster"
+	k8sutil "github.com/woozymasta/hysteron/internal/utils/k8s"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
@@ -31,7 +31,7 @@ import (
 func TestKubeStoreConfigMapClusterDataRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	kubecli := fake.NewSimpleClientset()
-	store, err := NewKubeStore(kubecli, "pod-01", "default", "test", "configmap", "stolon-cluster-test")
+	store, err := NewKubeStore(kubecli, "pod-01", "default", "test", "configmap", "hysteron-cluster-test")
 	if err != nil {
 		t.Fatalf("NewKubeStore() error = %v", err)
 	}
@@ -59,7 +59,7 @@ func TestKubeStoreConfigMapClusterDataRoundTrip(t *testing.T) {
 		t.Fatalf("GetClusterData() mismatch (-want +got):\n%s", diff)
 	}
 
-	cm, err := kubecli.CoreV1().ConfigMaps("default").Get(ctx, "stolon-cluster-test", metav1.GetOptions{})
+	cm, err := kubecli.CoreV1().ConfigMaps("default").Get(ctx, "hysteron-cluster-test", metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("ConfigMaps.Get() error = %v", err)
 	}
@@ -117,7 +117,7 @@ func TestKubeStoreSecretClusterDataRoundTrip(t *testing.T) {
 func TestKubeStoreSecretAtomicPutClusterData(t *testing.T) {
 	ctx := context.Background()
 	kubecli := fake.NewSimpleClientset()
-	store, err := NewKubeStore(kubecli, "pod-01", "default", "test", "secret", "stolon-cluster-test")
+	store, err := NewKubeStore(kubecli, "pod-01", "default", "test", "secret", "hysteron-cluster-test")
 	if err != nil {
 		t.Fatalf("NewKubeStore() error = %v", err)
 	}
@@ -141,7 +141,7 @@ func TestKubeStoreSecretAtomicPutClusterData(t *testing.T) {
 func TestKubeElectionUsesLeaseLock(t *testing.T) {
 	ctx := context.Background()
 	kubecli := fake.NewSimpleClientset()
-	election, err := NewKubeElection(kubecli, "pod-01", "default", "stolon-cluster-test", "sentinel-01")
+	election, err := NewKubeElection(kubecli, "pod-01", "default", "hysteron-cluster-test", "sentinel-01")
 	if err != nil {
 		t.Fatalf("NewKubeElection() error = %v", err)
 	}
@@ -157,7 +157,7 @@ func TestKubeElectionUsesLeaseLock(t *testing.T) {
 		t.Fatalf("ResourceLock.Create() error = %v", err)
 	}
 
-	lease, err := kubecli.CoordinationV1().Leases("default").Get(ctx, "stolon-cluster-test", metav1.GetOptions{})
+	lease, err := kubecli.CoordinationV1().Leases("default").Get(ctx, "hysteron-cluster-test", metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("Leases.Get() error = %v", err)
 	}

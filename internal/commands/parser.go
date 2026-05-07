@@ -17,16 +17,16 @@ package commands
 import (
 	"fmt"
 
-	"github.com/sorintlab/stolon/internal/utils/buildflags"
 	"github.com/woozymasta/flags"
+	"github.com/woozymasta/hysteron/internal/utils/buildflags"
 )
 
 var cfg = newRootCommand()
 
-// NewParser returns the unified stolon parser.
+// NewParser returns the unified hysteron parser.
 func NewParser() *flags.Parser {
 	parser := flags.NewNamedParser(
-		"stolon",
+		"hysteron",
 		flags.Default|
 			flags.HelpCommand|
 			flags.VersionCommand|
@@ -41,7 +41,7 @@ func NewParser() *flags.Parser {
 			flags.PrintHelpOnInputErrors|
 			flags.CommandChain,
 	)
-	parser.SetEnvPrefix("STOLON")
+	parser.SetEnvPrefix("HYSTERON")
 	parser.NamespaceDelimiter = "-"
 	parser.SetVersion(buildflags.Version)
 	parser.SetVersionCommit(buildflags.Commit)

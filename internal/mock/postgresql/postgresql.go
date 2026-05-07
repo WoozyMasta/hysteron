@@ -6,7 +6,7 @@ package mocks
 
 import (
 	gomock "github.com/golang/mock/gomock"
-	postgresql "github.com/sorintlab/stolon/internal/postgresql"
+	postgresql "github.com/woozymasta/hysteron/internal/postgresql"
 	reflect "reflect"
 )
 

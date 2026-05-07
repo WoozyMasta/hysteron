@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/sorintlab/stolon/internal/common"
+	"github.com/woozymasta/hysteron/internal/common"
 )
 
 var benchmarkClusterData = newBenchmarkClusterData(8)

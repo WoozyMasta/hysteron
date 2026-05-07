@@ -14,7 +14,7 @@
 
 package runtimecommon
 
-import stconfig "github.com/sorintlab/stolon/internal/config"
+import stconfig "github.com/woozymasta/hysteron/internal/config"
 
 // FromConfigCommon converts unified config contract to daemon common config.
 func FromConfigCommon(commonConfig stconfig.CommonConfig) CommonConfig {

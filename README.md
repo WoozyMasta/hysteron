@@ -1,10 +1,10 @@
-# stolon - PostgreSQL cloud native High Availability
+# hysteron - PostgreSQL cloud native High Availability
 
-![Stolon Logo](logos/stolon-color.png)
+![Hysteron Logo](doc/hysteron.svg)
 
-stolon is a cloud native PostgreSQL manager for PostgreSQL high availability. It's cloud native because it'll let you keep an high available PostgreSQL inside your containers (kubernetes integration) but also on every other kind of infrastructure (cloud IaaS, old style infrastructures etc...)
+hysteron is a cloud native PostgreSQL manager for PostgreSQL high availability. It's cloud native because it'll let you keep an high available PostgreSQL inside your containers (kubernetes integration) but also on every other kind of infrastructure (cloud IaaS, old style infrastructures etc...)
 
-For an introduction to stolon you can also take a look at [this post](https://sgotti.dev/post/stolon-introduction/)
+For an introduction to hysteron you can also take a look at [this post](https://sgotti.dev/post/hysteron-introduction/)
 
 ## Features
 
@@ -16,23 +16,23 @@ For an introduction to stolon you can also take a look at [this post](https://sg
 * Asynchronous (default) and [synchronous](doc/syncrepl.md) replication.
 * Full cluster setup in minutes.
 * Easy cluster administration with the unified
-  [`stolon` CLI](doc/commands/stolon.md)
+  [`hysteron` CLI](doc/commands/hysteron.md)
 * Can do point in time recovery integrating with your preferred backup/restore tool.
 * [Standby cluster](doc/standbycluster.md) (for multi site replication and near zero downtime migration).
-* Automatic service discovery and dynamic reconfiguration (handles postgres and stolon processes changing their addresses).
+* Automatic service discovery and dynamic reconfiguration (handles postgres and hysteron processes changing their addresses).
 * Can use [pg_rewind](doc/pg_rewind.md) for fast instance resynchronization with current master.
 
 ## Architecture
 
-Stolon is composed of 3 main components
+Hysteron is composed of 3 main components
 
 * keeper: it manages a PostgreSQL instance converging to the clusterview computed by the leader sentinel.
 * sentinel: it discovers and monitors keepers and proxies and computes the optimal clusterview.
 * proxy: the client's access point. It enforce connections to the right PostgreSQL master and forcibly closes connections to old masters.
 
-For more details and requirements see [Stolon Architecture and Requirements](doc/architecture.md)
+For more details and requirements see [Hysteron Architecture and Requirements](doc/architecture.md)
 
-![Stolon architecture](doc/architecture_small.png)
+![Hysteron architecture](doc/architecture.svg)
 
 ## Documentation
 
@@ -40,7 +40,7 @@ For more details and requirements see [Stolon Architecture and Requirements](doc
 
 ## Installation
 
-Stolon is available in [brew](https://brew.sh/). It is **unofficial and not supported** by the project.
+Hysteron is available in [brew](https://brew.sh/). It is **unofficial and not supported** by the project.
 So check the version before installing using `brew`.
 
 [Step to install using brew](doc/unofficial_packages.md)
@@ -53,7 +53,7 @@ So check the version before installing using `brew`.
 
 ## Project Status
 
-Stolon is under active development and used in different environments. Probably its on disk format (store hierarchy and key contents) will change in future to support new features. If a breaking change is needed it'll be documented in the release notes and an upgrade path will be provided.
+Hysteron is under active development and used in different environments. Probably its on disk format (store hierarchy and key contents) will change in future to support new features. If a breaking change is needed it'll be documented in the release notes and an upgrade path will be provided.
 
 Anyway it's quite easy to reset a cluster from scratch keeping the current master instance working and without losing any data.
 
@@ -64,12 +64,12 @@ Anyway it's quite easy to reset a cluster from scratch keeping the current maste
 
 * etcd v3 or Kubernetes, based on the store backend you're going to use.
 
-* OS: currently stolon is tested on GNU/Linux, with reports of people using it
+* OS: currently hysteron is tested on GNU/Linux, with reports of people using it
   also on Solaris, *BSD and Darwin.
 
 ## build
 
-To build stolon we usually test and support the latest two major versions of Go like in the [Go release policy](https://golang.org/doc/devel/release.html#policy).
+To build hysteron we usually test and support the latest two major versions of Go like in the [Go release policy](https://golang.org/doc/devel/release.html#policy).
 
 ```
 make
@@ -77,7 +77,7 @@ make
 
 ## High availability
 
-Stolon tries to be resilient to any partitioning problem. The cluster view is computed by the leader sentinel and is useful to avoid data loss (one example over all avoid that old dead masters coming back are elected as the new master).
+Hysteron tries to be resilient to any partitioning problem. The cluster view is computed by the leader sentinel and is useful to avoid data loss (one example over all avoid that old dead masters coming back are elected as the new master).
 
 There can be tons of different partitioning cases. The primary ones are covered (and in future more will be added) by various [integration tests](tests/integration)
 
@@ -85,12 +85,12 @@ There can be tons of different partitioning cases. The primary ones are covered 
 
 See [here](doc/faq.md) for a list of faq. If you have additional questions please ask.
 
-## Contributing to stolon
+## Contributing to hysteron
 
-stolon is an open source project under the Apache 2.0 license, and contributions are gladly welcomed!
+hysteron is an open source project under the Apache 2.0 license, and contributions are gladly welcomed!
 To submit your changes please open a pull request.
 
 ## Contacts
 
-* For general discussion about using and developing stolon, join the [stolon forum](https://talk.stolon.io)
-* For bugs and feature requests file an [issue](https://github.com/sorintlab/stolon/issues/new/choose)
+* For general discussion about using and developing hysteron, join the [hysteron forum](https://talk.hysteron.io)
+* For bugs and feature requests file an [issue](https://github.com/woozymasta/hysteron/issues/new/choose)

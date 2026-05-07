@@ -22,8 +22,8 @@ import (
 	"maps"
 	"time"
 
-	"github.com/sorintlab/stolon/internal/cluster"
-	k8sutil "github.com/sorintlab/stolon/internal/utils/k8s"
+	"github.com/woozymasta/hysteron/internal/cluster"
+	k8sutil "github.com/woozymasta/hysteron/internal/utils/k8s"
 
 	jsonpatch "github.com/evanphx/json-patch"
 	v1 "k8s.io/api/core/v1"
@@ -48,11 +48,11 @@ const (
 	DefaultComponentLabel = "component"
 
 	// KeeperLabelValue identifies keeper pods.
-	KeeperLabelValue ComponentLabelValue = "stolon-keeper"
+	KeeperLabelValue ComponentLabelValue = "hysteron-keeper"
 	// SentinelLabelValue identifies sentinel pods.
-	SentinelLabelValue ComponentLabelValue = "stolon-sentinel"
+	SentinelLabelValue ComponentLabelValue = "hysteron-sentinel"
 	// ProxyLabelValue identifies proxy pods.
-	ProxyLabelValue ComponentLabelValue = "stolon-proxy"
+	ProxyLabelValue ComponentLabelValue = "hysteron-proxy"
 )
 
 // KubeStore stores cluster state in Kubernetes objects.
@@ -63,7 +63,7 @@ type KubeStore struct {
 	podName string
 	// namespace is Kubernetes namespace for all store objects.
 	namespace string
-	// clusterName is Stolon cluster name.
+	// clusterName is Hysteron cluster name.
 	clusterName string
 	// resourceKind is the Kubernetes resource kind used for cluster data.
 	resourceKind string
@@ -563,7 +563,7 @@ func NewKubeElection(kubecli kubernetes.Interface, podName, namespace, resourceN
 		kubecli.CoordinationV1(),
 		resourcelock.ResourceLockConfig{
 			Identity:      candidateUID,
-			EventRecorder: createRecorder(kubecli, "stolon-sentinel", namespace),
+			EventRecorder: createRecorder(kubecli, "hysteron-sentinel", namespace),
 		})
 	if err != nil {
 		return nil, fmt.Errorf("error creating lock: %v", err)

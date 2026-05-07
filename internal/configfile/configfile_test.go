@@ -20,9 +20,9 @@ import (
 )
 
 func TestClusterSpecExpansion(t *testing.T) {
-	t.Setenv("STOLON_TEST_LOCALE", "C.UTF-8")
+	t.Setenv("HYSTERON_TEST_LOCALE", "C.UTF-8")
 
-	spec, err := ClusterSpec([]byte(`{"initMode":"new","newConfig":{"locale":"${STOLON_TEST_LOCALE}"}}`))
+	spec, err := ClusterSpec([]byte(`{"initMode":"new","newConfig":{"locale":"${HYSTERON_TEST_LOCALE}"}}`))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -35,8 +35,8 @@ func TestClusterSpecExpansionDefaultAndEscape(t *testing.T) {
 	spec, err := ClusterSpec([]byte(`
 initMode: new
 newConfig:
-  locale: ${STOLON_TEST_MISSING_LOCALE:-C}
-  encoding: $${STOLON_TEST_ESCAPED_ENCODING}
+  locale: ${HYSTERON_TEST_MISSING_LOCALE:-C}
+  encoding: $${HYSTERON_TEST_ESCAPED_ENCODING}
 `))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -47,13 +47,13 @@ newConfig:
 	if spec.NewConfig.Locale != "C" {
 		t.Fatalf("expected default locale, got %q", spec.NewConfig.Locale)
 	}
-	if spec.NewConfig.Encoding != "${STOLON_TEST_ESCAPED_ENCODING}" {
+	if spec.NewConfig.Encoding != "${HYSTERON_TEST_ESCAPED_ENCODING}" {
 		t.Fatalf("expected escaped encoding, got %q", spec.NewConfig.Encoding)
 	}
 }
 
 func TestClusterSpecExpansionRequiredError(t *testing.T) {
-	_, err := ClusterSpec([]byte(`{"initMode":"new","newConfig":{"locale":"${STOLON_TEST_REQUIRED_LOCALE:?missing locale}"}}`))
+	_, err := ClusterSpec([]byte(`{"initMode":"new","newConfig":{"locale":"${HYSTERON_TEST_REQUIRED_LOCALE:?missing locale}"}}`))
 	if err == nil {
 		t.Fatal("expected required expansion error")
 	}
@@ -80,16 +80,16 @@ func TestClusterSpecDurationStrings(t *testing.T) {
 // strings and pgHBA entries. Users can use the `$${VAR}` escape to keep
 // a literal `${VAR}` in their config when needed.
 func TestClusterSpecExpansionInShellAndPGStrings(t *testing.T) {
-	t.Setenv("STOLON_TEST_RESTORE_BUCKET", "s3://my-bucket")
-	t.Setenv("STOLON_TEST_HBA_CIDR", "10.0.0.0/8")
+	t.Setenv("HYSTERON_TEST_RESTORE_BUCKET", "s3://my-bucket")
+	t.Setenv("HYSTERON_TEST_HBA_CIDR", "10.0.0.0/8")
 	data := []byte(`
 initMode: pitr
 pitrConfig:
-  dataRestoreCommand: 'aws s3 cp ${STOLON_TEST_RESTORE_BUCKET}/%f %p'
+  dataRestoreCommand: 'aws s3 cp ${HYSTERON_TEST_RESTORE_BUCKET}/%f %p'
 pgParameters:
   archive_command: 'cp $${POSTGRES_RUNTIME_VAR} %p /archive/%f'
 pgHBA:
-  - 'host all all ${STOLON_TEST_HBA_CIDR} md5'
+  - 'host all all ${HYSTERON_TEST_HBA_CIDR} md5'
 `)
 	spec, err := ClusterSpec(data)
 	if err != nil {

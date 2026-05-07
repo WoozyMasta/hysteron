@@ -38,10 +38,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sorintlab/stolon/internal/cluster"
-	"github.com/sorintlab/stolon/internal/common"
-	pg "github.com/sorintlab/stolon/internal/postgresql"
-	"github.com/sorintlab/stolon/internal/store"
+	"github.com/woozymasta/hysteron/internal/cluster"
+	"github.com/woozymasta/hysteron/internal/common"
+	pg "github.com/woozymasta/hysteron/internal/postgresql"
+	"github.com/woozymasta/hysteron/internal/store"
 
 	"github.com/google/uuid"
 )
@@ -169,10 +169,10 @@ func waitReplicationSlots(q Querier, replSlots []string, timeout time.Duration) 
 }
 */
 
-func waitStolonReplicationSlots(q Querier, replSlots []string, timeout time.Duration) error {
-	// prefix with stolon_
+func waitHysteronReplicationSlots(q Querier, replSlots []string, timeout time.Duration) error {
+	// prefix with hysteron_
 	for i, slot := range replSlots {
-		replSlots[i] = common.StolonName(slot)
+		replSlots[i] = common.HysteronName(slot)
 	}
 	sort.Strings(replSlots)
 
@@ -186,7 +186,7 @@ func waitStolonReplicationSlots(q Querier, replSlots []string, timeout time.Dura
 		}
 		curReplSlots = []string{}
 		for _, s := range allReplSlots {
-			if common.IsStolonName(s) {
+			if common.IsHysteronName(s) {
 				curReplSlots = append(curReplSlots, s)
 			}
 		}
@@ -200,7 +200,7 @@ func waitStolonReplicationSlots(q Querier, replSlots []string, timeout time.Dura
 	return fmt.Errorf("timeout waiting for replSlots %v, got: %v, last err: %v", replSlots, curReplSlots, err)
 }
 
-func waitNotStolonReplicationSlots(q Querier, replSlots []string, timeout time.Duration) error {
+func waitNotHysteronReplicationSlots(q Querier, replSlots []string, timeout time.Duration) error {
 	sort.Strings(replSlots)
 
 	start := time.Now()
@@ -213,7 +213,7 @@ func waitNotStolonReplicationSlots(q Querier, replSlots []string, timeout time.D
 		}
 		curReplSlots = []string{}
 		for _, s := range allReplSlots {
-			if !common.IsStolonName(s) {
+			if !common.IsHysteronName(s) {
 				curReplSlots = append(curReplSlots, s)
 			}
 		}
@@ -442,9 +442,9 @@ func NewTestKeeperWithID(t *testing.T, dir, uid, clusterName, pgSUUsername, pgSU
 		return nil, err
 	}
 
-	bin := os.Getenv("STOLON_BIN")
+	bin := os.Getenv("HYSTERON_BIN")
 	if bin == "" {
-		return nil, fmt.Errorf("missing STOLON_BIN env")
+		return nil, fmt.Errorf("missing HYSTERON_BIN env")
 	}
 	unifiedArgs, err := wrapUnifiedRuntimeArgs("keeper", storeBackend, args)
 	if err != nil {
@@ -890,9 +890,9 @@ func NewTestSentinel(t *testing.T, dir string, clusterName string, storeBackend 
 	}
 	args = append(args, a...)
 
-	bin := os.Getenv("STOLON_BIN")
+	bin := os.Getenv("HYSTERON_BIN")
 	if bin == "" {
-		return nil, fmt.Errorf("missing STOLON_BIN env")
+		return nil, fmt.Errorf("missing HYSTERON_BIN env")
 	}
 	unifiedArgs, err := wrapUnifiedRuntimeArgs("sentinel", storeBackend, args)
 	if err != nil {
@@ -966,9 +966,9 @@ func NewTestProxy(t *testing.T, dir string, clusterName, pgSUUsername, pgSUPassw
 		return nil, err
 	}
 
-	bin := os.Getenv("STOLON_BIN")
+	bin := os.Getenv("HYSTERON_BIN")
 	if bin == "" {
-		return nil, fmt.Errorf("missing STOLON_BIN env")
+		return nil, fmt.Errorf("missing HYSTERON_BIN env")
 	}
 	unifiedArgs, err := wrapUnifiedRuntimeArgs("proxy", storeBackend, args)
 	if err != nil {
@@ -1051,19 +1051,19 @@ func (tp *TestProxy) WaitRightMaster(tk *TestKeeper, timeout time.Duration) erro
 	return tk.WaitPGParameter("port", tk.pgPort, timeout)
 }
 
-func Stolon(t *testing.T, a ...string) error {
-	_, err := StolonOutput(t, a...)
+func Hysteron(t *testing.T, a ...string) error {
+	_, err := HysteronOutput(t, a...)
 	return err
 }
 
-func StolonCluster(
+func HysteronCluster(
 	t *testing.T,
 	clusterName string,
 	storeBackend store.Backend,
 	storeEndpoints string,
 	a ...string,
 ) error {
-	_, err := StolonClusterOutput(
+	_, err := HysteronClusterOutput(
 		t,
 		clusterName,
 		storeBackend,
@@ -1073,14 +1073,14 @@ func StolonCluster(
 	return err
 }
 
-func StolonFailover(
+func HysteronFailover(
 	t *testing.T,
 	clusterName string,
 	storeBackend store.Backend,
 	storeEndpoints string,
 	a ...string,
 ) error {
-	_, err := StolonFailoverOutput(
+	_, err := HysteronFailoverOutput(
 		t,
 		clusterName,
 		storeBackend,
@@ -1090,11 +1090,11 @@ func StolonFailover(
 	return err
 }
 
-func StolonOutput(t *testing.T, a ...string) (string, error) {
-	return commandOutput(t, "stolon", "STOLON_BIN", a...)
+func HysteronOutput(t *testing.T, a ...string) (string, error) {
+	return commandOutput(t, "hysteron", "HYSTERON_BIN", a...)
 }
 
-func StolonClusterOutput(
+func HysteronClusterOutput(
 	t *testing.T,
 	clusterName string,
 	storeBackend store.Backend,
@@ -1110,10 +1110,10 @@ func StolonClusterOutput(
 		args = append(args, fmt.Sprintf("--cluster-name=%s", clusterName))
 	}
 	args = append(args, a...)
-	return commandOutput(t, "stolon", "STOLON_BIN", args...)
+	return commandOutput(t, "hysteron", "HYSTERON_BIN", args...)
 }
 
-func StolonFailoverOutput(
+func HysteronFailoverOutput(
 	t *testing.T,
 	clusterName string,
 	storeBackend store.Backend,
@@ -1129,7 +1129,7 @@ func StolonFailoverOutput(
 		args = append(args, fmt.Sprintf("--cluster-name=%s", clusterName))
 	}
 	args = append(args, a...)
-	return commandOutput(t, "stolon", "STOLON_BIN", args...)
+	return commandOutput(t, "hysteron", "HYSTERON_BIN", args...)
 }
 
 func ListClustersOutput(
@@ -1137,7 +1137,7 @@ func ListClustersOutput(
 	storeBackend store.Backend,
 	storeEndpoints string,
 ) ([]string, error) {
-	output, err := StolonClusterOutput(
+	output, err := HysteronClusterOutput(
 		t,
 		"",
 		storeBackend,
@@ -1150,7 +1150,7 @@ func ListClustersOutput(
 	}
 	var names []string
 	if err := json.Unmarshal([]byte(output), &names); err != nil {
-		return nil, fmt.Errorf("decode stolon cluster list output: %w", err)
+		return nil, fmt.Errorf("decode hysteron cluster list output: %w", err)
 	}
 	return names, nil
 }
@@ -1207,7 +1207,7 @@ type TestStore struct {
 func NewTestStore(t *testing.T, dir string, a ...string) (*TestStore, error) {
 	acquireStoreSlot(t)
 
-	storeBackend := store.Backend(strings.TrimSpace(os.Getenv("STOLON_TEST_STORE_BACKEND")))
+	storeBackend := store.Backend(strings.TrimSpace(os.Getenv("HYSTERON_TEST_STORE_BACKEND")))
 	switch storeBackend {
 	case "etcd":
 		storeBackend = "etcdv3"
@@ -1215,7 +1215,7 @@ func NewTestStore(t *testing.T, dir string, a ...string) (*TestStore, error) {
 		return NewTestEtcd(t, dir, storeBackend, a...)
 	}
 	return nil, fmt.Errorf(
-		"unsupported STOLON_TEST_STORE_BACKEND %q (supported: etcd, etcdv3)",
+		"unsupported HYSTERON_TEST_STORE_BACKEND %q (supported: etcd, etcdv3)",
 		storeBackend,
 	)
 }
@@ -1238,7 +1238,7 @@ func storeSlots() chan struct{} {
 
 func maxConcurrentStoresFromEnv() int {
 	limit := defaultMaxConcurrentStores
-	if raw := strings.TrimSpace(os.Getenv("STOLON_INTEGRATION_MAX_STORES")); raw != "" {
+	if raw := strings.TrimSpace(os.Getenv("HYSTERON_INTEGRATION_MAX_STORES")); raw != "" {
 		parsed, err := strconv.Atoi(raw)
 		if err == nil && parsed > 0 {
 			limit = parsed

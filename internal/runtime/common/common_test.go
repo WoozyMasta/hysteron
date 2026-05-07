@@ -19,8 +19,8 @@ import (
 	"reflect"
 	"testing"
 
-	stconfig "github.com/sorintlab/stolon/internal/config"
 	"github.com/woozymasta/flags"
+	stconfig "github.com/woozymasta/hysteron/internal/config"
 )
 
 func TestCommonConfigClusterNamesList(t *testing.T) {
@@ -173,7 +173,7 @@ func TestCheckCommonConfigWithK8sAlias(t *testing.T) {
 		t.Fatalf("expected ErrKubernetesResourceNameRequired, got: %v", err)
 	}
 
-	cfg.Kube.ResourceName = "stolon-{cluster}"
+	cfg.Kube.ResourceName = "hysteron-{cluster}"
 	if err := CheckCommonConfig(cfg); err != nil {
 		t.Fatalf("expected k8s alias config to pass, got: %v", err)
 	}

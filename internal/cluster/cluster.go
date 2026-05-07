@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package cluster defines Stolon cluster-data contracts and helpers.
+// Package cluster defines Hysteron cluster-data contracts and helpers.
 package cluster
 
 import (
@@ -25,8 +25,8 @@ import (
 	"time"
 
 	"github.com/mitchellh/copystructure"
-	"github.com/sorintlab/stolon/internal/common"
-	util "github.com/sorintlab/stolon/internal/postgresql"
+	"github.com/woozymasta/hysteron/internal/common"
+	util "github.com/woozymasta/hysteron/internal/postgresql"
 )
 
 // Uint16P returns a pointer to u.
@@ -307,10 +307,10 @@ type ClusterSpec struct { //nolint:revive
 	// Interval where the proxy must successfully complete a check
 	ProxyTimeout *Duration `json:"proxyTimeout,omitempty"`
 	// Max number of standbys. This needs to be greater enough to cover both
-	// standby managed by stolon and additional standbys configured by the
+	// standby managed by hysteron and additional standbys configured by the
 	// user. Its value affect different postgres parameters like
 	// max_replication_slots and max_wal_senders. Setting this to a number
-	// lower than the sum of stolon managed standbys and user managed
+	// lower than the sum of hysteron managed standbys and user managed
 	// standbys will have unpredicatable effects due to problems creating
 	// replication slots or replication problems due to exhausted wal
 	// senders.
@@ -330,7 +330,7 @@ type ClusterSpec struct { //nolint:revive
 	// to be configured when SynchronousReplication is true
 	MaxSynchronousStandbys *uint16 `json:"maxSynchronousStandbys,omitempty"`
 	// AdditionalWalSenders defines the number of additional wal_senders in
-	// addition to the ones internally defined by stolon
+	// addition to the ones internally defined by hysteron
 	AdditionalWalSenders *uint16 `json:"additionalWalSenders"`
 	// Whether to use pg_rewind
 	UsePgrewind *bool `json:"usePgrewind,omitempty"`
@@ -598,7 +598,7 @@ func validateReplicationSlot(replicationSlot string) error {
 	if !util.IsValidReplSlotName(replicationSlot) {
 		return fmt.Errorf("wrong replication slot name: %q", replicationSlot)
 	}
-	if common.IsStolonName(replicationSlot) {
+	if common.IsHysteronName(replicationSlot) {
 		return fmt.Errorf("replication slot name is reserved: %q", replicationSlot)
 	}
 	return nil
@@ -726,7 +726,7 @@ type DBSpec struct {
 	// See ClusterSpec MaxStandbys description
 	MaxStandbys uint16 `json:"maxStandbys,omitempty"`
 	// AdditionalWalSenders defines the number of additional wal_senders in
-	// addition to the ones internally defined by stolon
+	// addition to the ones internally defined by hysteron
 	AdditionalWalSenders uint16 `json:"additionalWalSenders"`
 	// Use Synchronous replication between master and its standbys
 	SynchronousReplication bool `json:"synchronousReplication,omitempty"`

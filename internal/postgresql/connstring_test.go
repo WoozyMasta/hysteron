@@ -69,11 +69,11 @@ func TestParseConnString(t *testing.T) {
 		},
 		{
 			name: "quoted and escaped values",
-			in:   `user='postgres user' password='pa\'ss' application_name=stolon\ keeper`,
+			in:   `user='postgres user' password='pa\'ss' application_name=hysteron\ keeper`,
 			want: ConnParams{
 				"user":             "postgres user",
 				"password":         "pa'ss",
-				"application_name": "stolon keeper",
+				"application_name": "hysteron keeper",
 			},
 		},
 	}

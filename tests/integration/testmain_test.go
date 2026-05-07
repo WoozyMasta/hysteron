@@ -39,16 +39,16 @@ func TestMain(m *testing.M) {
 func missingIntegrationPrerequisites() []string {
 	var missing []string
 
-	if strings.TrimSpace(os.Getenv("STOLON_BIN")) == "" {
-		missing = append(missing, "STOLON_BIN")
+	if strings.TrimSpace(os.Getenv("HYSTERON_BIN")) == "" {
+		missing = append(missing, "HYSTERON_BIN")
 	}
-	backend := strings.TrimSpace(os.Getenv("STOLON_TEST_STORE_BACKEND"))
+	backend := strings.TrimSpace(os.Getenv("HYSTERON_TEST_STORE_BACKEND"))
 	switch backend {
 	case "etcd", "etcdv3":
 	default:
 		missing = append(
 			missing,
-			`STOLON_TEST_STORE_BACKEND (expected "etcd" or "etcdv3")`,
+			`HYSTERON_TEST_STORE_BACKEND (expected "etcd" or "etcdv3")`,
 		)
 	}
 	if strings.TrimSpace(os.Getenv("ETCD_BIN")) == "" {

@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package common contains shared constants and helpers used across Stolon.
+// Package common contains shared constants and helpers used across Hysteron.
 package common
 
 import (
@@ -23,7 +23,7 @@ import (
 
 const (
 	// StorePrefix is the default base path used for cluster data in key-value stores.
-	StorePrefix = "stolon/cluster"
+	StorePrefix = "hysteron/cluster"
 
 	// SentinelLeaderKey is the key used for sentinel leader election state.
 	SentinelLeaderKey = "sentinel-leader"
@@ -52,22 +52,22 @@ var Roles = []Role{
 }
 
 const (
-	stolonPrefix = "stolon_"
+	hysteronPrefix = "hysteron_"
 )
 
-// StolonName returns name with the Stolon-managed object prefix.
-func StolonName(name string) string {
-	return stolonPrefix + name
+// HysteronName returns name with the Hysteron-managed object prefix.
+func HysteronName(name string) string {
+	return hysteronPrefix + name
 }
 
-// NameFromStolonName removes the Stolon-managed object prefix from stolonName.
-func NameFromStolonName(stolonName string) string {
-	return strings.TrimPrefix(stolonName, stolonPrefix)
+// NameFromHysteronName removes the Hysteron-managed object prefix from hysteronName.
+func NameFromHysteronName(hysteronName string) string {
+	return strings.TrimPrefix(hysteronName, hysteronPrefix)
 }
 
-// IsStolonName reports whether name has the Stolon-managed object prefix.
-func IsStolonName(name string) bool {
-	return strings.HasPrefix(name, stolonPrefix)
+// IsHysteronName reports whether name has the Hysteron-managed object prefix.
+func IsHysteronName(name string) bool {
+	return strings.HasPrefix(name, hysteronPrefix)
 }
 
 // Parameters maps PostgreSQL parameter names to values.

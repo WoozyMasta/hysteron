@@ -8,8 +8,8 @@ secrets:
 
 services:
   sentinel:
-    image: sorintlab/stolon:master-pg10
-    command: gosu stolon stolon --log-level debug sentinel etcd --cluster-name stolon-cluster --etcd-endpoints http://etcd-00:2379,http://etcd-01:2379,http://etcd-02:2379
+    image: sorintlab/hysteron:master-pg10
+    command: gosu hysteron hysteron --log-level debug sentinel etcd --cluster-name hysteron-cluster --etcd-endpoints http://etcd-00:2379,http://etcd-01:2379,http://etcd-02:2379
     networks:
       - etcd_etcd
       - pgdb
@@ -22,7 +22,7 @@ services:
         failure_action: pause
 
   keeper1:
-    image: sorintlab/stolon:master-pg10
+    image: sorintlab/hysteron:master-pg10
     hostname: keeper1
     environment:
       - PGDATA=/var/lib/postgresql/data
@@ -31,7 +31,7 @@ services:
     secrets:
       - pgsql
       - pgsql_repl
-    command: gosu stolon stolon --log-level debug keeper etcd --cluster-name stolon-cluster --etcd-endpoints http://etcd-00:2379,http://etcd-01:2379,http://etcd-02:2379 -- --pg-listen-address keeper1 --pg-repl-username replication --uid keeper1 --pg-su-username postgres --pg-su-passwordfile /run/secrets/pgsql --pg-repl-passwordfile /run/secrets/pgsql_repl --data-dir /var/lib/postgresql/data
+    command: gosu hysteron hysteron --log-level debug keeper etcd --cluster-name hysteron-cluster --etcd-endpoints http://etcd-00:2379,http://etcd-01:2379,http://etcd-02:2379 -- --pg-listen-address keeper1 --pg-repl-username replication --uid keeper1 --pg-su-username postgres --pg-su-passwordfile /run/secrets/pgsql --pg-repl-passwordfile /run/secrets/pgsql_repl --data-dir /var/lib/postgresql/data
     networks:
       - etcd_etcd
       - pgdb
@@ -41,7 +41,7 @@ services:
 #        constraints: [node.labels.nodename == node1]
 
   keeper2:
-    image: sorintlab/stolon:master-pg10
+    image: sorintlab/hysteron:master-pg10
     hostname: keeper2
     environment:
       - PGDATA=/var/lib/postgresql/data
@@ -49,7 +49,7 @@ services:
       - pgkeeper2:/var/lib/postgresql/data
     secrets:
       - pgsql
-    command: gosu stolon stolon --log-level debug keeper etcd --cluster-name stolon-cluster --etcd-endpoints http://etcd-00:2379,http://etcd-01:2379,http://etcd-02:2379 -- --pg-listen-address keeper2 --pg-repl-username replication --uid keeper2 --pg-su-username postgres --pg-su-passwordfile /run/secrets/pgsql --pg-repl-passwordfile /run/secrets/pgsql --data-dir /var/lib/postgresql/data
+    command: gosu hysteron hysteron --log-level debug keeper etcd --cluster-name hysteron-cluster --etcd-endpoints http://etcd-00:2379,http://etcd-01:2379,http://etcd-02:2379 -- --pg-listen-address keeper2 --pg-repl-username replication --uid keeper2 --pg-su-username postgres --pg-su-passwordfile /run/secrets/pgsql --pg-repl-passwordfile /run/secrets/pgsql --data-dir /var/lib/postgresql/data
     networks:
       - etcd_etcd
       - pgdb
@@ -59,8 +59,8 @@ services:
 #        constraints: [node.labels.nodename == node2]
 
   proxy:
-    image: sorintlab/stolon:master-pg10
-    command: gosu stolon stolon --log-level info proxy etcd --cluster-name stolon-cluster --etcd-endpoints http://etcd-00:2379,http://etcd-01:2379,http://etcd-02:2379 -- --listen-address 0.0.0.0
+    image: sorintlab/hysteron:master-pg10
+    command: gosu hysteron hysteron --log-level info proxy etcd --cluster-name hysteron-cluster --etcd-endpoints http://etcd-00:2379,http://etcd-01:2379,http://etcd-02:2379 -- --listen-address 0.0.0.0
     networks:
       - etcd_etcd
       - pgdb
@@ -88,3 +88,4 @@ networks:
     driver_opts:
       encrypted: "true"
     internal: true
+

@@ -1,20 +1,20 @@
-# This is an example and generic rbac role definition for stolon. It could be
+# This is an example and generic rbac role definition for hysteron. It could be
 # fine tuned and split per component.
 # The required permission per component should be:
 # keeper/proxy/sentinel: update their own pod annotations
-# sentinel/stolon cluster management commands: get, create, update configmaps
+# sentinel/hysteron cluster management commands: get, create, update configmaps
 # or secrets, depending on
 # the configured --kube-resource-kind
 # sentinel: get, create, update leases for leader election
 # sentinel: get, create, update services and endpointslices when Kubernetes
 # service publishing is enabled
-# sentinel/stolon cluster management commands: list component pods
-# sentinel/stolon cluster management commands: get component pod annotations
+# sentinel/hysteron cluster management commands: list component pods
+# sentinel/hysteron cluster management commands: get component pod annotations
 
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: stolon
+  name: hysteron
   namespace: default
 rules:
 - apiGroups:
@@ -39,3 +39,4 @@ rules:
   - leases
   verbs:
   - "*"
+

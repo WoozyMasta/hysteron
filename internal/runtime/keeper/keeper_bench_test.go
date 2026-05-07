@@ -18,9 +18,9 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/sorintlab/stolon/internal/cluster"
-	"github.com/sorintlab/stolon/internal/common"
-	pg "github.com/sorintlab/stolon/internal/postgresql"
+	"github.com/woozymasta/hysteron/internal/cluster"
+	"github.com/woozymasta/hysteron/internal/common"
+	pg "github.com/woozymasta/hysteron/internal/postgresql"
 )
 
 func BenchmarkKeeperCreatePGParameters(b *testing.B) {
@@ -50,7 +50,7 @@ func BenchmarkKeeperCreateRecoveryOptions(b *testing.B) {
 	p := &PostgresKeeper{}
 	standbySettings := &cluster.StandbySettings{
 		PrimaryConninfo:       "host=127.0.0.1 port=5432 user=repl sslmode=prefer",
-		PrimarySlotName:       "stolon_db1",
+		PrimarySlotName:       "hysteron_db1",
 		RecoveryMinApplyDelay: "10s",
 	}
 	archiveRecoverySettings := &cluster.ArchiveRecoverySettings{
@@ -139,11 +139,11 @@ func BenchmarkKeeperUpdateReplSlotsNoChanges(b *testing.B) {
 	curReplSlots := []string{"manual_slot"}
 	for i := range followersUIDs {
 		followersUIDs[i] = "db-" + strconv.Itoa(i+1)
-		curReplSlots = append(curReplSlots, common.StolonName(followersUIDs[i]))
+		curReplSlots = append(curReplSlots, common.HysteronName(followersUIDs[i]))
 	}
 	for i := range additionalReplSlots {
 		additionalReplSlots[i] = "extra-" + strconv.Itoa(i)
-		curReplSlots = append(curReplSlots, common.StolonName(additionalReplSlots[i]))
+		curReplSlots = append(curReplSlots, common.HysteronName(additionalReplSlots[i]))
 	}
 
 	b.ReportAllocs()

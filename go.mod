@@ -1,4 +1,4 @@
-module github.com/sorintlab/stolon
+module github.com/woozymasta/hysteron
 
 go 1.26.2
 
@@ -94,3 +94,4 @@ require (
 	sigs.k8s.io/structured-merge-diff/v6 v6.4.0 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
+

@@ -25,7 +25,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/sorintlab/stolon/internal/common"
+	"github.com/woozymasta/hysteron/internal/common"
 )
 
 // This parses PostgreSQL libpq-style keyword/value connection strings.

@@ -22,7 +22,7 @@ func TestQuoteIdentifier(t *testing.T) {
 		in   string
 		want string
 	}{
-		{name: "plain", in: "stolon", want: `"stolon"`},
+		{name: "plain", in: "hysteron", want: `"hysteron"`},
 		{name: "single quote", in: "sto'lon", want: `"sto'lon"`},
 		{name: "double quote", in: `sto"lon`, want: `"sto""lon"`},
 	}

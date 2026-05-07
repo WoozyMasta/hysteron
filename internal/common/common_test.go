@@ -20,9 +20,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/sorintlab/stolon/internal/common"
-	"github.com/sorintlab/stolon/internal/utils/fs"
-	slicesutil "github.com/sorintlab/stolon/internal/utils/slices"
+	"github.com/woozymasta/hysteron/internal/common"
+	"github.com/woozymasta/hysteron/internal/utils/fs"
+	slicesutil "github.com/woozymasta/hysteron/internal/utils/slices"
 )
 
 func TestDiffReturnsChangedParams(t *testing.T) {

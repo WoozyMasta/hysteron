@@ -26,8 +26,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sorintlab/stolon/internal/cluster"
-	"github.com/sorintlab/stolon/internal/common"
+	"github.com/woozymasta/hysteron/internal/cluster"
+	"github.com/woozymasta/hysteron/internal/common"
 	etcdclientv3 "go.etcd.io/etcd/client/v3"
 )
 

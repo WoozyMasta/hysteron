@@ -26,9 +26,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/sorintlab/stolon/internal/cluster"
-	"github.com/sorintlab/stolon/internal/common"
-	"github.com/sorintlab/stolon/internal/store"
+	"github.com/woozymasta/hysteron/internal/cluster"
+	"github.com/woozymasta/hysteron/internal/common"
+	"github.com/woozymasta/hysteron/internal/store"
 )
 
 func TestInit(t *testing.T) {
@@ -253,7 +253,7 @@ func testInitExisting(t *testing.T, merge bool) {
 
 	t.Logf("reinitializing cluster")
 	// Initialize cluster with new spec
-	err = StolonCluster(t, clusterName, tstore.storeBackend, storeEndpoints, "initialize", "-y", "-f", initialClusterSpecFile)
+	err = HysteronCluster(t, clusterName, tstore.storeBackend, storeEndpoints, "initialize", "-y", "-f", initialClusterSpecFile)
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -563,7 +563,7 @@ func TestSentinelMultiCluster(t *testing.T) {
 	wantClusterNames := []string{clusterName1, clusterName2}
 	slices.Sort(wantClusterNames)
 	if !slices.Equal(gotClusterNames, wantClusterNames) {
-		t.Fatalf("stolon cluster list = %v, want %v", gotClusterNames, wantClusterNames)
+		t.Fatalf("hysteron cluster list = %v, want %v", gotClusterNames, wantClusterNames)
 	}
 }
 
@@ -694,8 +694,8 @@ func TestPasswordTrailingNewLine(t *testing.T) {
 	u := uuid.New()
 	id := fmt.Sprintf("%x", u[:4])
 
-	pgSUPassword := "stolon_superuserpassword\n"
-	pgReplPassword := "stolon_replpassword\n"
+	pgSUPassword := "hysteron_superuserpassword\n"
+	pgReplPassword := "hysteron_replpassword\n"
 
 	tk, err := NewTestKeeperWithID(t, dir, id, clusterName, pgSUUsername, pgSUPassword, pgReplUsername, pgReplPassword, tstore.storeBackend, storeEndpoints)
 	if err != nil {
@@ -707,15 +707,15 @@ func TestPasswordTrailingNewLine(t *testing.T) {
 	if err := WaitClusterPhase(sm, cluster.ClusterPhaseNormal, 60*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if err := tk.waitDBUpWithCredentials(pgSUUsername, "stolon_superuserpassword", 60*time.Second); err != nil {
+	if err := tk.waitDBUpWithCredentials(pgSUUsername, "hysteron_superuserpassword", 60*time.Second); err != nil {
 		t.Fatalf("expected superuser trimmed password to work: %v", err)
 	}
-	if err := tk.expectConnect(pgReplUsername, "stolon_replpassword"); err != nil {
+	if err := tk.expectConnect(pgReplUsername, "hysteron_replpassword"); err != nil {
 		t.Fatalf("expected replication user trimmed password to work: %v", err)
 	}
 	tk.Stop()
 
-	pgSUPassword = "stolon_superuserpassword\n"
+	pgSUPassword = "hysteron_superuserpassword\n"
 	pgReplPassword = "\n"
 
 	tk, err = NewTestKeeperWithID(t, dir, id, clusterName, pgSUUsername, pgSUPassword, pgReplUsername, pgReplPassword, tstore.storeBackend, storeEndpoints)
@@ -730,7 +730,7 @@ func TestPasswordTrailingNewLine(t *testing.T) {
 	}
 
 	pgSUPassword = "\n"
-	pgReplPassword = "stolon_replpassword\n"
+	pgReplPassword = "hysteron_replpassword\n"
 
 	tk, err = NewTestKeeperWithID(t, dir, id, clusterName, pgSUUsername, pgSUPassword, pgReplUsername, pgReplPassword, tstore.storeBackend, storeEndpoints)
 	if err != nil {

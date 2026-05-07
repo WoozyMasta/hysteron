@@ -22,21 +22,21 @@ import (
 var (
 	lastCheckSuccessSeconds = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "stolon_sentinel_last_cluster_check_success_seconds",
+			Name: "hysteron_sentinel_last_cluster_check_success_seconds",
 			Help: "Last time we successfully performed a cluster check as seconds since unix epoch",
 		},
 		[]string{"cluster_name"},
 	)
 	isLeaderGauge = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "stolon_sentinel_is_leader",
+			Name: "hysteron_sentinel_is_leader",
 			Help: "Set to 1 if the sentinel is currently a leader",
 		},
 		[]string{"cluster_name"},
 	)
 	leaderCountGauge = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "stolon_sentinel_leader_count",
+			Name: "hysteron_sentinel_leader_count",
 			Help: "Number of times this sentinel has been elected as leader",
 		},
 		[]string{"cluster_name"},

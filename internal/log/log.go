@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package log provides shared Stolon logging helpers backed by zerolog.
+// Package log provides shared Hysteron logging helpers backed by zerolog.
 //
 // The process-wide root is the same global described in zerolog's log subpackage:
 // import zlog "github.com/rs/zerolog/log" -- see zlog.Logger and zlog.Info() etc.

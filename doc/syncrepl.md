@@ -1,37 +1,38 @@
 # Synchronous replication
 
-Since synchronous replication is usually needed to avoid losing some transactions, stolon implements it in a way to avoid any possibility of electing non sync standbys as new masters.
-When synchronous replication is enabled stolon will always ensure that a master has N synchronous standbys (where N will be between MinSynchronousStandbys and MaxSynchronousStandbys values defined in the [cluster specification](cluster_spec.md)). If there're not enough available standbys then it will also add a fake standby server in the `synchronous_standby_names`. Adding a non existing standby server will ensure the master will always block waiting for remote commits.
+Since synchronous replication is usually needed to avoid losing some transactions, hysteron implements it in a way to avoid any possibility of electing non sync standbys as new masters.
+When synchronous replication is enabled hysteron will always ensure that a master has N synchronous standbys (where N will be between MinSynchronousStandbys and MaxSynchronousStandbys values defined in the [cluster specification](cluster_spec.md)). If there're not enough available standbys then it will also add a fake standby server in the `synchronous_standby_names`. Adding a non existing standby server will ensure the master will always block waiting for remote commits.
 
-You can enable/disable synchronous replication at any time and the keepers will reconfigure themselves using `stolon cluster update` to update the [cluster specification](cluster_spec.md).
+You can enable/disable synchronous replication at any time and the keepers will reconfigure themselves using `hysteron cluster update` to update the [cluster specification](cluster_spec.md).
 
 ### Min and Max number of synchronous replication standbys
 
 In the cluster spec you can set the `MinSynchronousStandbys` and `MaxSynchronousStandbys` values (they both defaults to 1). Having multiple synchronous standbys is a feature provided starting from [PostgreSQL 9.6](https://www.postgresql.org/docs/9.6/static/warm-standby.html#SYNCHRONOUS-REPLICATION). Values different than 1 for postgres versions below 9.6 will be ignored.
 
-For postgres versions over 9.6, you are also allowed to set `MinSynchronousStandbys` to 0. When set to 0, stolon will keep healthy sync standbys in the `synchronous_standby_names` list (up to `MaxSynchronousStandbys`), but will not force the primary to block if there isn't any healthy sync standby to add to the list.
+For postgres versions over 9.6, you are also allowed to set `MinSynchronousStandbys` to 0. When set to 0, hysteron will keep healthy sync standbys in the `synchronous_standby_names` list (up to `MaxSynchronousStandbys`), but will not force the primary to block if there isn't any healthy sync standby to add to the list.
 
 Notice that `MinSynchronousStandbys` = 0 can cause loss of committed transactions if the primary restarts while the list of synchronous standbys is empty. So this is only advised for clusters with just one primary and one sync standby, when you value availability over consistency. For availability _and_ consistency, you should set `MinSynchronousStandbys` > 0, and have at least `MinSynchronousStandbys` + 1 standbys.
 
-## Enable synchronous replication.
+## Enable synchronous replication
 
 Assuming that your cluster name is `mycluster` and using etcd (v3 api) listening on localhost:2379:
-```
-stolon cluster --cluster-name=mycluster --store-backend=etcdv3 update --patch '{ "synchronousReplication" : true }'
+
+```shell
+hysteron cluster --cluster-name=mycluster --store-backend=etcdv3 update --patch '{ "synchronousReplication" : true }'
 ```
 
-## Disable synchronous replication.
+## Disable synchronous replication
 
-```
-stolon cluster --cluster-name=mycluster --store-backend=etcdv3 update --patch '{ "synchronousReplication" : false }'
+```shell
+hysteron cluster --cluster-name=mycluster --store-backend=etcdv3 update --patch '{ "synchronousReplication" : false }'
 ```
 
 ## Set min and max number of synchronous replication standbys
 
 Set MinSynchronousStandbys/MaxSynchronousStandbys to a value greater than 1 (only when using PostgreSQL >= 9.6)
 
-```
-stolon cluster --cluster-name=mycluster --store-backend=etcdv3 update --patch '{ "synchronousReplication" : true, "minSynchronousStandbys": 2, "maxSynchronousStandbys": 3 }'
+```shell
+hysteron cluster --cluster-name=mycluster --store-backend=etcdv3 update --patch '{ "synchronousReplication" : true, "minSynchronousStandbys": 2, "maxSynchronousStandbys": 3 }'
 ```
 
 ## Handling postgresql sync repl limits under such circumstances
@@ -57,9 +58,8 @@ So there can be some conditions where a syncstandby could be elected also if it'
 
 It's not easy to fix this issue since these events cannot be resolved by the sentinel because it's not possible to know if a sync standby is really in sync when the master is down (since we cannot query its last wal position and the reporting from the keeper is asynchronous).
 
-But with stolon we have the power to overcome this issue by noticing when a primary restarts (since we control it), allow only "internal" connections until all the defined synchronous standbys are really in sync.
+But with hysteron we have the power to overcome this issue by noticing when a primary restarts (since we control it), allow only "internal" connections until all the defined synchronous standbys are really in sync.
 
 Allowing only "internal" connections means not adding the default rules or the user defined pgHBA rules but only the rules needed for replication (and local communication from the keeper).
 
 Since "internal" rules accepts the defined superuser and replication users, client should not use these roles for normal operation or the above solution won't work (but they shouldn't do it anyway since this could cause exhaustion of reserved superuser connections needed by the keeper to check the instance).
-

@@ -27,17 +27,17 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/sorintlab/stolon/internal/cluster"
-	"github.com/sorintlab/stolon/internal/common"
-	pg "github.com/sorintlab/stolon/internal/postgresql"
-	"github.com/sorintlab/stolon/internal/store"
+	"github.com/woozymasta/hysteron/internal/cluster"
+	"github.com/woozymasta/hysteron/internal/common"
+	pg "github.com/woozymasta/hysteron/internal/postgresql"
+	"github.com/woozymasta/hysteron/internal/store"
 )
 
 const (
-	pgReplUsername = "stolon_repluser"
-	pgReplPassword = "stolon_replpassword"
-	pgSUUsername   = "stolon_superuser"
-	pgSUPassword   = "stolon_superuserpassword"
+	pgReplUsername = "hysteron_repluser"
+	pgReplPassword = "hysteron_replpassword"
+	pgSUUsername   = "hysteron_superuser"
+	pgSUPassword   = "hysteron_superuserpassword"
 )
 
 type testKeepers map[string]*TestKeeper
@@ -60,7 +60,7 @@ func setupStore(t *testing.T, dir string) *TestStore {
 func TestInitWithMultipleKeepers(t *testing.T) {
 	t.Parallel()
 
-	dir, err := os.MkdirTemp("", "stolon")
+	dir, err := os.MkdirTemp("", "hysteron")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -331,7 +331,7 @@ func waitMasterStandbysReady(t *testing.T, sm *store.KVBackedStore, tks testKeep
 }
 
 func testMasterStandby(t *testing.T, syncRepl bool) {
-	dir, err := os.MkdirTemp("", "stolon")
+	dir, err := os.MkdirTemp("", "hysteron")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -383,7 +383,7 @@ func TestMasterStandbySyncRepl(t *testing.T) {
 }
 
 func testFailover(t *testing.T, syncRepl bool, standbyCluster bool) {
-	dir, err := os.MkdirTemp("", "stolon")
+	dir, err := os.MkdirTemp("", "hysteron")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -494,7 +494,7 @@ func TestFailoverSyncReplStandbyCluster(t *testing.T) {
 // Tests standby elected as new master but fails to become master. Then old
 // master comes back and is re-elected as master.
 func testFailoverFailed(t *testing.T, syncRepl bool, standbyCluster bool) {
-	dir, err := os.MkdirTemp("", "stolon")
+	dir, err := os.MkdirTemp("", "hysteron")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -606,7 +606,7 @@ func TestFailoverFailedSyncStandbyCluster(t *testing.T) {
 // master (reported) xlogpos won't be elected as the new master. This test is
 // valid only for asynchronous replication
 func testFailoverTooMuchLag(t *testing.T, standbyCluster bool) {
-	dir, err := os.MkdirTemp("", "stolon")
+	dir, err := os.MkdirTemp("", "hysteron")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -685,7 +685,7 @@ func TestFailoverTooMuchLagStandbyCluster(t *testing.T) {
 }
 
 func testOldMasterRestart(t *testing.T, syncRepl, minSync0 bool, usePgrewind bool, standbyCluster bool) {
-	dir, err := os.MkdirTemp("", "stolon")
+	dir, err := os.MkdirTemp("", "hysteron")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -839,7 +839,7 @@ func TestOldMasterRestartStandbyCluster(t *testing.T) {
 }
 
 func testPartition1(t *testing.T, syncRepl, minSync0, usePgrewind bool, standbyCluster bool) {
-	dir, err := os.MkdirTemp("", "stolon")
+	dir, err := os.MkdirTemp("", "hysteron")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -1008,7 +1008,7 @@ func TestPartition1StandbyCluster(t *testing.T) {
 }
 
 func testTimelineFork(t *testing.T, syncRepl, usePgrewind bool) {
-	dir, err := os.MkdirTemp("", "stolon")
+	dir, err := os.MkdirTemp("", "hysteron")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -1201,7 +1201,7 @@ func TestTimelineForkSyncReplPgrewind(t *testing.T) {
 // postgres (without triggering failover since it restart before being marked
 // ad failed) make the slave continue to sync using the new address
 func testMasterChangedAddress(t *testing.T, standbyCluster bool) {
-	dir, err := os.MkdirTemp("", "stolon")
+	dir, err := os.MkdirTemp("", "hysteron")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -1299,7 +1299,7 @@ func TestMasterChangedAddressStandbyCluster(t *testing.T) {
 
 func TestFailedStandby(t *testing.T) {
 	t.Parallel()
-	dir, err := os.MkdirTemp("", "stolon")
+	dir, err := os.MkdirTemp("", "hysteron")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -1390,7 +1390,7 @@ func TestFailedStandby(t *testing.T) {
 
 func TestLoweredMaxStandbysPerSender(t *testing.T) {
 	t.Parallel()
-	dir, err := os.MkdirTemp("", "stolon")
+	dir, err := os.MkdirTemp("", "hysteron")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -1442,7 +1442,7 @@ func TestLoweredMaxStandbysPerSender(t *testing.T) {
 	}
 
 	// Set MaxStandbysPerSender to 1
-	err = StolonCluster(t, clusterName, tstore.storeBackend, storeEndpoints, "update", "--patch", `{ "maxStandbysPerSender" : 1 }`)
+	err = HysteronCluster(t, clusterName, tstore.storeBackend, storeEndpoints, "update", "--patch", `{ "maxStandbysPerSender" : 1 }`)
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -1455,7 +1455,7 @@ func TestLoweredMaxStandbysPerSender(t *testing.T) {
 
 func TestKeeperRemoval(t *testing.T) {
 	t.Parallel()
-	dir, err := os.MkdirTemp("", "stolon")
+	dir, err := os.MkdirTemp("", "hysteron")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -1562,8 +1562,8 @@ func TestKeeperRemoval(t *testing.T) {
 	}
 }
 
-func testKeeperRemovalStolonCluster(t *testing.T, syncRepl bool) {
-	dir, err := os.MkdirTemp("", "stolon")
+func testKeeperRemovalHysteronCluster(t *testing.T, syncRepl bool) {
+	dir, err := os.MkdirTemp("", "hysteron")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -1635,7 +1635,7 @@ func testKeeperRemovalStolonCluster(t *testing.T, syncRepl bool) {
 	}
 
 	// remove master from the cluster data, must fail
-	err = StolonCluster(
+	err = HysteronCluster(
 		t,
 		clusterName,
 		tstore.storeBackend,
@@ -1654,7 +1654,7 @@ func testKeeperRemovalStolonCluster(t *testing.T, syncRepl bool) {
 	standbys[0].Stop()
 
 	// remove standby[0] from the cluster data
-	err = StolonCluster(
+	err = HysteronCluster(
 		t,
 		clusterName,
 		tstore.storeBackend,
@@ -1694,20 +1694,20 @@ func testKeeperRemovalStolonCluster(t *testing.T, syncRepl bool) {
 	}
 }
 
-func TestKeeperRemovalStolonCluster(t *testing.T) {
+func TestKeeperRemovalHysteronCluster(t *testing.T) {
 	t.Parallel()
-	testKeeperRemovalStolonCluster(t, false)
+	testKeeperRemovalHysteronCluster(t, false)
 }
 
-func TestKeeperRemovalStolonClusterSyncRepl(t *testing.T) {
+func TestKeeperRemovalHysteronClusterSyncRepl(t *testing.T) {
 	t.Parallel()
-	testKeeperRemovalStolonCluster(t, true)
+	testKeeperRemovalHysteronCluster(t, true)
 }
 
 func TestStandbyCantSync(t *testing.T) {
 	t.Parallel()
 
-	dir, err := os.MkdirTemp("", "stolon")
+	dir, err := os.MkdirTemp("", "hysteron")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -1837,7 +1837,7 @@ func TestStandbyCantSync(t *testing.T) {
 func TestDisappearedKeeperData(t *testing.T) {
 	t.Parallel()
 
-	dir, err := os.MkdirTemp("", "stolon")
+	dir, err := os.MkdirTemp("", "hysteron")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -1918,7 +1918,7 @@ func TestDisappearedKeeperData(t *testing.T) {
 }
 
 func testForceFail(t *testing.T, syncRepl bool, standbyCluster bool) {
-	dir, err := os.MkdirTemp("", "stolon")
+	dir, err := os.MkdirTemp("", "hysteron")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -1982,7 +1982,7 @@ func testForceFail(t *testing.T, syncRepl bool, standbyCluster bool) {
 	}
 
 	// mark master as failed
-	err = StolonFailover(
+	err = HysteronFailover(
 		t,
 		clusterName,
 		tstore.storeBackend,
@@ -2042,7 +2042,7 @@ func TestForceFailSyncReplStandbyCluster(t *testing.T) {
 // defined synchronous standbys are in sync.
 func testSyncStandbyNotInSync(t *testing.T, minSync0 bool) {
 	t.Parallel()
-	dir, err := os.MkdirTemp("", "stolon")
+	dir, err := os.MkdirTemp("", "hysteron")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}

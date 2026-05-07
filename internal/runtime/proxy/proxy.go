@@ -28,16 +28,16 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/sorintlab/stolon/internal/cluster"
-	"github.com/sorintlab/stolon/internal/common"
-	stconfig "github.com/sorintlab/stolon/internal/config"
-	slog "github.com/sorintlab/stolon/internal/log"
-	runtimecommon "github.com/sorintlab/stolon/internal/runtime/common"
-	"github.com/sorintlab/stolon/internal/store"
-	"github.com/sorintlab/stolon/internal/tcpproxy"
-	"github.com/sorintlab/stolon/internal/utils/id"
-	readonly "github.com/sorintlab/stolon/internal/utils/readonly"
-	units "github.com/sorintlab/stolon/internal/utils/units"
+	"github.com/woozymasta/hysteron/internal/cluster"
+	"github.com/woozymasta/hysteron/internal/common"
+	stconfig "github.com/woozymasta/hysteron/internal/config"
+	slog "github.com/woozymasta/hysteron/internal/log"
+	runtimecommon "github.com/woozymasta/hysteron/internal/runtime/common"
+	"github.com/woozymasta/hysteron/internal/store"
+	"github.com/woozymasta/hysteron/internal/tcpproxy"
+	"github.com/woozymasta/hysteron/internal/utils/id"
+	readonly "github.com/woozymasta/hysteron/internal/utils/readonly"
+	units "github.com/woozymasta/hysteron/internal/utils/units"
 
 	"github.com/rs/zerolog"
 	"github.com/woozymasta/flags"
@@ -624,7 +624,7 @@ func (c *ClusterChecker) Start() error {
 // commands stay available; subcommands are optional because the proxy
 // is a daemon.
 func newParser() *flags.Parser {
-	parser := runtimecommon.NewParser("stolon proxy", "STOLON", &cfg, 0)
+	parser := runtimecommon.NewParser("hysteron proxy", "HYSTERON", &cfg, 0)
 	parser.SubcommandsOptional = true
 	return parser
 }

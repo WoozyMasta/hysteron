@@ -19,8 +19,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/sorintlab/stolon/internal/common"
-	slog "github.com/sorintlab/stolon/internal/log"
+	"github.com/woozymasta/hysteron/internal/common"
+	slog "github.com/woozymasta/hysteron/internal/log"
 
 	"github.com/rs/zerolog"
 )
@@ -31,7 +31,7 @@ var benchmarkConnParams = ConnParams{
 	"user":             "postgres user",
 	"password":         `pa'ss\word`,
 	"dbname":           "postgres",
-	"application_name": "stolon keeper",
+	"application_name": "hysteron keeper",
 	"sslmode":          "disable",
 }
 
@@ -40,7 +40,7 @@ func init() {
 }
 
 func BenchmarkParseConnString(b *testing.B) {
-	const connString = `host=127.0.0.1 port=5432 user='postgres user' password='pa\'ss\\word' dbname=postgres application_name=stolon\ keeper sslmode=disable`
+	const connString = `host=127.0.0.1 port=5432 user='postgres user' password='pa\'ss\\word' dbname=postgres application_name=hysteron\ keeper sslmode=disable`
 
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
@@ -55,7 +55,7 @@ func BenchmarkParseConnString(b *testing.B) {
 }
 
 func BenchmarkURLToConnParams(b *testing.B) {
-	const connURL = "postgres://postgres:secret@127.0.0.1:5432/postgres?sslmode=disable&application_name=stolon"
+	const connURL = "postgres://postgres:secret@127.0.0.1:5432/postgres?sslmode=disable&application_name=hysteron"
 
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
@@ -200,7 +200,7 @@ func benchmarkPGParameters() common.Parameters {
 		"max_wal_senders":           "16",
 		"max_replication_slots":     "16",
 		"shared_buffers":            "256MB",
-		"synchronous_standby_names": "2 (stolon_db1,stolon_db2)",
+		"synchronous_standby_names": "2 (hysteron_db1,hysteron_db2)",
 	}
 }
 
@@ -209,7 +209,7 @@ func benchmarkRecoveryOptions() *RecoveryOptions {
 		RecoveryMode: RecoveryModeStandby,
 		RecoveryParameters: common.Parameters{
 			"primary_conninfo":         "host=127.0.0.1 port=5432 user=repl sslmode=prefer",
-			"primary_slot_name":        "stolon_db1",
+			"primary_slot_name":        "hysteron_db1",
 			"restore_command":          "wal-g wal-fetch %f %p",
 			"recovery_target_timeline": "latest",
 		},

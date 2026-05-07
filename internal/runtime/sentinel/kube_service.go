@@ -27,12 +27,12 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog"
-	"github.com/sorintlab/stolon/internal/cluster"
-	"github.com/sorintlab/stolon/internal/common"
-	runtimecommon "github.com/sorintlab/stolon/internal/runtime/common"
-	k8sutil "github.com/sorintlab/stolon/internal/utils/k8s"
-	readonly "github.com/sorintlab/stolon/internal/utils/readonly"
-	units "github.com/sorintlab/stolon/internal/utils/units"
+	"github.com/woozymasta/hysteron/internal/cluster"
+	"github.com/woozymasta/hysteron/internal/common"
+	runtimecommon "github.com/woozymasta/hysteron/internal/runtime/common"
+	k8sutil "github.com/woozymasta/hysteron/internal/utils/k8s"
+	readonly "github.com/woozymasta/hysteron/internal/utils/readonly"
+	units "github.com/woozymasta/hysteron/internal/utils/units"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -42,9 +42,9 @@ import (
 )
 
 const (
-	kubeEndpointSliceManagedBy  = "stolon-sentinel"
+	kubeEndpointSliceManagedBy  = "hysteron-sentinel"
 	kubeServicePortName         = "postgres"
-	kubeEndpointSliceSuffix     = "-stolon"
+	kubeEndpointSliceSuffix     = "-hysteron"
 	kubeEndpointSliceHashLength = 8
 )
 
@@ -243,7 +243,7 @@ func (p *kubeServicePublisher) ensureService(ctx context.Context, serviceName st
 		return nil, fmt.Errorf("cannot get %s Kubernetes Service: %w", mode, err)
 	}
 	if len(service.Spec.Selector) != 0 {
-		return nil, fmt.Errorf("%s Kubernetes Service %q has a selector and cannot be managed by Stolon", mode, serviceName)
+		return nil, fmt.Errorf("%s Kubernetes Service %q has a selector and cannot be managed by Hysteron", mode, serviceName)
 	}
 
 	desiredPorts := []corev1.ServicePort{{
@@ -375,8 +375,8 @@ func (p *kubeServicePublisher) endpointSliceName(serviceName string) string {
 func (p *kubeServicePublisher) labels() map[string]string {
 	return map[string]string{
 		k8sutil.KubeClusterLabel:       p.clusterName,
-		"app.kubernetes.io/managed-by": "stolon",
-		"app.kubernetes.io/component":  "stolon-service-publishing",
+		"app.kubernetes.io/managed-by": "hysteron",
+		"app.kubernetes.io/component":  "hysteron-service-publishing",
 	}
 }
 

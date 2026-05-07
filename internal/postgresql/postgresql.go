@@ -30,9 +30,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/sorintlab/stolon/internal/common"
-	slog "github.com/sorintlab/stolon/internal/log"
-	"github.com/sorintlab/stolon/internal/utils/fs"
+	"github.com/woozymasta/hysteron/internal/common"
+	slog "github.com/woozymasta/hysteron/internal/log"
+	"github.com/woozymasta/hysteron/internal/utils/fs"
 
 	"github.com/mitchellh/copystructure"
 	"github.com/rs/zerolog"
@@ -47,7 +47,7 @@ const (
 	postgresRecoverySignal = "recovery.signal"
 	postgresRecoveryDone   = "recovery.done"
 	postgresAutoConf       = "postgresql.auto.conf"
-	tmpPostgresConf        = "stolon-temp-postgresql.conf"
+	tmpPostgresConf        = "hysteron-temp-postgresql.conf"
 
 	startTimeout = 60 * time.Second
 )

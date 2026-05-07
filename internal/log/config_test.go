@@ -56,7 +56,7 @@ func TestConfigureInvalidFileMode(t *testing.T) {
 	_, err := Configure(Options{
 		Level:    "info",
 		Format:   "json",
-		Output:   os.TempDir() + "/stolon-log-test-nonexistent-dir-xyz/db.log",
+		Output:   os.TempDir() + "/hysteron-log-test-nonexistent-dir-xyz/db.log",
 		FileMode: "rotate",
 	})
 	if err == nil {

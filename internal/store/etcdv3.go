@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package store provides Stolon store backends and leader election helpers.
+// Package store provides Hysteron store backends and leader election helpers.
 package store
 
 import (

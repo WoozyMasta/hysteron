@@ -1,20 +1,20 @@
 ## Config Variable Expansion
 
-Stolon accepts JSON and YAML for user-facing cluster specification files:
+Hysteron accepts JSON and YAML for user-facing cluster specification files:
 
-* `stolon cluster initialize -f`
-* `stolon cluster update -f`
-* `stolon cluster data write -f`
-* `stolon sentinel <etcd|kubernetes> -- --initial-cluster-spec`
+* `hysteron cluster initialize -f`
+* `hysteron cluster update -f`
+* `hysteron cluster data write -f`
+* `hysteron sentinel <etcd|kubernetes> -- --initial-cluster-spec`
 
 Both formats use the same `json` field names documented in the cluster
-specification. Before decoding, Stolon expands environment variables in scalar
+specification. Before decoding, Hysteron expands environment variables in scalar
 values using Bash-style syntax:
 
 ```yaml
 initMode: new
 newConfig:
-  locale: ${STOLON_INIT_LOCALE:-C}
+  locale: ${HYSTERON_INIT_LOCALE:-C}
 ```
 
 Supported forms:

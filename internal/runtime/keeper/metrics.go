@@ -16,57 +16,57 @@ package keeper
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/sorintlab/stolon/internal/common"
+	"github.com/woozymasta/hysteron/internal/common"
 )
 
 var (
 	clusterdataLastValidUpdateSeconds = prometheus.NewGauge(
 		prometheus.GaugeOpts{
-			Name: "stolon_keeper_clusterdata_last_valid_update_seconds",
+			Name: "hysteron_keeper_clusterdata_last_valid_update_seconds",
 			Help: "Last time we received a valid clusterdata from our store as seconds since unix epoch",
 		},
 	)
 	targetRoleGauge = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "stolon_keeper_target_role",
+			Name: "hysteron_keeper_target_role",
 			Help: "Keeper last requested target role",
 		},
 		[]string{"role"},
 	)
 	localRoleGauge = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "stolon_keeper_local_role",
+			Name: "hysteron_keeper_local_role",
 			Help: "Keeper current local role",
 		},
 		[]string{"role"},
 	)
 	needsReloadGauge = prometheus.NewGauge(
 		prometheus.GaugeOpts{
-			Name: "stolon_keeper_needs_reload",
+			Name: "hysteron_keeper_needs_reload",
 			Help: "Set to 1 if Postgres requires reload",
 		},
 	)
 	needsRestartGauge = prometheus.NewGauge(
 		prometheus.GaugeOpts{
-			Name: "stolon_keeper_needs_restart",
+			Name: "hysteron_keeper_needs_restart",
 			Help: "Set to 1 if Postgres requires restart",
 		},
 	)
 	lastSyncSuccessSeconds = prometheus.NewGauge(
 		prometheus.GaugeOpts{
-			Name: "stolon_keeper_last_sync_success_seconds",
+			Name: "hysteron_keeper_last_sync_success_seconds",
 			Help: "Last time we successfully synced our keeper",
 		},
 	)
 	sleepInterval = prometheus.NewGauge(
 		prometheus.GaugeOpts{
-			Name: "stolon_keeper_sleep_interval",
+			Name: "hysteron_keeper_sleep_interval",
 			Help: "Seconds to sleep between sync loops",
 		},
 	)
 	shutdownSeconds = prometheus.NewGauge(
 		prometheus.GaugeOpts{
-			Name: "stolon_keeper_shutdown_seconds",
+			Name: "hysteron_keeper_shutdown_seconds",
 			Help: "Shutdown time (received termination signal) since unix epoch in seconds",
 		},
 	)

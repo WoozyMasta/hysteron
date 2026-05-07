@@ -1,14 +1,14 @@
-# Stolon inside docker swarm
+# Hysteron inside docker swarm
 
-In this example you'll see how stolon can provide an high available postgreSQL cluster inside Docker swarm.
+In this example you'll see how hysteron can provide an high available postgreSQL cluster inside Docker swarm.
 
 We will use etcdv3 deployed in its own stack.
 
 ## Docker image
 
-Prebuilt images are available on the dockerhub, the images' tags are the stolon release version plus the postgresql version (for example v0.12.0-pg10).
+Prebuilt images are available on the dockerhub, the images' tags are the hysteron release version plus the postgresql version (for example v0.12.0-pg10).
 
-**NOTE**: These images are **example** images provided for quickly testing stolon. In production you should build your own image customized to fit your needs (adding postgres extensions, backup tools/scripts etc...).
+**NOTE**: These images are **example** images provided for quickly testing hysteron. In production you should build your own image customized to fit your needs (adding postgres extensions, backup tools/scripts etc...).
 
 Additional images are available:
 
@@ -18,24 +18,24 @@ In the [image](../kubernetes/image/docker) directory you'll find a Dockerfile to
 
 To build the image used in this example just execute (from the project root) `make` with the `docker` target providing the mandatory `PGVERSION` and `TAG` variables.
 
-For example, if you want to build an image named `stolon:master-pg10` that uses postgresql 10 you should execute:
+For example, if you want to build an image named `hysteron:master-pg10` that uses postgresql 10 you should execute:
 
 ```
-make PGVERSION=10 TAG=stolon:master-pg10 docker
+make PGVERSION=10 TAG=hysteron:master-pg10 docker
 ```
 
 Once the image is built you should push it to the docker registry used by your swarm infrastructure.
 
-The provided example uses `sorintlab/stolon:master-pg10`
+The provided example uses `sorintlab/hysteron:master-pg10`
 
 
 ## Cluster setup and tests
 
 This example has some predefined values that you'd like to change:
 
-* The cluster name is `stolon-cluster`. It's set in the component `--cluster-name` option. The labels and the `--cluster-name` option must be in sync.
+* The cluster name is `hysteron-cluster`. It's set in the component `--cluster-name` option. The labels and the `--cluster-name` option must be in sync.
 * It uses the etcd v3 backend. You can also use Kubernetes by selecting the
-  backend and options on the unified `stolon` command (see the
+  backend and options on the unified `hysteron` command (see the
   [commands invocation documentation](/doc/commands_invocation.md)).
 
 ### Initialize the swarm
@@ -67,7 +67,7 @@ docker node ls
 
 ### Initialize the etcdv3 backend
 
-Now, before starting any stolon component, we need to start the etcdv3 backend. This can easily be done using the provided `docker-compose-etcd.yml` file:
+Now, before starting any hysteron component, we need to start the etcdv3 backend. This can easily be done using the provided `docker-compose-etcd.yml` file:
 
 ```
 docker stack deploy --compose-file docker-compose-etcd.yml etcd
@@ -85,17 +85,17 @@ pbjr4k9285iy        etcd_etcd-00        replicated          1/1                 
 
 ### Initialize the cluster
 
-All the stolon components wait for an existing clusterdata entry in the store. So the first time you have to initialize a new cluster. For more details see the [cluster initialization doc](/doc/initialization.md). You can do this step at every moment, now or after having started the stolon components.
+All the hysteron components wait for an existing clusterdata entry in the store. So the first time you have to initialize a new cluster. For more details see the [cluster initialization doc](/doc/initialization.md). You can do this step at every moment, now or after having started the hysteron components.
 
 You can initialize the cluster from a machine that can access the store backend:
 
 ```
-stolon cluster --cluster-name=stolon-cluster --store-backend=etcdv3 --store-endpoints http://localhost:2379 initialize
+hysteron cluster --cluster-name=hysteron-cluster --store-backend=etcdv3 --store-endpoints http://localhost:2379 initialize
 ```
 
 ### Create sentinel(s), keepers and proxy(ies)
 
-To create all the stolon components, we just have to create a new stack based on the file `docker-compose-pg.yml`.
+To create all the hysteron components, we just have to create a new stack based on the file `docker-compose-pg.yml`.
 Before creating the stack, in case you have several nodes, it's highly recommended to set constraints so that each keeper
 will start on its own node.
 Assuming you have 2 nodes with labels `nodename=node1` and `nodename=node2`, just edit the file `docker-compose-pg.yml`
@@ -111,7 +111,7 @@ and
 ```
 
 If you have only one node, just leave the file unchanged.
-Now, enter the following command to create the new stack with all stolon components:
+Now, enter the following command to create the new stack with all hysteron components:
 
 ```
 docker stack deploy --compose-file docker-compose-pg.yml pg
@@ -136,7 +136,7 @@ tkbnrfdj4axa        pg_sentinel         replicated          2/2                 
 
 #### Connect to the proxy service
 
-The password for the stolon user will be the value specified in your `./etc/secrets/pgsql` file (or `password1` if you did not change it).
+The password for the hysteron user will be the value specified in your `./etc/secrets/pgsql` file (or `password1` if you did not change it).
 
 ```
 psql --host localhost --port 5432 postgres -U postgres -W
@@ -198,11 +198,11 @@ postgres=# select * from test;
 
 ### Scale your cluster keepers
 
-You can add additional stolon keepers by duplicating an existing keeper definition. You need to specify a dedicated volume for each keeper.
+You can add additional hysteron keepers by duplicating an existing keeper definition. You need to specify a dedicated volume for each keeper.
 
 ### Scale your cluster sentinels and proxies
 
-You can increase/decrease the number of stolon sentinels and proxies:
+You can increase/decrease the number of hysteron sentinels and proxies:
 
 ```
 docker service scale pg_sentinel=3
@@ -218,4 +218,5 @@ For PostgreSQL major version upgrade, see [PostgreSQL upgrade](postgresql_upgrad
 
 For any PostgreSQL upgrade, check PostgreSQL release note for any additional upgrade note.
 
-For stolon upgrade: TODO
+For hysteron upgrade: TODO
+

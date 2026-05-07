@@ -19,7 +19,7 @@ import (
 	zlog "github.com/rs/zerolog/log"
 )
 
-// Stable JSON field keys for structured logs across Stolon binaries.
+// Stable JSON field keys for structured logs across Hysteron binaries.
 const (
 	FieldComponent   = "component"
 	FieldClusterName = "cluster_name"

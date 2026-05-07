@@ -21,12 +21,12 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/sorintlab/stolon/internal/cluster"
-	stconfig "github.com/sorintlab/stolon/internal/config"
-	"github.com/sorintlab/stolon/internal/configfile"
-	runtimex "github.com/sorintlab/stolon/internal/runtime"
-	"github.com/sorintlab/stolon/internal/store"
-	"github.com/sorintlab/stolon/internal/utils/id"
+	"github.com/woozymasta/hysteron/internal/cluster"
+	stconfig "github.com/woozymasta/hysteron/internal/config"
+	"github.com/woozymasta/hysteron/internal/configfile"
+	runtimex "github.com/woozymasta/hysteron/internal/runtime"
+	"github.com/woozymasta/hysteron/internal/store"
+	"github.com/woozymasta/hysteron/internal/utils/id"
 
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
 )

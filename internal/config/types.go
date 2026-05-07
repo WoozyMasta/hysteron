@@ -18,7 +18,7 @@ import (
 	"strings"
 	"time"
 
-	stlog "github.com/sorintlab/stolon/internal/log"
+	stlog "github.com/woozymasta/hysteron/internal/log"
 )
 
 // CommonConfig groups options shared by unified CLI runtime and management
@@ -36,7 +36,7 @@ type CommonConfig struct {
 type StoreOptions struct {
 	Backend       string        `long:"backend" env:"BACKEND" choices:"etcd;etcdv3;kubernetes;k8s" validate-non-empty:"true" description:"store backend type"`
 	Endpoints     string        `long:"endpoints" env:"ENDPOINTS" description:"a comma-delimited list of store endpoints (use https scheme for tls communication) (defaults: http://127.0.0.1:2379 for etcdv3)"`
-	Prefix        string        `long:"prefix" env:"PREFIX" default:"stolon/cluster" description:"the store base prefix"`
+	Prefix        string        `long:"prefix" env:"PREFIX" default:"hysteron/cluster" description:"the store base prefix"`
 	CertFile      string        `long:"cert-file" env:"CERT_FILE" description:"certificate file for client identification to the store"`
 	KeyFile       string        `long:"key" env:"KEY" description:"private key file for client identification to the store"`
 	CAFile        string        `long:"ca-file" env:"CA_FILE" description:"verify certificates of HTTPS-enabled store servers using this CA bundle"`
@@ -52,8 +52,8 @@ type MetricsOptions struct {
 // K8sOptions configures kubernetes storage integration.
 type K8sOptions struct {
 	Config       string `long:"kubeconfig" env:"KUBECONFIG" description:"path to kubeconfig file. Overrides $KUBECONFIG"`
-	ResourceKind string `long:"kube-resource-kind" env:"KUBE_RESOURCE_KIND" choices:"configmap;secret" description:"the k8s resource kind to be used to store stolon clusterdata"`
-	ResourceName string `long:"kube-resource-name" env:"KUBE_RESOURCE_NAME" default:"stolon-{cluster}" description:"Kubernetes resource name template for cluster data and sentinel election objects; {cluster} is replaced with the cluster name"`
+	ResourceKind string `long:"kube-resource-kind" env:"KUBE_RESOURCE_KIND" choices:"configmap;secret" description:"the k8s resource kind to be used to store hysteron clusterdata"`
+	ResourceName string `long:"kube-resource-name" env:"KUBE_RESOURCE_NAME" default:"hysteron-{cluster}" description:"Kubernetes resource name template for cluster data and sentinel election objects; {cluster} is replaced with the cluster name"`
 	Context      string `long:"kube-context" env:"KUBE_CONTEXT" description:"name of the kubeconfig context to use"`
 	Namespace    string `long:"kube-namespace" env:"KUBE_NAMESPACE" description:"name of the kubernetes namespace to use"`
 }

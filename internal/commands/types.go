@@ -14,7 +14,7 @@
 
 package commands
 
-import "github.com/sorintlab/stolon/internal/output"
+import "github.com/woozymasta/hysteron/internal/output"
 
 type rootCommand struct {
 	Keeper   runtimeCommand    `command:"keeper" command-group:"Runtime Commands" description:"Run keeper runtime components"`

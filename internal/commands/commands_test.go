@@ -19,8 +19,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sorintlab/stolon/internal/app"
 	"github.com/woozymasta/flags"
+	"github.com/woozymasta/hysteron/internal/app"
 )
 
 func TestKeeperCommandReturnsValidationError(t *testing.T) {

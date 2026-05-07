@@ -19,10 +19,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sorintlab/stolon/internal/cluster"
-	"github.com/sorintlab/stolon/internal/common"
-	slog "github.com/sorintlab/stolon/internal/log"
-	"github.com/sorintlab/stolon/internal/store"
+	"github.com/woozymasta/hysteron/internal/cluster"
+	"github.com/woozymasta/hysteron/internal/common"
+	slog "github.com/woozymasta/hysteron/internal/log"
+	"github.com/woozymasta/hysteron/internal/store"
 
 	"github.com/rs/zerolog"
 )

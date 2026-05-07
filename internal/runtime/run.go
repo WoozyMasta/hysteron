@@ -17,10 +17,10 @@ package runtime
 import (
 	"fmt"
 
-	stconfig "github.com/sorintlab/stolon/internal/config"
-	keepercmd "github.com/sorintlab/stolon/internal/runtime/keeper"
-	proxycmd "github.com/sorintlab/stolon/internal/runtime/proxy"
-	sentinelcmd "github.com/sorintlab/stolon/internal/runtime/sentinel"
+	stconfig "github.com/woozymasta/hysteron/internal/config"
+	keepercmd "github.com/woozymasta/hysteron/internal/runtime/keeper"
+	proxycmd "github.com/woozymasta/hysteron/internal/runtime/proxy"
+	sentinelcmd "github.com/woozymasta/hysteron/internal/runtime/sentinel"
 )
 
 // Run executes a runtime component for the selected backend.

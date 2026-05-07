@@ -1,11 +1,5 @@
 # stolon - PostgreSQL cloud native High Availability
 
-[![Build Status](https://run.agola.io/api/v1alpha/badges/org%2Fstolon%2Fstolon?branch=master)](https://run.agola.io/org/stolon/projects/stolon.proj)
-[![Discourse](https://img.shields.io/discourse/https/talk.stolon.io/status.svg)](https://talk.stolon.io)
-[![Go Report Card](https://goreportcard.com/badge/github.com/sorintlab/stolon)](https://goreportcard.com/report/github.com/sorintlab/stolon)
-[![Downloads](https://img.shields.io/github/downloads/sorintlab/stolon/latest/total.svg)](https://github.com/sorintlab/stolon/releases)
-[![Latest release](https://img.shields.io/github/release/sorintlab/stolon.svg)](https://github.com/sorintlab/stolon/releases)
-
 ![Stolon Logo](logos/stolon-color.png)
 
 stolon is a cloud native PostgreSQL manager for PostgreSQL high availability. It's cloud native because it'll let you keep an high available PostgreSQL inside your containers (kubernetes integration) but also on every other kind of infrastructure (cloud IaaS, old style infrastructures etc...)

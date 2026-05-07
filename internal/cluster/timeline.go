@@ -33,11 +33,10 @@ const (
 
 // TimelineBranchDivergence contains the result of branch-divergence detection.
 type TimelineBranchDivergence struct {
-	Different bool
-	Reason    TimelineDivergenceReason
-
+	Reason              TimelineDivergenceReason
 	FollowedSwitchPoint uint64
 	CurrentSwitchPoint  uint64
+	Different           bool
 }
 
 // DetectTimelineBranchDivergence checks whether followed timeline state belongs

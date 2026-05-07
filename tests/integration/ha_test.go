@@ -560,11 +560,10 @@ func testFailoverFailed(t *testing.T, syncRepl bool, standbyCluster bool) {
 		t.Fatalf("expected master %q in cluster view", standby.uid)
 	}
 
-	// Stopping standby before reading the new cluster data and promoting
-	// TODO(sgotti) this is flacky and the standby can read the data and
-	// publish new state before it's stopped
-	t.Logf("Stopping current standby keeper: %s", standby.uid)
-	standby.Stop()
+	// Force-stop standby to avoid a race where graceful shutdown allows one
+	// extra reconciliation loop and state publish before process exit.
+	t.Logf("Killing current standby keeper: %s", standby.uid)
+	standby.Kill()
 
 	t.Logf("Starting previous master keeper: %s", master.uid)
 	if err := master.Start(); err != nil {

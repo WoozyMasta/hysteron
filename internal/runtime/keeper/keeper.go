@@ -457,21 +457,18 @@ func (p *PostgresKeeper) createPGParameters(
 	parameters["listen_addresses"] = p.pgListenAddress
 
 	parameters["port"] = p.pgPort
-	// TODO(sgotti) max_replication_slots needs to be at least the
-	// number of existing replication slots or startup will
-	// fail.
-	// TODO(sgotti) changing max_replication_slots requires an
-	// instance restart.
-	parameters["max_replication_slots"] = strconv.FormatUint(
-		uint64(db.Spec.MaxStandbys),
-		10,
-	)
+	desiredMaxReplSlots := int(db.Spec.MaxStandbys)
+	if current, ok := p.currentPGParameterInt("max_replication_slots"); ok && current > desiredMaxReplSlots {
+		desiredMaxReplSlots = current
+	}
+	parameters["max_replication_slots"] = strconv.Itoa(desiredMaxReplSlots)
+
 	// Add some more wal senders, since also the keeper will use them
-	// TODO(sgotti) changing max_wal_senders requires an instance restart.
-	parameters["max_wal_senders"] = strconv.FormatUint(
-		uint64((db.Spec.MaxStandbys*2)+2+db.Spec.AdditionalWalSenders),
-		10,
-	)
+	desiredMaxWalSenders := int((db.Spec.MaxStandbys * 2) + 2 + db.Spec.AdditionalWalSenders)
+	if current, ok := p.currentPGParameterInt("max_wal_senders"); ok && current > desiredMaxWalSenders {
+		desiredMaxWalSenders = current
+	}
+	parameters["max_wal_senders"] = strconv.Itoa(desiredMaxWalSenders)
 
 	// required by pg_rewind (if data checksum is enabled it's ignored)
 	if db.Spec.UsePgrewind {
@@ -1014,6 +1011,23 @@ func (p *PostgresKeeper) getLastPGState() *cluster.PostgresState {
 		Fields(cluster.LogSummaryPostgresState(pgState)).
 		Msg("PostgreSQL state snapshot from last publish")
 	return pgState
+}
+
+func (p *PostgresKeeper) currentPGParameterInt(name string) (int, bool) {
+	p.pgStateMutex.Lock()
+	defer p.pgStateMutex.Unlock()
+	if p.lastPGState == nil || p.lastPGState.PGParameters == nil {
+		return 0, false
+	}
+	raw, ok := p.lastPGState.PGParameters[name]
+	if !ok || raw == "" {
+		return 0, false
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, false
+	}
+	return n, true
 }
 
 func (p *PostgresKeeper) applyRuntimeConfigFromClusterData(cd *cluster.ClusterData) {

@@ -478,61 +478,43 @@ func (s *Sentinel) isDifferentTimelineBranch(
 	followedDB *cluster.DB,
 	db *cluster.DB,
 ) bool {
-	if followedDB.Status.TimelineID < db.Status.TimelineID {
+	res := cluster.DetectTimelineBranchDivergence(
+		followedDB.Status.TimelineID,
+		followedDB.Status.TimelinesHistory,
+		followedDB.Status.XLogPos,
+		db.Status.TimelineID,
+		db.Status.TimelinesHistory,
+		db.Status.XLogPos,
+	)
+	if !res.Different {
+		return false
+	}
+
+	switch res.Reason {
+	case cluster.TimelineDivergenceFollowedTimelineOlder:
 		s.log.Info().
 			Uint64("followed_timeline", followedDB.Status.TimelineID).
 			Uint64("db_timeline", db.Status.TimelineID).
 			Msg("followed instance timeline < than our timeline")
-		return true
-	}
-
-	// if the timelines are the same check that also the switchpoints are the same.
-	if followedDB.Status.TimelineID == db.Status.TimelineID {
-		if db.Status.TimelineID <= 1 {
-			// if timeline <= 1 then no timeline history file exists.
-			return false
-		}
-		ftlh := followedDB.Status.TimelinesHistory.GetTimelineHistory(
-			db.Status.TimelineID - 1,
-		)
-		tlh := db.Status.TimelinesHistory.GetTimelineHistory(
-			db.Status.TimelineID - 1,
-		)
-		if ftlh == nil || tlh == nil {
-			// No timeline history to check
-			return false
-		}
-		if ftlh.SwitchPoint == tlh.SwitchPoint {
-			return false
-		}
+	case cluster.TimelineDivergenceSameTimelineDifferentSwitchPoint:
 		s.log.Info().
 			Uint64("followed_timeline", followedDB.Status.TimelineID).
-			Uint64("followed_xlog_pos", ftlh.SwitchPoint).
+			Uint64("followed_xlog_pos", res.FollowedSwitchPoint).
 			Uint64("db_timeline", db.Status.TimelineID).
-			Uint64("db_xlog_pos", tlh.SwitchPoint).
+			Uint64("db_xlog_pos", res.CurrentSwitchPoint).
 			Msg(
 				"followed instance timeline forked at a different xlog pos " +
 					"than our timeline",
 			)
-		return true
+	case cluster.TimelineDivergenceFollowedForkedBeforeCurrentPosition:
+		s.log.Info().
+			Uint64("followed_timeline", followedDB.Status.TimelineID).
+			Uint64("followed_xlog_pos", res.FollowedSwitchPoint).
+			Uint64("db_timeline", db.Status.TimelineID).
+			Uint64("db_xlog_pos", res.CurrentSwitchPoint).
+			Msg("followed instance timeline forked before our current state")
 	}
-
-	// followedDB.Status.TimelineID > db.Status.TimelineID
-	ftlh := followedDB.Status.TimelinesHistory.GetTimelineHistory(
-		db.Status.TimelineID,
-	)
-	if ftlh != nil {
-		if ftlh.SwitchPoint < db.Status.XLogPos {
-			s.log.Info().
-				Uint64("followed_timeline", followedDB.Status.TimelineID).
-				Uint64("followed_xlog_pos", ftlh.SwitchPoint).
-				Uint64("db_timeline", db.Status.TimelineID).
-				Uint64("db_xlog_pos", db.Status.XLogPos).
-				Msg("followed instance timeline forked before our current state")
-			return true
-		}
-	}
-	return false
+	return true
 }
 
 // isLagBelowMax checks if the db reported lag is below MaxStandbyLag from the
@@ -1186,13 +1168,13 @@ func (s *Sentinel) updateCluster(
 				if !ok {
 					return nil, fmt.Errorf("cluster status references missing db %q", cd.Cluster.Status.Master)
 				}
-				// Check that the choosed db for being the master has correctly initialized
-				// TODO(sgotti) set a timeout (the max time for a restore operation)
+				// Check that the chosen db for being the master has correctly initialized.
+				// PITR initialization is bounded by init timeout.
 				s.applyInitialDBConvergence(
 					newcd,
 					clusterSpec,
 					db,
-					s.dbConvergenceState(db, 0),
+					s.dbConvergenceState(db, clusterSpec.InitTimeout.Duration),
 					"waiting for db to converge",
 				)
 			}

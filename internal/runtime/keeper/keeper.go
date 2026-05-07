@@ -1154,63 +1154,44 @@ func (p *PostgresKeeper) resync(
 	return nil
 }
 
-// TODO(sgotti) unify this with the sentinel one. They have the same logic but one uses *cluster.PostgresState while the other *cluster.DB
 func (p *PostgresKeeper) isDifferentTimelineBranch(
 	followedDB *cluster.DB,
 	pgState *cluster.PostgresState,
 ) bool {
-	if followedDB.Status.TimelineID < pgState.TimelineID {
+	res := cluster.DetectTimelineBranchDivergence(
+		followedDB.Status.TimelineID,
+		followedDB.Status.TimelinesHistory,
+		followedDB.Status.XLogPos,
+		pgState.TimelineID,
+		pgState.TimelinesHistory,
+		pgState.XLogPos,
+	)
+	if !res.Different {
+		return false
+	}
+
+	switch res.Reason {
+	case cluster.TimelineDivergenceFollowedTimelineOlder:
 		p.baseLog().Info().
 			Interface("followedTimeline", followedDB.Status.TimelineID).
 			Interface("timeline", pgState.TimelineID).
 			Msg("followed instance timeline < than our timeline")
-		return true
-	}
-
-	// if the timelines are the same check that also the switchpoints are the same.
-	if followedDB.Status.TimelineID == pgState.TimelineID {
-		if pgState.TimelineID <= 1 {
-			// if timeline <= 1 then no timeline history file exists.
-			return false
-		}
-		ftlh := followedDB.Status.TimelinesHistory.GetTimelineHistory(
-			pgState.TimelineID - 1,
-		)
-		tlh := pgState.TimelinesHistory.GetTimelineHistory(
-			pgState.TimelineID - 1,
-		)
-		if ftlh == nil || tlh == nil {
-			// No timeline history to check
-			return false
-		}
-		if ftlh.SwitchPoint == tlh.SwitchPoint {
-			return false
-		}
+	case cluster.TimelineDivergenceSameTimelineDifferentSwitchPoint:
 		p.baseLog().Info().
 			Interface("followedTimeline", followedDB.Status.TimelineID).
-			Interface("followedXlogpos", ftlh.SwitchPoint).
+			Interface("followedXlogpos", res.FollowedSwitchPoint).
 			Interface("timeline", pgState.TimelineID).
-			Interface("xlogpos", tlh.SwitchPoint).
+			Interface("xlogpos", res.CurrentSwitchPoint).
 			Msg("followed instance timeline forked at a different xlog pos than our timeline")
-		return true
+	case cluster.TimelineDivergenceFollowedForkedBeforeCurrentPosition:
+		p.baseLog().Info().
+			Interface("followedTimeline", followedDB.Status.TimelineID).
+			Interface("followedXlogpos", res.FollowedSwitchPoint).
+			Interface("timeline", pgState.TimelineID).
+			Interface("xlogpos", res.CurrentSwitchPoint).
+			Msg("followed instance timeline forked before our current state")
 	}
-
-	// followedDB.Status.TimelineID > pgState.TimelineID
-	ftlh := followedDB.Status.TimelinesHistory.GetTimelineHistory(
-		pgState.TimelineID,
-	)
-	if ftlh != nil {
-		if ftlh.SwitchPoint < pgState.XLogPos {
-			p.baseLog().Info().
-				Interface("followedTimeline", followedDB.Status.TimelineID).
-				Interface("followedXlogpos", ftlh.SwitchPoint).
-				Interface("timeline", pgState.TimelineID).
-				Interface("xlogpos", pgState.XLogPos).
-				Msg("followed instance timeline forked before our current state")
-			return true
-		}
-	}
-	return false
+	return true
 }
 
 func (p *PostgresKeeper) updateReplSlots(

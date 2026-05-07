@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG GO_VERSION=1.26
+ARG GO_VERSION=1.26.3
 FROM docker.io/library/golang:$GO_VERSION-bookworm
 
 ARG PG_MAJOR=18

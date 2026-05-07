@@ -650,3 +650,17 @@ func WalFileNameNoTimeLine(name string) (string, error) {
 	}
 	return name[8:24], nil
 }
+
+// IsRequiredWalAvailable reports whether requiredXLogPos is still available on
+// a source that advertises oldestWalFile.
+func IsRequiredWalAvailable(requiredXLogPos uint64, oldestWalFile string, walSegSize uint32) (bool, error) {
+	if oldestWalFile == "" {
+		return true, nil
+	}
+	older, err := WalFileNameNoTimeLine(oldestWalFile)
+	if err != nil {
+		return false, err
+	}
+	required := XlogPosToWalFileNameNoTimeline(requiredXLogPos, walSegSize)
+	return required >= older, nil
+}

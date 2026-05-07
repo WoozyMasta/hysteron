@@ -1156,10 +1156,8 @@ func testTimelineFork(t *testing.T, syncRepl, usePgrewind bool) {
 	// will stop, full resync and start. We have to avoid detecting it up
 	// at the first start. Do this waiting for the number of expected lines.
 
-	// TODO(sgotti) sometimes, when using pg_rewind, the rewinded standby needs wals
-	// not available anymore on the source master, until we implement better way to
-	// detect missing wals we have to just wait for the start timeout (60s) and
-	// then a full resync should be executed.
+	// In pg_rewind paths the standby may still need a full resync when startup
+	// cannot complete from available WAL history on the source master.
 	if err := waitLines(t, standbys[1], 3, 120*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}

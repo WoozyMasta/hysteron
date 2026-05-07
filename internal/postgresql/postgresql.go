@@ -755,10 +755,8 @@ func (p *Manager) PGDataVersion() (int, int, error) {
 // IsInitialized reports whether the data directory is initialized.
 func (p *Manager) IsInitialized() (bool, error) {
 	// List of required files or directories relative to postgres data dir
-	// From https://www.postgresql.org/docs/9.4/static/storage-file-layout.html
-	// with some additions.
-	// TODO(sgotti) when the code to get the current db version is in place
-	// also add additinal files introduced by releases after 9.4.
+	// based on PostgreSQL storage layout, with additions used by Hysteron.
+	// Keep this list aligned with currently supported PostgreSQL majors.
 	exists, err := fileExists(filepath.Join(p.dataDir, "PG_VERSION"))
 	if err != nil {
 		return false, err

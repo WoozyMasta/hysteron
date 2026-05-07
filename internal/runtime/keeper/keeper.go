@@ -1831,17 +1831,35 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 				tryPgrewind = false
 			}
 
+			if tryPgrewind {
+				walAvailable, walErr := pg.IsRequiredWalAvailable(
+					db.Status.XLogPos,
+					masterDB.Status.OlderWalFile,
+					pg.WalSegSize,
+				)
+				if walErr != nil {
+					p.baseLog().Warn().
+						Err(walErr).
+						Str("older_master_wal", masterDB.Status.OlderWalFile).
+						Msg("cannot verify required WAL availability for pg_rewind path")
+				} else if !walAvailable {
+					requiredWal := pg.XlogPosToWalFileNameNoTimeline(db.Status.XLogPos, pg.WalSegSize)
+					olderWal, _ := pg.WalFileNameNoTimeLine(masterDB.Status.OlderWalFile)
+					p.baseLog().Info().
+						Str("required_wal", requiredWal).
+						Str("older_master_wal", olderWal).
+						Msg("pg_rewind disabled because required WAL is no longer available on master")
+					tryPgrewind = false
+				}
+			}
+
 			// pg_rewind can leave a node on a diverged branch in edge cases.
 			// Verify branch alignment after rewind and force full resync when
 			// divergence is still detected.
 
-			// TODO(sgotti) The rewinded standby needs wal from the master
-			// starting from the common ancestor, if they aren't available the
-			// instance will keep waiting for them, now we assume that if the
-			// instance isn't ready after the start timeout, it's waiting for
-			// wals and we'll force a full resync.
-			// We have to find a better way to detect if a standby is waiting
-			// for unavailable wals.
+			// A rewinded standby needs WAL from the master starting from the
+			// common ancestor. If those WAL files are unavailable or startup
+			// still stalls, fall back to full resync with pg_basebackup.
 			if err = p.resync(db, masterDB, followedDB, tryPgrewind); err != nil {
 				p.baseLog().
 					Error().

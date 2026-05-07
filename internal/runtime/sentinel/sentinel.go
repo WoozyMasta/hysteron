@@ -728,8 +728,15 @@ func (s *Sentinel) dbCanSync(
 			"xlog pos isn't advancing on standby, checking if the master " +
 				"has the required wals",
 		)
-	// compare the required wal file with the older wal file name ignoring the timelineID
-	if required >= older {
+	walAvailable, walErr := pg.IsRequiredWalAvailable(
+		db.Status.XLogPos,
+		masterDB.Status.OlderWalFile,
+		pg.WalSegSize,
+	)
+	if walErr != nil {
+		return false, walErr
+	}
+	if walAvailable {
 		return true, nil
 	}
 

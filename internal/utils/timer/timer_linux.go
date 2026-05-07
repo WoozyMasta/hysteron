@@ -27,9 +27,8 @@ const (
 	CLOCK_MONOTONIC = 1
 )
 
-// TODO(sgotti) for the moment just use a syscall so it'll work on all linux
-// architectures. It's slower than using a vdso but we don't have such performance
-// needs. Let's wait for a stdlib native monotonic clock.
+// Use a syscall so this works consistently across Linux architectures.
+// This can be slower than vDSO, but this call is not performance-critical.
 func Now() int64 {
 	var ts syscall.Timespec
 	_, _, _ = syscall.Syscall(syscall.SYS_CLOCK_GETTIME, CLOCK_MONOTONIC, uintptr(unsafe.Pointer(&ts)), 0)

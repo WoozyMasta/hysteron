@@ -846,32 +846,6 @@ func (tk *TestKeeper) waitPostgresConfParam(parameter, value string, timeout tim
 	return fmt.Errorf("timeout waiting for %s in %s", expected, path)
 }
 
-/*
-// currently unused, keep for future needs
-
-type CheckFunc func(time.Duration) error
-
-func waitChecks(timeout time.Duration, fns ...CheckFunc) error {
-	end := make(chan error)
-	fnc := len(fns)
-	for _, fn := range fns {
-		go func(fn CheckFunc, end chan error) {
-			end <- fn(timeout)
-		}(fn, end)
-	}
-
-	c := 0
-	for c < fnc {
-		err := <-end
-		if err != nil {
-			return err
-		}
-		c++
-	}
-	return nil
-}
-*/
-
 type TestSentinel struct {
 	t *testing.T
 	Process

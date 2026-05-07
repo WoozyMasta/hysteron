@@ -32,14 +32,14 @@ done
 
 popd
 
-KUBERUN="kubectl run --quiet -i -t stolonctl --image=stolon:master-pg11 --restart=Never --rm --"
+KUBERUN="kubectl run --quiet -i -t stolon --image=stolon:master-pg11 --restart=Never --rm --"
 
-$KUBERUN /usr/local/bin/stolonctl --cluster-name=kube-stolon --store-backend=kubernetes --kube-resource-kind=configmap init -y
+$KUBERUN /usr/local/bin/stolon cluster --cluster-name=kube-stolon --store-backend=kubernetes --k8s-resource-kind=configmap initialize -y
 
 OK=false
 COUNT=0
 while [ $COUNT -lt 120 ]; do
-	OUT=$($KUBERUN /usr/local/bin/stolonctl --cluster-name kube-stolon --store-backend kubernetes --kube-resource-kind configmap clusterdata read | jq .cluster.status.phase)
+	OUT=$($KUBERUN /usr/local/bin/stolon cluster --cluster-name kube-stolon --store-backend kubernetes --k8s-resource-kind configmap data read --format json | jq .cluster.status.phase)
 	if [ "$OUT" == '"normal"' ]; then
 		OK=true
 		break
@@ -51,8 +51,8 @@ done
 
 # report some debug output
 kubectl get all
-$KUBERUN /usr/local/bin/stolonctl --cluster-name kube-stolon --store-backend kubernetes --kube-resource-kind configmap status
-$KUBERUN /usr/local/bin/stolonctl --cluster-name kube-stolon --store-backend kubernetes --kube-resource-kind configmap clusterdata read | jq .
+$KUBERUN /usr/local/bin/stolon cluster --cluster-name kube-stolon --store-backend kubernetes --k8s-resource-kind configmap status --format json
+$KUBERUN /usr/local/bin/stolon cluster --cluster-name kube-stolon --store-backend kubernetes --k8s-resource-kind configmap data read --format json | jq .
 
 if [ "$OK" != "true" ]; then
 	echo "stolon cluster not correctly setup"

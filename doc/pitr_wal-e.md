@@ -15,7 +15,7 @@ Take the base backups using the `wal-e backup-push` command.
 For doing this you should set at least the `archive_mode` and the `archive_command` pgParameters in the cluster spec. Wal-e will be used as the archive command:
 
 ```
-stolonctl update --patch '{ "pgParameters" : { "archive_mode": "on", "archive_command": "envdir /etc/wal-e.d/env wal-e wal-push %p" } }'
+stolon cluster update --patch '{ "pgParameters" : { "archive_mode": "on", "archive_command": "envdir /etc/wal-e.d/env wal-e wal-push %p" } }'
 ```
 
 
@@ -27,6 +27,7 @@ Note: looks like wal-e doesn't backups various config files like `postgresql.con
 * if you don't want to backup/restore it than you can just set all the `pgParameters` inside the [cluster specification](cluster_spec.md)
 
 ```
-stolonctl init '{ "initMode": "pitr", "pitrConfig": { "dataRestoreCommand": "envdir /etc/wal-e.d/env wal-e backup-fetch %d LATEST" , "archiveRecoverySettings": { "restoreCommand": "envdir /etc/wal-e.d/env wal-e wal-fetch \"%f\" \"%p\"" } } }'
+stolon cluster initialize '{ "initMode": "pitr", "pitrConfig": { "dataRestoreCommand": "envdir /etc/wal-e.d/env wal-e backup-fetch %d LATEST" , "archiveRecoverySettings": { "restoreCommand": "envdir /etc/wal-e.d/env wal-e wal-fetch \"%f\" \"%p\"" } } }'
 ```
+
 

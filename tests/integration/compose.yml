@@ -28,6 +28,7 @@ services:
       INTEGRATION_RUN: ${INTEGRATION_RUN:-}
       INTEGRATION_STORE_BACKEND: etcdv3
       INTEGRATION_TEST_ARGS: ${INTEGRATION_TEST_ARGS:-}
+      INTEGRATION_MAX_STORES: ${INTEGRATION_MAX_STORES:-8}
       OUTPUT_DIR: /tmp/stolon-build
     user: postgres
     volumes:

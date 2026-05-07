@@ -4,23 +4,29 @@ These are the steps to setup and test a simple cluster.
 
 This example assumes a running etcd 3.x server on localhost. We'll use the etcd v3 api to store stolon data inside etcd.
 
-Note: under ubuntu the `initdb` command is not provided in the path. You should updated the exported `PATH` env variable or provide the `--pg-bin-path` command line option to the `stolon-keeper` command.
+Note: under ubuntu the `initdb` command is not provided in the path. You
+should update the exported `PATH` env variable or provide the
+`--pg-bin-path` runtime option to `stolon keeper`.
 
 ### Initialize the cluster
 
 The first step is to initialize a cluster with a cluster specification. For now we'll just initialize a cluster without providing a cluster specification but using a default one that will just start with an empty database cluster.
 
 ```
-./bin/stolonctl --cluster-name stolon-cluster --store-backend=etcdv3 init
+./bin/stolon cluster --cluster-name stolon-cluster --store-backend=etcdv3 \
+  --store-endpoints=http://127.0.0.1:2379 initialize
 ```
 
-If you want to automate this step you can just pass an initial cluster specification to the sentinels with the `--initial-cluster-spec` option.
+If you want to automate this step you can pass an initial cluster
+specification to `stolon sentinel` using runtime passthrough options after
+`--`, for example `stolon sentinel etcd ... -- --initial-cluster-spec spec.json`.
 
 ### Start a sentinel
 
 The sentinel will become the sentinels leader for the cluster named `stolon-cluster`.
 ```
-./bin/stolon-sentinel --cluster-name stolon-cluster --store-backend=etcdv3
+./bin/stolon sentinel etcd --cluster-name stolon-cluster \
+  --etcd-endpoints http://127.0.0.1:2379
 ```
 
 ```
@@ -32,7 +38,11 @@ sentinel leadership acquired
 ### Launch first keeper
 
 ```
-./bin/stolon-keeper --cluster-name stolon-cluster --store-backend=etcdv3 --uid postgres0 --data-dir data/postgres0 --pg-su-password=supassword --pg-repl-username=repluser --pg-repl-password=replpassword --pg-listen-address=127.0.0.1
+./bin/stolon keeper etcd --cluster-name stolon-cluster \
+  --etcd-endpoints http://127.0.0.1:2379 -- \
+  --uid postgres0 --data-dir data/postgres0 \
+  --pg-su-password=supassword --pg-repl-username=repluser \
+  --pg-repl-password=replpassword --pg-listen-address=127.0.0.1
 ```
 
 This will start a stolon keeper with id `postgres0` listening by default on localhost:5431, it will setup and initialize a postgres instance inside `data/postgres0/postgres/`
@@ -78,7 +88,8 @@ db initialized db=2a87ea79 keeper=postgres0
 Now we can start the proxy
 
 ```
-./bin/stolon-proxy --cluster-name stolon-cluster --store-backend=etcdv3 --port 25432
+./bin/stolon proxy etcd --cluster-name stolon-cluster \
+  --etcd-endpoints http://127.0.0.1:2379 -- --port 25432
 ```
 
 ```
@@ -119,7 +130,12 @@ postgres=# select * from test;
 ### Start another keeper:
 
 ```
-./bin/stolon-keeper --cluster-name stolon-cluster --store-backend=etcdv3 --uid postgres1 --data-dir data/postgres1 --pg-su-password=supassword --pg-repl-username=repluser --pg-repl-password=replpassword --pg-listen-address=127.0.0.1 --pg-port 5435
+./bin/stolon keeper etcd --cluster-name stolon-cluster \
+  --etcd-endpoints http://127.0.0.1:2379 -- \
+  --uid postgres1 --data-dir data/postgres1 \
+  --pg-su-password=supassword --pg-repl-username=repluser \
+  --pg-repl-password=replpassword --pg-listen-address=127.0.0.1 \
+  --pg-port 5435
 ```
 
 This instance will start replicating from the master (postgres0)
@@ -177,3 +193,4 @@ postgres=# select * from test;
 ```
 
 If you start the `postgres0` keeper it'll read the new cluster view and make the old master become a standby of the new master.
+

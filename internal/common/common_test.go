@@ -21,7 +21,8 @@ import (
 	"testing"
 
 	"github.com/sorintlab/stolon/internal/common"
-	"github.com/sorintlab/stolon/internal/util"
+	"github.com/sorintlab/stolon/internal/utils/fs"
+	slicesutil "github.com/sorintlab/stolon/internal/utils/slices"
 )
 
 func TestDiffReturnsChangedParams(t *testing.T) {
@@ -41,7 +42,7 @@ func TestDiffReturnsChangedParams(t *testing.T) {
 
 	diff := curParams.Diff(newParams)
 
-	if !util.CompareStringSliceNoOrder(expectedDiff, diff) {
+	if !slicesutil.CompareStringSliceNoOrder(expectedDiff, diff) {
 		t.Errorf("Expected diff is %v, but got %v", expectedDiff, diff)
 	}
 }
@@ -49,7 +50,7 @@ func TestDiffReturnsChangedParams(t *testing.T) {
 func TestWriteFileAtomicWithAbsolutePath(t *testing.T) {
 	filename := filepath.Join(t.TempDir(), "postgresql.conf")
 
-	if err := common.WriteFileAtomic(filename, 0600, []byte("port = '5432'\n")); err != nil {
+	if err := fs.WriteFileAtomic(filename, 0600, []byte("port = '5432'\n")); err != nil {
 		t.Fatalf("WriteFileAtomic failed: %v", err)
 	}
 

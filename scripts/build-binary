@@ -40,7 +40,7 @@ function package {
 
 	mkdir ${target}/bin
 
-	for bin in stolon-keeper stolon-sentinel stolon-proxy stolonctl; do
+	for bin in stolon; do
 		cp ${srcdir}/${bin} ${target}/bin
 	done
 

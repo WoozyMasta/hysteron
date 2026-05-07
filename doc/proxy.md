@@ -1,6 +1,6 @@
 # Stolon Proxy
 
-`stolon-proxy` routes PostgreSQL client connections to the current cluster
+`stolon proxy` routes PostgreSQL client connections to the current cluster
 topology discovered from the store.
 
 The proxy can expose a writable listener, a read-only listener, or both. The
@@ -12,18 +12,21 @@ read-only listener; it does not disable the writable listener. Use
 `--disable-writable-listener` when a proxy process should serve read-only
 traffic only.
 
-For the full flag reference, see
-[stolon-proxy command reference](commands/stolon-proxy.md).
+In the unified CLI, proxy daemon options are passed after `--` so they are
+forwarded to the runtime component parser.
+
+For the full command reference, see
+[stolon command reference](commands/stolon.md).
 
 ## Writable Proxy
 
 The writable listener is the default mode.
 
 ```sh
-stolon-proxy \
+stolon proxy etcd \
+  --etcd-endpoints http://127.0.0.1:2379 \
+  -- \
   --cluster-name cluster1 \
-  --store-backend etcdv3 \
-  --store-endpoints http://127.0.0.1:2379 \
   --listen-address 0.0.0.0 \
   --port 5432
 ```
@@ -39,10 +42,10 @@ The read-only listener is enabled by setting a read-only listen address or port.
 This keeps the default writable listener enabled.
 
 ```sh
-stolon-proxy \
+stolon proxy etcd \
+  --etcd-endpoints http://127.0.0.1:2379 \
+  -- \
   --cluster-name cluster1 \
-  --store-backend etcdv3 \
-  --store-endpoints http://127.0.0.1:2379 \
   --read-only-listen-address 0.0.0.0 \
   --read-only-port 5433
 ```
@@ -72,10 +75,10 @@ Specify writable flags explicitly when the writable listener should use a
 non-default address or port:
 
 ```sh
-stolon-proxy \
+stolon proxy etcd \
+  --etcd-endpoints http://127.0.0.1:2379 \
+  -- \
   --cluster-name cluster1 \
-  --store-backend etcdv3 \
-  --store-endpoints http://127.0.0.1:2379 \
   --listen-address 0.0.0.0 \
   --port 15432 \
   --read-only-listen-address 0.0.0.0 \
@@ -91,10 +94,10 @@ Disable the writable listener when a process should only serve read-only
 traffic.
 
 ```sh
-stolon-proxy \
+stolon proxy etcd \
+  --etcd-endpoints http://127.0.0.1:2379 \
+  -- \
   --cluster-name cluster1 \
-  --store-backend etcdv3 \
-  --store-endpoints http://127.0.0.1:2379 \
   --disable-writable-listener \
   --read-only-listen-address 0.0.0.0 \
   --read-only-port 5433
@@ -117,10 +120,10 @@ Disable fallback when applications must never send read-only traffic to the
 primary:
 
 ```sh
-stolon-proxy \
+stolon proxy etcd \
+  --etcd-endpoints http://127.0.0.1:2379 \
+  -- \
   --cluster-name cluster1 \
-  --store-backend etcdv3 \
-  --store-endpoints http://127.0.0.1:2379 \
   --disable-writable-listener \
   --read-only-listen-address 0.0.0.0 \
   --read-only-port 5433 \
@@ -137,10 +140,10 @@ Use `--read-only-include-primary` to include the current primary in the
 read-only destination pool even when eligible standbys exist.
 
 ```sh
-stolon-proxy \
+stolon proxy etcd \
+  --etcd-endpoints http://127.0.0.1:2379 \
+  -- \
   --cluster-name cluster1 \
-  --store-backend etcdv3 \
-  --store-endpoints http://127.0.0.1:2379 \
   --listen-address 0.0.0.0 \
   --port 5432 \
   --read-only-listen-address 0.0.0.0 \

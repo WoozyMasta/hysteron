@@ -1442,7 +1442,7 @@ func TestLoweredMaxStandbysPerSender(t *testing.T) {
 	}
 
 	// Set MaxStandbysPerSender to 1
-	err = StolonCtl(t, clusterName, tstore.storeBackend, storeEndpoints, "update", "--patch", `{ "maxStandbysPerSender" : 1 }`)
+	err = StolonCluster(t, clusterName, tstore.storeBackend, storeEndpoints, "update", "--patch", `{ "maxStandbysPerSender" : 1 }`)
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -1562,7 +1562,7 @@ func TestKeeperRemoval(t *testing.T) {
 	}
 }
 
-func testKeeperRemovalStolonCtl(t *testing.T, syncRepl bool) {
+func testKeeperRemovalStolonCluster(t *testing.T, syncRepl bool) {
 	dir, err := os.MkdirTemp("", "stolon")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
@@ -1635,7 +1635,16 @@ func testKeeperRemovalStolonCtl(t *testing.T, syncRepl bool) {
 	}
 
 	// remove master from the cluster data, must fail
-	err = StolonCtl(t, clusterName, tstore.storeBackend, storeEndpoints, "removekeeper", master.uid)
+	err = StolonCluster(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		"keeper",
+		"remove",
+		"--keeper-uid",
+		master.uid,
+	)
 	if err == nil {
 		t.Fatalf("expected err")
 	}
@@ -1645,7 +1654,16 @@ func testKeeperRemovalStolonCtl(t *testing.T, syncRepl bool) {
 	standbys[0].Stop()
 
 	// remove standby[0] from the cluster data
-	err = StolonCtl(t, clusterName, tstore.storeBackend, storeEndpoints, "removekeeper", standbys[0].uid)
+	err = StolonCluster(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		"keeper",
+		"remove",
+		"--keeper-uid",
+		standbys[0].uid,
+	)
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -1676,14 +1694,14 @@ func testKeeperRemovalStolonCtl(t *testing.T, syncRepl bool) {
 	}
 }
 
-func TestKeeperRemovalStolonCtl(t *testing.T) {
+func TestKeeperRemovalStolonCluster(t *testing.T) {
 	t.Parallel()
-	testKeeperRemovalStolonCtl(t, false)
+	testKeeperRemovalStolonCluster(t, false)
 }
 
-func TestKeeperRemovalStolonCtlSyncRepl(t *testing.T) {
+func TestKeeperRemovalStolonClusterSyncRepl(t *testing.T) {
 	t.Parallel()
-	testKeeperRemovalStolonCtl(t, true)
+	testKeeperRemovalStolonCluster(t, true)
 }
 
 func TestStandbyCantSync(t *testing.T) {
@@ -1964,7 +1982,15 @@ func testForceFail(t *testing.T, syncRepl bool, standbyCluster bool) {
 	}
 
 	// mark master as failed
-	err = StolonCtl(t, clusterName, tstore.storeBackend, storeEndpoints, "failkeeper", master.uid)
+	err = StolonFailover(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		"keeper",
+		"--keeper-uid",
+		master.uid,
+	)
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}

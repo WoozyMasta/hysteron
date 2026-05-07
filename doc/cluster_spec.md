@@ -3,9 +3,9 @@
 Stolon has a declarative model where you specify the desired cluster state, this is called cluster specification and it's saved inside the cluster data in the store.
 
 A cluster needs to be initialized providing a cluster specification.
-This can be achieved using `stolonctl init`.
+This can be achieved using `stolon cluster initialize`.
 
-A cluster specification is updatable using `stolonctl update`.
+A cluster specification is updatable using `stolon cluster update`.
 
 Some options in a running cluster specification can be changed to update the desired state. Sometimes a cluster state can be updated only in some directions, this means that some options cannot be updated on a running cluster but will require a new cluster initialization.
 
@@ -114,26 +114,26 @@ Currently the specification must be provided in json format.
 ### Cluster Specification patching
 
 ``` bash
-stolonctl --cluster-name=mycluster update --patch '{ "synchronousReplication" : true }'
+stolon cluster --cluster-name=mycluster update --patch '{ "synchronousReplication" : true }'
 ```
 
 You can also pass the cluster specification or a patch as a file using the `-f` option:
 
 ``` bash
-stolonctl --cluster-name=mycluster update --patch -f spec.json
+stolon cluster --cluster-name=mycluster update --patch -f spec.json
 ```
 
 Using `-` as the file name means stdin:
 
 ``` bash
-echo '{ "synchronousReplication" : true }' | stolonctl --cluster-name=mycluster update --patch -f -
+echo '{ "synchronousReplication" : true }' | stolon cluster --cluster-name=mycluster update --patch -f -
 ```
 
 ### Cluster Specification replace
 
 This command will replace the whole cluster specification. The unspecificed options will be populated with their defaults.
 ``` bash
-stolonctl --cluster-name=mycluster update '{ "requestTimeout": "10s", "sleepInterval": "10s" }'
+stolon cluster --cluster-name=mycluster update '{ "requestTimeout": "10s", "sleepInterval": "10s" }'
 ```
 
 ## Examples
@@ -143,7 +143,7 @@ stolonctl --cluster-name=mycluster update '{ "requestTimeout": "10s", "sleepInte
 You can patch the cluster specification providing postgres parameters. For example, if you want to set `log_min_duration_statement = 1s` you can do:
 
 ``` bash
-stolonctl --cluster-name=mycluster update --patch '{ "pgParameters" : {"log_min_duration_statement" : "1s" } }'
+stolon cluster --cluster-name=mycluster update --patch '{ "pgParameters" : {"log_min_duration_statement" : "1s" } }'
 ```
 
 ### Remove some postgres parameters
@@ -151,7 +151,7 @@ stolonctl --cluster-name=mycluster update --patch '{ "pgParameters" : {"log_min_
 To remove a postgres parameter just patch the cluster spec setting the parameter's value to `null`:
 
 ``` bash
-stolonctl --cluster-name=mycluster update --patch '{ "pgParameters" : {"log_min_duration_statement" : null } }'
+stolon cluster --cluster-name=mycluster update --patch '{ "pgParameters" : {"log_min_duration_statement" : null } }'
 ```
 
 ### Remove all the postgres parameters
@@ -159,5 +159,6 @@ stolonctl --cluster-name=mycluster update --patch '{ "pgParameters" : {"log_min_
 To remove all the postgres parameters just patch the cluster spec setting `pgParameters` value to `null`:
 
 ``` bash
-stolonctl --cluster-name=mycluster update --patch '{ "pgParameters" : null }'
+stolon cluster --cluster-name=mycluster update --patch '{ "pgParameters" : null }'
 ```
+

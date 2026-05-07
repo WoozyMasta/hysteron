@@ -34,8 +34,8 @@ The provided example uses `sorintlab/stolon:master-pg10`
 This example has some predefined values that you'd like to change:
 
 * The cluster name is `stolon-cluster`. It's set in the component `--cluster-name` option. The labels and the `--cluster-name` option must be in sync.
-* It uses the etcdv3 backend. You can also use Kubernetes by setting the
-  `ST${COMPONENT}_STORE_*` environment variables (see the
+* It uses the etcd v3 backend. You can also use Kubernetes by selecting the
+  backend and options on the unified `stolon` command (see the
   [commands invocation documentation](/doc/commands_invocation.md)).
 
 ### Initialize the swarm
@@ -87,10 +87,10 @@ pbjr4k9285iy        etcd_etcd-00        replicated          1/1                 
 
 All the stolon components wait for an existing clusterdata entry in the store. So the first time you have to initialize a new cluster. For more details see the [cluster initialization doc](/doc/initialization.md). You can do this step at every moment, now or after having started the stolon components.
 
-You can execute stolonctl from a machine that can access the store backend:
+You can initialize the cluster from a machine that can access the store backend:
 
 ```
-stolonctl --cluster-name=stolon-cluster --store-backend=etcdv3 --store-endpoints http://localhost:2379 init
+stolon cluster --cluster-name=stolon-cluster --store-backend=etcdv3 --store-endpoints http://localhost:2379 initialize
 ```
 
 ### Create sentinel(s), keepers and proxy(ies)

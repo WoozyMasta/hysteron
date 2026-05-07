@@ -95,10 +95,7 @@ if [ -n "$INTEGRATION" ]; then
 		echo "STOLON_TEST_STORE_BACKEND env var needs to be defined (etcdv3)"
 		exit 1
 	fi
-	export STKEEPER_BIN=${BINDIR}/stolon-keeper
-	export STSENTINEL_BIN=${BINDIR}/stolon-sentinel
-	export STPROXY_BIN=${BINDIR}/stolon-proxy
-	export STCTL_BIN=${BINDIR}/stolonctl
+	export STOLON_BIN=${BINDIR}/stolon
 	if [ "${STOLON_TEST_STORE_BACKEND}" == "etcdv3" ]; then
 		if [ -z ${ETCD_BIN} ]; then
 			if [ -z $(which etcd) ]; then

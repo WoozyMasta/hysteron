@@ -126,4 +126,4 @@ bench_*.txt
 *.pprof
 .rumdl_cache
 build/
-tmp/
+artifacts/

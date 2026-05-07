@@ -16,7 +16,7 @@ Take the base backups using the `wal-g backup-push` command.
 For doing this you should set at least the `archive_mode` and the `archive_command` pgParameters in the cluster spec. Wal-g will be used as the archive command:
 
 ```
-stolonctl update --patch '{ "pgParameters" : { "archive_mode": "on", "archive_command": "envdir /etc/wal-g.d/env wal-g wal-push %p" } }'
+stolon cluster update --patch '{ "pgParameters" : { "archive_mode": "on", "archive_command": "envdir /etc/wal-g.d/env wal-g wal-push %p" } }'
 ```
 
 
@@ -28,6 +28,7 @@ Note: looks like wal-g doesn't backups various config files like `postgresql.con
 * if you don't want to backup/restore it than you can just set all the `pgParameters` inside the [cluster specification](cluster_spec.md)
 
 ```
-stolonctl init '{ "initMode": "pitr", "pitrConfig": { "dataRestoreCommand": "envdir /etc/wal-g.d/env wal-g backup-fetch %d LATEST" , "archiveRecoverySettings": { "restoreCommand": "envdir /etc/wal-g.d/env wal-g wal-fetch \"%f\" \"%p\"" } } }'
+stolon cluster initialize '{ "initMode": "pitr", "pitrConfig": { "dataRestoreCommand": "envdir /etc/wal-g.d/env wal-g backup-fetch %d LATEST" , "archiveRecoverySettings": { "restoreCommand": "envdir /etc/wal-g.d/env wal-g wal-fetch \"%f\" \"%p\"" } } }'
 ```
+
 

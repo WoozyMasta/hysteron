@@ -24,14 +24,16 @@ DOC_COMMANDS_DIR ?= doc/commands
 
 INTEGRATION_TAGS          ?= integration
 INTEGRATION_TIMEOUT       ?= 20m
-INTEGRATION_PARALLEL      ?= 4
+INTEGRATION_PARALLEL      ?= 16
+INTEGRATION_MAX_STORES    ?= 8
 INTEGRATION_RUN           ?=
 INTEGRATION_TEST_ARGS     ?=
 INTEGRATION_STORE_BACKEND ?= etcdv3
 ETCD_BIN                  ?= etcd
 INTEGRATION_RUN_ARG       := $(if $(INTEGRATION_RUN),-run '$(INTEGRATION_RUN)',)
 
-BINARIES   := stolon-keeper stolon-sentinel stolon-proxy stolonctl
+BINARY     ?= stolon
+PKG        ?= ./cmd/stolon
 OUTPUT_DIR ?= build
 OUTPUT_ABS_DIR := $(abspath $(OUTPUT_DIR))
 
@@ -74,40 +76,22 @@ clean:
 
 build: clean
 	@mkdir -p $(OUTPUT_DIR)
-	@for binary in $(BINARIES); do \
-		case "$$binary" in \
-			stolon-keeper) pkg="./cmd/keeper" ;; \
-			stolon-sentinel) pkg="./cmd/sentinel" ;; \
-			stolon-proxy) pkg="./cmd/proxy" ;; \
-			stolonctl) pkg="./cmd/stolonctl" ;; \
-			*) echo "unknown binary $$binary" >&2; exit 1 ;; \
-		esac; \
-		out="$(OUTPUT_DIR)/$$binary$(NATIVE_EXTENSION)"; \
-		echo ">> building $$out"; \
-		GOOS=$(NATIVE_GOOS) GOARCH=$(NATIVE_GOARCH) \
-		GOWORK=$(GOWORK) CGO_ENABLED=$(CGO_ENABLED) \
-		$(GO) build $(GOFLAGS) -ldflags="$(LDFLAGS) $(LDFLAGS_X)" \
-			-tags "$(GOFTAGS)" $(EXTRA_BUILD_FLAGS) -o "$$out" "$$pkg"; \
-	done
+	@out="$(OUTPUT_DIR)/$(BINARY)$(NATIVE_EXTENSION)"; \
+	echo ">> building $$out"; \
+	GOOS=$(NATIVE_GOOS) GOARCH=$(NATIVE_GOARCH) \
+	GOWORK=$(GOWORK) CGO_ENABLED=$(CGO_ENABLED) \
+	$(GO) build $(GOFLAGS) -ldflags="$(LDFLAGS) $(LDFLAGS_X)" \
+		-tags "$(GOFTAGS)" $(EXTRA_BUILD_FLAGS) -o "$$out" "$(PKG)"
 	@if [ "$(DOC_BUILD)" = "1" ]; then \
 		$(MAKE) cli-docs; \
 	fi
 
 cli-docs:
 	@mkdir -p $(DOC_COMMANDS_DIR)
-	@for binary in $(BINARIES); do \
-		case "$$binary" in \
-			stolon-keeper) doc="stolon-keeper.md" ;; \
-			stolon-sentinel) doc="stolon-sentinel.md" ;; \
-			stolon-proxy) doc="stolon-proxy.md" ;; \
-			stolonctl) doc="stolonctl.md" ;; \
-			*) echo "unknown binary $$binary" >&2; exit 1 ;; \
-		esac; \
-		bin="$(OUTPUT_DIR)/$$binary$(NATIVE_EXTENSION)"; \
-		out="$(DOC_COMMANDS_DIR)/$$doc"; \
-		echo ">> generating $$out"; \
-		"$$bin" docs md --style "$(DOC_RENDER_STYLE)" "$$out"; \
-	done
+	@bin="$(OUTPUT_DIR)/$(BINARY)$(NATIVE_EXTENSION)"; \
+	out="$(DOC_COMMANDS_DIR)/stolon.md"; \
+	echo ">> generating $$out"; \
+	"$$bin" docs md --style "$(DOC_RENDER_STYLE)" "$$out"
 
 release: clean
 	@mkdir -p $(OUTPUT_DIR)
@@ -115,21 +99,12 @@ release: clean
 		goos=$${target%%/*}; \
 		goarch=$${target##*/}; \
 		ext=$$( [ "$$goos" = "windows" ] && echo ".exe" || echo "" ); \
-		for binary in $(BINARIES); do \
-			case "$$binary" in \
-				stolon-keeper) pkg="./cmd/keeper" ;; \
-				stolon-sentinel) pkg="./cmd/sentinel" ;; \
-				stolon-proxy) pkg="./cmd/proxy" ;; \
-				stolonctl) pkg="./cmd/stolonctl" ;; \
-				*) echo "unknown binary $$binary" >&2; exit 1 ;; \
-			esac; \
-			out="$(OUTPUT_DIR)/$$binary-$${goos}-$${goarch}$$ext"; \
-			echo ">> building $$out"; \
-			GOOS=$$goos GOARCH=$$goarch \
-			GOWORK=$(GOWORK) CGO_ENABLED=$(CGO_ENABLED) \
-			$(GO) build $(GOFLAGS) -ldflags="$(LDFLAGS) $(LDFLAGS_X)" \
-				-tags "$(GOFTAGS)" -o "$$out" "$$pkg"; \
-		done; \
+		out="$(OUTPUT_DIR)/$(BINARY)-$${goos}-$${goarch}$$ext"; \
+		echo ">> building $$out"; \
+		GOOS=$$goos GOARCH=$$goarch \
+		GOWORK=$(GOWORK) CGO_ENABLED=$(CGO_ENABLED) \
+		$(GO) build $(GOFLAGS) -ldflags="$(LDFLAGS) $(LDFLAGS_X)" \
+			-tags "$(GOFTAGS)" -o "$$out" "$(PKG)"; \
 	done
 
 verify:
@@ -205,11 +180,9 @@ bench-reset:
 
 integration: build
 	STOLON_TEST_STORE_BACKEND="$(INTEGRATION_STORE_BACKEND)" \
+	STOLON_INTEGRATION_MAX_STORES="$(INTEGRATION_MAX_STORES)" \
 	ETCD_BIN="$(ETCD_BIN)" \
-	STKEEPER_BIN="$(OUTPUT_ABS_DIR)/stolon-keeper$(NATIVE_EXTENSION)" \
-	STSENTINEL_BIN="$(OUTPUT_ABS_DIR)/stolon-sentinel$(NATIVE_EXTENSION)" \
-	STPROXY_BIN="$(OUTPUT_ABS_DIR)/stolon-proxy$(NATIVE_EXTENSION)" \
-	STCTL_BIN="$(OUTPUT_ABS_DIR)/stolonctl$(NATIVE_EXTENSION)" \
+	STOLON_BIN="$(OUTPUT_ABS_DIR)/$(BINARY)$(NATIVE_EXTENSION)" \
 	$(GO) test -tags "$(INTEGRATION_TAGS)" -timeout "$(INTEGRATION_TIMEOUT)" \
 		-parallel "$(INTEGRATION_PARALLEL)" $(INTEGRATION_RUN_ARG) \
 		$(INTEGRATION_TEST_ARGS) \

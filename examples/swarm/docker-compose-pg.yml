@@ -9,7 +9,7 @@ secrets:
 services:
   sentinel:
     image: sorintlab/stolon:master-pg10
-    command: gosu stolon stolon-sentinel --cluster-name stolon-cluster --store-backend=etcdv3 --store-endpoints http://etcd-00:2379,http://etcd-01:2379,http://etcd-02:2379 --log-level debug
+    command: gosu stolon stolon --log-level debug sentinel etcd --cluster-name stolon-cluster --etcd-endpoints http://etcd-00:2379,http://etcd-01:2379,http://etcd-02:2379
     networks:
       - etcd_etcd
       - pgdb
@@ -31,7 +31,7 @@ services:
     secrets:
       - pgsql
       - pgsql_repl
-    command: gosu stolon stolon-keeper --pg-listen-address keeper1 --pg-repl-username replication --uid keeper1 --pg-su-username postgres --pg-su-passwordfile /run/secrets/pgsql --pg-repl-passwordfile /run/secrets/pgsql_repl --data-dir /var/lib/postgresql/data --cluster-name stolon-cluster --store-backend=etcdv3 --store-endpoints http://etcd-00:2379,http://etcd-01:2379,http://etcd-02:2379 --log-level debug
+    command: gosu stolon stolon --log-level debug keeper etcd --cluster-name stolon-cluster --etcd-endpoints http://etcd-00:2379,http://etcd-01:2379,http://etcd-02:2379 -- --pg-listen-address keeper1 --pg-repl-username replication --uid keeper1 --pg-su-username postgres --pg-su-passwordfile /run/secrets/pgsql --pg-repl-passwordfile /run/secrets/pgsql_repl --data-dir /var/lib/postgresql/data
     networks:
       - etcd_etcd
       - pgdb
@@ -49,7 +49,7 @@ services:
       - pgkeeper2:/var/lib/postgresql/data
     secrets:
       - pgsql
-    command: gosu stolon stolon-keeper --pg-listen-address keeper2 --pg-repl-username replication --uid keeper2 --pg-su-username postgres --pg-su-passwordfile /run/secrets/pgsql --pg-repl-passwordfile /run/secrets/pgsql --data-dir /var/lib/postgresql/data --cluster-name stolon-cluster --store-backend=etcdv3 --store-endpoints http://etcd-00:2379,http://etcd-01:2379,http://etcd-02:2379 --log-level debug
+    command: gosu stolon stolon --log-level debug keeper etcd --cluster-name stolon-cluster --etcd-endpoints http://etcd-00:2379,http://etcd-01:2379,http://etcd-02:2379 -- --pg-listen-address keeper2 --pg-repl-username replication --uid keeper2 --pg-su-username postgres --pg-su-passwordfile /run/secrets/pgsql --pg-repl-passwordfile /run/secrets/pgsql --data-dir /var/lib/postgresql/data
     networks:
       - etcd_etcd
       - pgdb
@@ -60,7 +60,7 @@ services:
 
   proxy:
     image: sorintlab/stolon:master-pg10
-    command: gosu stolon stolon-proxy --listen-address 0.0.0.0 --cluster-name stolon-cluster --store-backend=etcdv3 --store-endpoints http://etcd-00:2379,http://etcd-01:2379,http://etcd-02:2379 --log-level info
+    command: gosu stolon stolon --log-level info proxy etcd --cluster-name stolon-cluster --etcd-endpoints http://etcd-00:2379,http://etcd-01:2379,http://etcd-02:2379 -- --listen-address 0.0.0.0
     networks:
       - etcd_etcd
       - pgdb

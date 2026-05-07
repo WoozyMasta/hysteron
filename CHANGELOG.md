@@ -20,6 +20,8 @@ The format is based on [Keep a Changelog][], and this project adheres to
 
 * Improve keeper data directory locking portability
   and allow native Windows builds without CGO.
+* Replace the legacy multi-binary CLI model with one unified `stolon` CLI
+  (`keeper`, `sentinel`, `proxy`, `cluster`, `failover`).
 * Replace the legacy Makefile with loop-based native
   and release builds for all Stolon binaries.
 * Add the first cluster contract and PostgreSQL connection string regression
@@ -42,8 +44,9 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Internalize and modernize the TCP proxy previously provided by
   `github.com/sorintlab/pollon` as `internal/tcpproxy`, removing the old
   `pollon` and `tcpkeepalive` dependencies.
-* Drop the obsolete etcd v2 and Consul backends, remove `stolonctl register`,
-  and migrate the etcd v3 backend to `go.etcd.io/etcd/client/v3` `v3.6.11`.
+* Drop the obsolete etcd v2 and Consul backends, remove the deprecated
+  register management command, and migrate the etcd v3 backend to
+  `go.etcd.io/etcd/client/v3` `v3.6.11`.
 * Update Kubernetes client libraries to `v0.36.0`, raise the Go module
   baseline to Go 1.26, and move Kubernetes sentinel leader election from
   ConfigMap locks to `coordination.k8s.io/Lease` locks.
@@ -56,7 +59,9 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Replace the integration test pseudo-terminal wrapper with a native
   stdout/stderr pipe-based process runner and remove the `gexpect` dependency.
 * Move process-level integration tests behind an explicit `integration` build
-  tag and isolate Unix freeze/resume signals behind platform helpers.
+  tag, isolate Unix freeze/resume signals behind platform helpers, and add
+  package-level integration preflight checks that skip suites cleanly when
+  required env/tool prerequisites are missing.
 * Use `github.com/google/uuid` for project UUID generation and remove the
   direct `github.com/gofrs/uuid` dependency.
 * Add an explicit Docker Compose integration-test runner for PostgreSQL major
@@ -72,15 +77,16 @@ The format is based on [Keep a Changelog][], and this project adheres to
   production code.
 * Apply safe Go modernization for pointer defaults and build tags while leaving
   cluster-data JSON tag changes for a dedicated migration pass.
-* Document the intentional `stolonctl spec` JSON wrapper duplication used to
+* Document the intentional specification JSON wrapper duplication used to
   preserve default and non-default output shapes.
 * Clean up the first low-risk revive findings for unused parameters, blank
   imports, and early-return control flow.
-* Clean up shared command and stolonctl command revive findings, including
+* Clean up shared command and management command revive findings, including
   comments and TLS naming.
 * Allow one sentinel process to run control loops for multiple clusters with
   per-cluster initial spec overrides and per-cluster log and metrics labels.
-* Add `stolonctl ls` to list clusters present in the configured store.
+* Add cluster list command to enumerate clusters present in the configured
+  store.
 * Clean up keeper and sentinel command revive findings with package and exported
   symbol comments.
 * Clean up cluster contract revive findings with documentation comments while
@@ -93,26 +99,27 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Centralize build metadata in the new `internal/buildflags` package and wire
   it through the `flags` built-in `version` command via Makefile `ldflags`.
 * Reorganize CLI options into reflection-based groups (`Store`/`Logging`/
-  `Metrics`/`Kubernetes` for every binary, `PostgreSQL` with nested
+  `Metrics`/`Kubernetes` for runtime command families, `PostgreSQL` with nested
   `Replication User` and `Superuser` sub-groups for the keeper, and
   `Writable Proxy`/`Read-Only Proxy`/`TCP Keep-Alive` for the proxy),
   preserving the public flag and environment names while making help output and
   generated docs easier to navigate.
 * Add convenient short flags for the most common options:
-  `-c/--cluster-name` (all binaries), `-i/--uid` and `-d/--data-dir` (keeper),
+  `-c/--cluster-name` (all runtime command families), `-i/--uid` and
+  `-d/--data-dir` (keeper),
   `-p/--pg-port` (keeper), `-l/--listen-address` and `-p/--port` (proxy), and
   `-f/--initial-cluster-spec` (sentinel).
 * Drop the static `IgnoreExpandPaths` allowlist from `internal/configfile` so
   every string scalar in cluster spec/data documents accepts `${VAR}`
   environment expansion uniformly; use `$${VAR}` to keep a literal `${VAR}`.
-* Define stolonctl subcommands declaratively through `command:` struct tags
+* Define management subcommands declaratively through `command:` struct tags
   on a single root, dropping the previous programmatic
   `parser.AddCommand` plumbing.
 * Replace project logging with zerolog-based structured loggers, add
   command-level logging setup, and remove production-path `panic` calls.
 * Migrate PostgreSQL `database/sql` access from `github.com/lib/pq` to
   `github.com/jackc/pgx/v5/stdlib`.
-* Add an optional read-only `stolon-proxy` listener with standby lag filtering,
+* Add an optional read-only proxy listener with standby lag filtering,
   sync/async replica priority, round-robin standby routing, and explicit primary
   fallback controls.
 * Add `--kube-resource-kind=secret` as a Kubernetes store option that stores
@@ -589,7 +596,7 @@ Thanks to all the contributors!
   ([#28](https://github.com/sorintlab/stolon/pull/28)
   [#64](https://github.com/sorintlab/stolon/pull/64)). In future multiple
   additional functions will be added. See
-  [doc/stolonctl.md](doc/stolonctl.md).
+  [doc/commands/stolon.md](doc/commands/stolon.md).
 * The cluster config is now configurable using stolonctl
   ([#2](https://github.com/sorintlab/stolon/pull/2)). See
   [doc/cluster_spec.md](doc/cluster_spec.md).

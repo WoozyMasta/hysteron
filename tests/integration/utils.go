@@ -29,6 +29,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"slices"
 	"sort"
 	"strconv"
@@ -60,6 +61,12 @@ var (
 
 var curPort = MinPort
 var portMutex = sync.Mutex{}
+var (
+	storeSlotsOnce sync.Once
+	storeSlotsCh   chan struct{}
+)
+
+const defaultMaxConcurrentStores = 8
 
 func pgParametersWithDefaults(p cluster.PGParameters) cluster.PGParameters {
 	pd := cluster.PGParameters{}
@@ -435,10 +442,15 @@ func NewTestKeeperWithID(t *testing.T, dir, uid, clusterName, pgSUUsername, pgSU
 		return nil, err
 	}
 
-	bin := os.Getenv("STKEEPER_BIN")
+	bin := os.Getenv("STOLON_BIN")
 	if bin == "" {
-		return nil, fmt.Errorf("missing STKEEPER_BIN env")
+		return nil, fmt.Errorf("missing STOLON_BIN env")
 	}
+	unifiedArgs, err := wrapUnifiedRuntimeArgs("keeper", storeBackend, args)
+	if err != nil {
+		return nil, err
+	}
+	args = unifiedArgs
 	tk := &TestKeeper{
 		t: t,
 		Process: Process{
@@ -878,10 +890,15 @@ func NewTestSentinel(t *testing.T, dir string, clusterName string, storeBackend 
 	}
 	args = append(args, a...)
 
-	bin := os.Getenv("STSENTINEL_BIN")
+	bin := os.Getenv("STOLON_BIN")
 	if bin == "" {
-		return nil, fmt.Errorf("missing STSENTINEL_BIN env")
+		return nil, fmt.Errorf("missing STOLON_BIN env")
 	}
+	unifiedArgs, err := wrapUnifiedRuntimeArgs("sentinel", storeBackend, args)
+	if err != nil {
+		return nil, err
+	}
+	args = unifiedArgs
 	ts := &TestSentinel{
 		t: t,
 		Process: Process{
@@ -949,10 +966,15 @@ func NewTestProxy(t *testing.T, dir string, clusterName, pgSUUsername, pgSUPassw
 		return nil, err
 	}
 
-	bin := os.Getenv("STPROXY_BIN")
+	bin := os.Getenv("STOLON_BIN")
 	if bin == "" {
-		return nil, fmt.Errorf("missing STPROXY_BIN env")
+		return nil, fmt.Errorf("missing STOLON_BIN env")
 	}
+	unifiedArgs, err := wrapUnifiedRuntimeArgs("proxy", storeBackend, args)
+	if err != nil {
+		return nil, err
+	}
+	args = unifiedArgs
 	tp := &TestProxy{
 		t: t,
 		Process: Process{
@@ -1029,36 +1051,148 @@ func (tp *TestProxy) WaitRightMaster(tk *TestKeeper, timeout time.Duration) erro
 	return tk.WaitPGParameter("port", tk.pgPort, timeout)
 }
 
-func StolonCtl(t *testing.T, clusterName string, storeBackend store.Backend, storeEndpoints string, a ...string) error {
-	_, err := StolonCtlOutput(t, clusterName, storeBackend, storeEndpoints, a...)
+func Stolon(t *testing.T, a ...string) error {
+	_, err := StolonOutput(t, a...)
 	return err
 }
 
-func StolonCtlOutput(t *testing.T, clusterName string, storeBackend store.Backend, storeEndpoints string, a ...string) (string, error) {
-	args := []string{}
+func StolonCluster(
+	t *testing.T,
+	clusterName string,
+	storeBackend store.Backend,
+	storeEndpoints string,
+	a ...string,
+) error {
+	_, err := StolonClusterOutput(
+		t,
+		clusterName,
+		storeBackend,
+		storeEndpoints,
+		a...,
+	)
+	return err
+}
+
+func StolonFailover(
+	t *testing.T,
+	clusterName string,
+	storeBackend store.Backend,
+	storeEndpoints string,
+	a ...string,
+) error {
+	_, err := StolonFailoverOutput(
+		t,
+		clusterName,
+		storeBackend,
+		storeEndpoints,
+		a...,
+	)
+	return err
+}
+
+func StolonOutput(t *testing.T, a ...string) (string, error) {
+	return commandOutput(t, "stolon", "STOLON_BIN", a...)
+}
+
+func StolonClusterOutput(
+	t *testing.T,
+	clusterName string,
+	storeBackend store.Backend,
+	storeEndpoints string,
+	a ...string,
+) (string, error) {
+	args := []string{
+		"cluster",
+		fmt.Sprintf("--store-backend=%s", storeBackend),
+		fmt.Sprintf("--store-endpoints=%s", storeEndpoints),
+	}
 	if clusterName != "" {
 		args = append(args, fmt.Sprintf("--cluster-name=%s", clusterName))
 	}
-	args = append(args, fmt.Sprintf("--store-backend=%s", storeBackend))
-	args = append(args, fmt.Sprintf("--store-endpoints=%s", storeEndpoints))
 	args = append(args, a...)
+	return commandOutput(t, "stolon", "STOLON_BIN", args...)
+}
 
-	t.Logf("executing stolonctl, args: %s", args)
+func StolonFailoverOutput(
+	t *testing.T,
+	clusterName string,
+	storeBackend store.Backend,
+	storeEndpoints string,
+	a ...string,
+) (string, error) {
+	args := []string{
+		"failover",
+		fmt.Sprintf("--store-backend=%s", storeBackend),
+		fmt.Sprintf("--store-endpoints=%s", storeEndpoints),
+	}
+	if clusterName != "" {
+		args = append(args, fmt.Sprintf("--cluster-name=%s", clusterName))
+	}
+	args = append(args, a...)
+	return commandOutput(t, "stolon", "STOLON_BIN", args...)
+}
 
-	bin := os.Getenv("STCTL_BIN")
+func ListClustersOutput(
+	t *testing.T,
+	storeBackend store.Backend,
+	storeEndpoints string,
+) ([]string, error) {
+	output, err := StolonClusterOutput(
+		t,
+		"",
+		storeBackend,
+		storeEndpoints,
+		"list",
+		"--format=json",
+	)
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	if err := json.Unmarshal([]byte(output), &names); err != nil {
+		return nil, fmt.Errorf("decode stolon cluster list output: %w", err)
+	}
+	return names, nil
+}
+
+func commandOutput(t *testing.T, commandName, binEnv string, args ...string) (string, error) {
+	t.Logf("executing %s, args: %s", commandName, args)
+
+	bin := os.Getenv(binEnv)
 	if bin == "" {
-		return "", fmt.Errorf("missing STCTL_BIN env")
+		return "", fmt.Errorf("missing %s env", binEnv)
 	}
 	cmd := exec.Command(bin, args...)
 	output, err := cmd.CombinedOutput()
 	scanner := bufio.NewScanner(strings.NewReader(string(output)))
 	for scanner.Scan() {
-		t.Logf("[%s]: %s", "stolonctl", scanner.Text())
+		t.Logf("[%s]: %s", commandName, scanner.Text())
 	}
 	if err != nil {
 		return string(output), err
 	}
 	return string(output), nil
+}
+
+func wrapUnifiedRuntimeArgs(component string, backend store.Backend, componentArgs []string) ([]string, error) {
+	backendCmd, err := runtimeBackendSubcommand(backend)
+	if err != nil {
+		return nil, err
+	}
+	args := []string{component, backendCmd, "--"}
+	args = append(args, componentArgs...)
+	return args, nil
+}
+
+func runtimeBackendSubcommand(backend store.Backend) (string, error) {
+	switch backend {
+	case "etcd", "etcdv3":
+		return "etcd", nil
+	case "kubernetes":
+		return "kubernetes", nil
+	default:
+		return "", fmt.Errorf("unsupported runtime backend %q", backend)
+	}
 }
 
 type TestStore struct {
@@ -1071,12 +1205,53 @@ type TestStore struct {
 }
 
 func NewTestStore(t *testing.T, dir string, a ...string) (*TestStore, error) {
-	storeBackend := store.Backend(os.Getenv("STOLON_TEST_STORE_BACKEND"))
+	acquireStoreSlot(t)
+
+	storeBackend := store.Backend(strings.TrimSpace(os.Getenv("STOLON_TEST_STORE_BACKEND")))
 	switch storeBackend {
+	case "etcd":
+		storeBackend = "etcdv3"
 	case "etcdv3":
 		return NewTestEtcd(t, dir, storeBackend, a...)
 	}
-	return nil, fmt.Errorf("wrong store backend")
+	return nil, fmt.Errorf(
+		"unsupported STOLON_TEST_STORE_BACKEND %q (supported: etcd, etcdv3)",
+		storeBackend,
+	)
+}
+
+func acquireStoreSlot(t *testing.T) {
+	slots := storeSlots()
+	slots <- struct{}{}
+	t.Cleanup(func() {
+		<-slots
+	})
+}
+
+func storeSlots() chan struct{} {
+	storeSlotsOnce.Do(func() {
+		limit := maxConcurrentStoresFromEnv()
+		storeSlotsCh = make(chan struct{}, limit)
+	})
+	return storeSlotsCh
+}
+
+func maxConcurrentStoresFromEnv() int {
+	limit := defaultMaxConcurrentStores
+	if raw := strings.TrimSpace(os.Getenv("STOLON_INTEGRATION_MAX_STORES")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	gmp := runtime.GOMAXPROCS(0)
+	if gmp > 0 && limit > gmp {
+		limit = gmp
+	}
+	if limit < 1 {
+		return 1
+	}
+	return limit
 }
 
 func NewTestEtcd(t *testing.T, dir string, backend store.Backend, a ...string) (*TestStore, error) {

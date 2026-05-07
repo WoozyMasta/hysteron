@@ -1,35 +1,32 @@
-## Commands invocation
+## Commands Invocation
 
-There are 4 commands provided by stolon:
+Stolon now provides one command: `stolon`.
 
-* [stolon-keeper](commands/stolon-keeper.md)
-* [stolon-sentinel](commands/stolon-sentinel.md)
-* [stolon-proxy](commands/stolon-proxy.md)
-* [stolonctl](commands/stolonctl.md)
+The unified CLI is split into runtime and management command groups.
 
-Every command has different options and when called without any option or with
-`--help` they'll show help with a description for every subcommand and option.
-Please take also a look at the various examples to see how the commands'
-options are used.
+Runtime commands:
 
-An option can be specified in the command line or as an environment variables.
+* `stolon keeper <etcd|kubernetes>`
+* `stolon sentinel <etcd|kubernetes>`
+* `stolon proxy <etcd|kubernetes>`
 
-Environment variables are prefixed with a string related to the command and
-take the name of the options but are UPPERCASE and any dashes are replaced by
-underscores.
+Management commands:
 
-For example for the `stolon-keeper` `--data-dir` command line option the
-equivalent environment variable is `STKEEPER_DATA_DIR`.
+* `stolon cluster ...`
+* `stolon failover ...`
 
+For the complete command and option reference, see
+[commands/stolon.md](commands/stolon.md).
 
-| Command            | Environment variable prefix |
-|--------------------|-----------------------------|
-| stolon-keeper      | STKEEPER                    |
-| stolon-sentinel    | STSENTINEL                  |
-| stolon-proxy       | STPROXY                     |
-| stolonctl          | STOLONCTL                   |
+Every command option can be passed on the CLI or via environment variables.
+Environment variables use one canonical prefix: `STOLON_`.
 
-Configuration files passed to `stolonctl` and `stolon-sentinel` can also use
-YAML/JSON variable expansion. See [Config Variable Expansion](config_expansion.md)
-for the `${VAR}` syntax and the fields where expansion is deliberately
-disabled.
+Examples:
+
+* `--cluster-name` -> `STOLON_CLUSTER_NAME`
+* `--etcd-endpoints` -> `STOLON_ETCD_ENDPOINTS`
+* `--k8s-resource-kind` -> `STOLON_K8S_RESOURCE_KIND`
+
+Cluster configuration files passed to management and runtime flows can use
+YAML/JSON variable expansion. See
+[Config Variable Expansion](config_expansion.md) for `${VAR}` syntax.

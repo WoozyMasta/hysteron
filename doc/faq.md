@@ -14,7 +14,9 @@ We are open to alternative solutions (PRs are welcome) like using haproxy if the
 
 Currently the proxy redirects all requests to the master. There is a [feature request](https://github.com/sorintlab/stolon/issues/132) for using the proxy also for standbys but it's low in the priority list.
 
-There is a simple Python script that gets info about standbys from `stolonctl` and generates HAProxy config: [UnitedTraders/stolon-standby-haproxy](https://github.com/UnitedTraders/stolon-standby-haproxy).
+There is a simple Python script that gets info about standbys from the
+cluster control API and generates HAProxy config:
+[UnitedTraders/stolon-standby-haproxy](https://github.com/UnitedTraders/stolon-standby-haproxy).
 
 If your application want to query the hot standbys, currently you can read the standby dbs and their status form the cluster data directly from the store (but be warned that this isn't meant to be stable).
 
@@ -23,7 +25,7 @@ If your application want to query the hot standbys, currently you can read the s
 stolon eliminates the requirement of a shared storage since it uses postgres streaming replication and can avoid the need of fencing (killing the node, removing access to the shared storage etc...) due to its architecture:
 * It uses etcd v3 or Kubernetes as the first step to determine which
   components are healthy.
-* The stolon-proxy is a sort of fencer since it'll close connections to old masters and direct new connections to the current master.
+* The stolon proxy is a sort of fencer since it'll close connections to old masters and direct new connections to the current master.
 
 ## How does stolon differ from pure kubernetes high availability?
 
@@ -80,3 +82,4 @@ Consul (or etcd) is used only as a key-value storage.
 stolon will create its keys using the cluster name as part of the key hierarchy. So multiple stolon clusters can share the same store.
 
 The suggestion is to use a store located in the same *region*/*datacenter* (the concepts are related on your architecture/cloud provider) with the stolon cluster.
+

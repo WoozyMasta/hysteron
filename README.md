@@ -21,7 +21,8 @@ For an introduction to stolon you can also take a look at [this post](https://sg
   available data store and for leader election.
 * Asynchronous (default) and [synchronous](doc/syncrepl.md) replication.
 * Full cluster setup in minutes.
-* Easy [cluster administration](doc/stolonctl.md)
+* Easy cluster administration with the unified
+  [`stolon` CLI](doc/commands/stolon.md)
 * Can do point in time recovery integrating with your preferred backup/restore tool.
 * [Standby cluster](doc/standbycluster.md) (for multi site replication and near zero downtime migration).
 * Automatic service discovery and dynamic reconfiguration (handles postgres and stolon processes changing their addresses).

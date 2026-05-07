@@ -3,7 +3,7 @@
 Since synchronous replication is usually needed to avoid losing some transactions, stolon implements it in a way to avoid any possibility of electing non sync standbys as new masters.
 When synchronous replication is enabled stolon will always ensure that a master has N synchronous standbys (where N will be between MinSynchronousStandbys and MaxSynchronousStandbys values defined in the [cluster specification](cluster_spec.md)). If there're not enough available standbys then it will also add a fake standby server in the `synchronous_standby_names`. Adding a non existing standby server will ensure the master will always block waiting for remote commits.
 
-You can enable/disable synchronous replication at any time and the keepers will reconfigure themselves using `stolonctl update` to update the [cluster specification](cluster_spec.md).
+You can enable/disable synchronous replication at any time and the keepers will reconfigure themselves using `stolon cluster update` to update the [cluster specification](cluster_spec.md).
 
 ### Min and Max number of synchronous replication standbys
 
@@ -17,13 +17,13 @@ Notice that `MinSynchronousStandbys` = 0 can cause loss of committed transaction
 
 Assuming that your cluster name is `mycluster` and using etcd (v3 api) listening on localhost:2379:
 ```
-stolonctl --cluster-name=mycluster --store-backend=etcdv3 update --patch '{ "synchronousReplication" : true }'
+stolon cluster --cluster-name=mycluster --store-backend=etcdv3 update --patch '{ "synchronousReplication" : true }'
 ```
 
 ## Disable synchronous replication.
 
 ```
-stolonctl --cluster-name=mycluster --store-backend=etcdv3 update --patch '{ "synchronousReplication" : false }'
+stolon cluster --cluster-name=mycluster --store-backend=etcdv3 update --patch '{ "synchronousReplication" : false }'
 ```
 
 ## Set min and max number of synchronous replication standbys
@@ -31,7 +31,7 @@ stolonctl --cluster-name=mycluster --store-backend=etcdv3 update --patch '{ "syn
 Set MinSynchronousStandbys/MaxSynchronousStandbys to a value greater than 1 (only when using PostgreSQL >= 9.6)
 
 ```
-stolonctl --cluster-name=mycluster --store-backend=etcdv3 update --patch '{ "synchronousReplication" : true, "minSynchronousStandbys": 2, "maxSynchronousStandbys": 3 }'
+stolon cluster --cluster-name=mycluster --store-backend=etcdv3 update --patch '{ "synchronousReplication" : true, "minSynchronousStandbys": 2, "maxSynchronousStandbys": 3 }'
 ```
 
 ## Handling postgresql sync repl limits under such circumstances
@@ -62,3 +62,4 @@ But with stolon we have the power to overcome this issue by noticing when a prim
 Allowing only "internal" connections means not adding the default rules or the user defined pgHBA rules but only the rules needed for replication (and local communication from the keeper).
 
 Since "internal" rules accepts the defined superuser and replication users, client should not use these roles for normal operation or the above solution won't work (but they shouldn't do it anyway since this could cause exhaustion of reserved superuser connections needed by the keeper to check the instance).
+

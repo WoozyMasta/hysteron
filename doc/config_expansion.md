@@ -2,10 +2,10 @@
 
 Stolon accepts JSON and YAML for user-facing cluster specification files:
 
-* `stolonctl init -f`
-* `stolonctl update -f`
-* `stolonctl clusterdata write -f`
-* `stolon-sentinel --initial-cluster-spec`
+* `stolon cluster initialize -f`
+* `stolon cluster update -f`
+* `stolon cluster data write -f`
+* `stolon sentinel <etcd|kubernetes> -- --initial-cluster-spec`
 
 Both formats use the same `json` field names documented in the cluster
 specification. Before decoding, Stolon expands environment variables in scalar

@@ -17,16 +17,8 @@
 package common
 
 import (
-	"encoding/hex"
-	"errors"
-	"fmt"
-	"io"
-	"os"
-	"path/filepath"
 	"reflect"
 	"strings"
-
-	"github.com/google/uuid"
 )
 
 const (
@@ -57,17 +49,6 @@ var Roles = []Role{
 	RoleUndefined,
 	RoleMaster,
 	RoleStandby,
-}
-
-// UID returns a short random identifier.
-func UID() string {
-	u := uuid.New()
-	return hex.EncodeToString(u[:4])
-}
-
-// UUID returns a random UUID string.
-func UUID() string {
-	return uuid.NewString()
 }
 
 const (
@@ -112,49 +93,4 @@ func (s Parameters) Diff(newParams Parameters) []string {
 		}
 	}
 	return changedParams
-}
-
-// WriteFileAtomicFunc atomically writes a file, it achieves this by creating a
-// temporary file and then moving it. writeFunc is the func that will write
-// data to the file.
-// This function is taken from
-//
-//	https://github.com/youtube/vitess/blob/master/go/ioutil2/ioutil.go
-//
-// Copyright 2012, Google Inc. BSD-license, see licenses/LICENSE-BSD-3-Clause
-func WriteFileAtomicFunc(filename string, perm os.FileMode, writeFunc func(f io.Writer) error) error {
-	dir, name := filepath.Split(filename)
-	f, err := os.CreateTemp(dir, name)
-	if err != nil {
-		return err
-	}
-	err = writeFunc(f)
-	if err == nil {
-		err = f.Sync()
-	}
-	if closeErr := f.Close(); err == nil {
-		err = closeErr
-	}
-	if permErr := os.Chmod(f.Name(), perm); err == nil {
-		err = permErr
-	}
-	if err == nil {
-		err = os.Rename(f.Name(), filename)
-	}
-	// Any err should result in full cleanup.
-	if err != nil {
-		if removeErr := os.Remove(f.Name()); removeErr != nil {
-			return errors.Join(err, fmt.Errorf("remove temporary file %q: %w", f.Name(), removeErr))
-		}
-	}
-	return err
-}
-
-// WriteFileAtomic atomically writes a file.
-func WriteFileAtomic(filename string, perm os.FileMode, data []byte) error {
-	return WriteFileAtomicFunc(filename, perm,
-		func(f io.Writer) error {
-			_, err := f.Write(data)
-			return err
-		})
 }

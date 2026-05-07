@@ -49,7 +49,7 @@ ensure to set the [right permissions to the password file](https://www.postgresq
 * Initialize the cluster with the following cluster spec:
 
 ```
-stolonctl --cluster-name stolon-cluster --store-backend=etcdv3 init '
+stolon cluster --cluster-name stolon-cluster --store-backend=etcdv3 initialize '
 {
   "role": "standby",
   "initMode": "pitr",
@@ -88,14 +88,17 @@ Ex. with a primary slot name:
 
 ### Promoting a standby cluster
 
-When you want to promote your standby cluster to a primary one (for example in a disaster recovery scenario to switch to a dr site, or during a migration to switch to the new stolon cluster) you can do this using `stolonctl`:
+When you want to promote your standby cluster to a primary one (for example in
+a disaster recovery scenario to switch to a DR site, or during a migration to
+switch to the new Stolon cluster) you can do this with `stolon cluster promote`:
 
 ```
-stolonctl --cluster-name stolon-cluster --store-backend=etcdv3 promote
+stolon cluster --cluster-name stolon-cluster --store-backend=etcdv3 promote
 ```
 
 This is the same as doing:
 
 ```
-stolonctl --cluster-name stolon-cluster --store-backend=etcdv3 update --patch { "role": "master" }
+stolon cluster --cluster-name stolon-cluster --store-backend=etcdv3 update --patch '{ "role": "master" }'
 ```
+

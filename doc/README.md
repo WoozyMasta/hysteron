@@ -6,6 +6,7 @@ primary concepts and avoid possible mistakes.
 
 * [Stolon Architecture and Requirements](architecture.md)
 * [Commands Invocation](commands_invocation.md)
+* [Unified `stolon` Command Reference](commands/stolon.md)
 * [Cluster Specification](cluster_spec.md)
 * [Config Variable Expansion](config_expansion.md)
 * [Cluster Initialization](initialization.md)
@@ -13,7 +14,6 @@ primary concepts and avoid possible mistakes.
 * [Kubernetes Service Publishing](kubernetes_service_publishing.md)
 * [Setting instance parameters](postgres_parameters.md)
 * [Custom pg_hba.conf entries](custom_pg_hba_entries.md)
-* [Stolon Client](stolonctl.md)
 * Backup/Restore
   * [Point In Time Recovery](pitr.md)
   * [Point In Time Recovery with wal-e](pitr_wal-e.md)

@@ -32,6 +32,7 @@ import (
 
 	"github.com/sorintlab/stolon/internal/common"
 	slog "github.com/sorintlab/stolon/internal/log"
+	"github.com/sorintlab/stolon/internal/utils/fs"
 
 	"github.com/mitchellh/copystructure"
 	"github.com/rs/zerolog"
@@ -859,7 +860,7 @@ func (p *Manager) writeConf(useTmpPostgresConf, writeRecoveryParams bool) error 
 		confFile = tmpPostgresConf
 	}
 
-	return common.WriteFileAtomicFunc(filepath.Join(p.dataDir, confFile), 0600,
+	return fs.WriteFileAtomicFunc(filepath.Join(p.dataDir, confFile), 0600,
 		func(f io.Writer) error {
 			if useTmpPostgresConf {
 				// include postgresql.conf if it exists
@@ -902,7 +903,7 @@ func (p *Manager) writeRecoveryConf() error {
 		return nil
 	}
 
-	return common.WriteFileAtomicFunc(filepath.Join(p.dataDir, postgresRecoveryConf), 0600,
+	return fs.WriteFileAtomicFunc(filepath.Join(p.dataDir, postgresRecoveryConf), 0600,
 		func(f io.Writer) error {
 			if p.recoveryOptions.RecoveryMode == RecoveryModeStandby {
 				if _, err := f.Write([]byte("standby_mode = 'on'\n")); err != nil {
@@ -926,7 +927,7 @@ func (p *Manager) writeStandbySignal() error {
 
 	zl().Info().Msg("writing standby signal file")
 
-	return common.WriteFileAtomicFunc(filepath.Join(p.dataDir, postgresStandbySignal), 0600,
+	return fs.WriteFileAtomicFunc(filepath.Join(p.dataDir, postgresStandbySignal), 0600,
 		func(_ io.Writer) error {
 			return nil
 		})
@@ -940,14 +941,14 @@ func (p *Manager) writeRecoverySignal() error {
 
 	zl().Info().Msg("writing recovery signal file")
 
-	return common.WriteFileAtomicFunc(filepath.Join(p.dataDir, postgresRecoverySignal), 0600,
+	return fs.WriteFileAtomicFunc(filepath.Join(p.dataDir, postgresRecoverySignal), 0600,
 		func(_ io.Writer) error {
 			return nil
 		})
 }
 
 func (p *Manager) writePgHba() error {
-	return common.WriteFileAtomicFunc(filepath.Join(p.dataDir, "pg_hba.conf"), 0600,
+	return fs.WriteFileAtomicFunc(filepath.Join(p.dataDir, "pg_hba.conf"), 0600,
 		func(f io.Writer) error {
 			if p.hba != nil {
 				for _, e := range p.hba {

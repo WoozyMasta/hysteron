@@ -22,7 +22,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/sorintlab/stolon/internal/cluster"
-	"github.com/sorintlab/stolon/internal/util"
+	k8sutil "github.com/sorintlab/stolon/internal/utils/k8s"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
@@ -63,11 +63,11 @@ func TestKubeStoreConfigMapClusterDataRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConfigMaps.Get() error = %v", err)
 	}
-	if cm.Annotations[util.KubeClusterDataAnnotation] == "" {
-		t.Fatalf("ConfigMap annotation %q is empty", util.KubeClusterDataAnnotation)
+	if cm.Annotations[k8sutil.KubeClusterDataAnnotation] == "" {
+		t.Fatalf("ConfigMap annotation %q is empty", k8sutil.KubeClusterDataAnnotation)
 	}
-	if cm.Labels[util.KubeClusterLabel] != "test" {
-		t.Fatalf("ConfigMap cluster label = %q, want test", cm.Labels[util.KubeClusterLabel])
+	if cm.Labels[k8sutil.KubeClusterLabel] != "test" {
+		t.Fatalf("ConfigMap cluster label = %q, want test", cm.Labels[k8sutil.KubeClusterLabel])
 	}
 }
 
@@ -106,11 +106,11 @@ func TestKubeStoreSecretClusterDataRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Secrets.Get() error = %v", err)
 	}
-	if len(secret.Data[util.KubeClusterDataKey]) == 0 {
-		t.Fatalf("Secret data key %q is empty", util.KubeClusterDataKey)
+	if len(secret.Data[k8sutil.KubeClusterDataKey]) == 0 {
+		t.Fatalf("Secret data key %q is empty", k8sutil.KubeClusterDataKey)
 	}
-	if secret.Labels[util.KubeClusterLabel] != "test" {
-		t.Fatalf("Secret cluster label = %q, want test", secret.Labels[util.KubeClusterLabel])
+	if secret.Labels[k8sutil.KubeClusterLabel] != "test" {
+		t.Fatalf("Secret cluster label = %q, want test", secret.Labels[k8sutil.KubeClusterLabel])
 	}
 }
 

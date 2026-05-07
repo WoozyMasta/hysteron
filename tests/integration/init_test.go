@@ -22,7 +22,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 	"testing"
 	"time"
 
@@ -254,7 +253,7 @@ func testInitExisting(t *testing.T, merge bool) {
 
 	t.Logf("reinitializing cluster")
 	// Initialize cluster with new spec
-	err = StolonCtl(t, clusterName, tstore.storeBackend, storeEndpoints, "init", "-y", "-f", initialClusterSpecFile)
+	err = StolonCluster(t, clusterName, tstore.storeBackend, storeEndpoints, "initialize", "-y", "-f", initialClusterSpecFile)
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -556,16 +555,15 @@ func TestSentinelMultiCluster(t *testing.T) {
 		t.Fatalf("expected second cluster database up: %v", err)
 	}
 
-	output, err := StolonCtlOutput(t, "", tstore.storeBackend, storeEndpoints, "ls")
+	gotClusterNames, err := ListClustersOutput(t, tstore.storeBackend, storeEndpoints)
 	if err != nil {
-		t.Fatalf("stolonctl ls failed: %v", err)
+		t.Fatalf("cluster list failed: %v", err)
 	}
-	gotClusterNames := strings.Fields(output)
 	slices.Sort(gotClusterNames)
 	wantClusterNames := []string{clusterName1, clusterName2}
 	slices.Sort(wantClusterNames)
 	if !slices.Equal(gotClusterNames, wantClusterNames) {
-		t.Fatalf("stolonctl ls = %v, want %v", gotClusterNames, wantClusterNames)
+		t.Fatalf("stolon cluster list = %v, want %v", gotClusterNames, wantClusterNames)
 	}
 }
 

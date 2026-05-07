@@ -1,10 +1,10 @@
 # Kubernetes Service Publishing
 
-`stolon-sentinel` can publish writable and read-only PostgreSQL endpoints
+`stolon sentinel` can publish writable and read-only PostgreSQL endpoints
 through Kubernetes Services and EndpointSlice objects instead of
-requiring `stolon-proxy` in the client path.
+requiring `stolon proxy` in the client path.
 
-This mode is optional and only works with `--store-backend=kubernetes`.
+This mode is optional and only works with the `kubernetes` backend command.
 
 ## How It Works
 
@@ -18,36 +18,36 @@ by the sentinel. When there is no safe writable endpoint, it is kept with
 an empty endpoint list.
 
 The writable Service name defaults to `{resource}`, where `{resource}`
-is the resolved Kubernetes resource name from `--kube-resource-name`.
+is the resolved Kubernetes resource name from `--k8s-resource-name`.
 The default resource name template
 is `stolon-{cluster}` for compatibility.
 
 ```sh
-stolon-sentinel \
+stolon sentinel \
+  kubernetes \
   --cluster-name kube-stolon \
-  --store-backend kubernetes \
-  --kube-resource-kind secret \
-  --kube-service-publishing
+  --k8s-resource-kind secret \
+  -- --kube-service-publishing
 ```
 
 Use a custom resource name to avoid collisions when multiple Stolon
 installations share a namespace and cluster name:
 
 ```sh
-stolon-sentinel \
+stolon sentinel \
+  kubernetes \
   --cluster-name postgres \
-  --store-backend kubernetes \
-  --kube-resource-name app-a-postgres \
-  --kube-service-publishing
+  --k8s-resource-name app-a-postgres \
+  -- --kube-service-publishing
 ```
 
 Use a custom Service name or port when needed:
 
 ```sh
-stolon-sentinel \
+stolon sentinel \
+  kubernetes \
   --cluster-name kube-stolon \
-  --store-backend kubernetes \
-  --kube-service-publishing \
+  -- --kube-service-publishing \
   --kube-service-name postgres \
   --kube-service-port 5432
 ```
@@ -58,18 +58,18 @@ One sentinel process can manage multiple Stolon clusters.
 With Kubernetes Service publishing enabled,
 each cluster runner publishes its own Service and EndpointSlice.
 
-For multiple clusters, `--kube-resource-name` must include `{cluster}`.
+For multiple clusters, `--k8s-resource-name` must include `{cluster}`.
 This keeps ConfigMap or Secret clusterdata, Lease election objects,
 and default Service names separate.
 
 ```sh
-stolon-sentinel \
+stolon sentinel \
+  kubernetes \
   --cluster-name app-a \
   --cluster-name app-b \
-  --store-backend kubernetes \
-  --kube-resource-kind secret \
-  --kube-resource-name pg-{cluster} \
-  --kube-service-publishing
+  --k8s-resource-kind secret \
+  --k8s-resource-name pg-{cluster} \
+  -- --kube-service-publishing
 ```
 
 This creates independent Kubernetes resources:
@@ -84,12 +84,12 @@ pg-app-b        writable Service
 Override the Service name with a template when the default is not suitable:
 
 ```sh
-stolon-sentinel \
+stolon sentinel \
+  kubernetes \
   --cluster-name app-a \
   --cluster-name app-b \
-  --store-backend kubernetes \
-  --kube-resource-name pg-{cluster} \
-  --kube-service-publishing \
+  --k8s-resource-name pg-{cluster} \
+  -- --kube-service-publishing \
   --kube-service-name postgres-{cluster}
 ```
 
@@ -98,10 +98,10 @@ stolon-sentinel \
 Enable read-only publishing with a separate Service:
 
 ```sh
-stolon-sentinel \
+stolon sentinel \
+  kubernetes \
   --cluster-name kube-stolon \
-  --store-backend kubernetes \
-  --kube-service-publishing \
+  -- --kube-service-publishing \
   --kube-read-only-service-publishing
 ```
 
@@ -111,7 +111,7 @@ Defaults:
 * read-only Service name: `{resource}-ro`;
 * both Service ports: `5432`.
 
-Read-only endpoint selection follows the same policy as `stolon-proxy`:
+Read-only endpoint selection follows the same policy as `stolon proxy`:
 
 * only healthy standby databases with matching generation are eligible;
 * standby lag is filtered by `--kube-read-only-max-lag`;
@@ -136,7 +136,7 @@ It keeps the Service stable while the sentinel changes only the endpoint list.
 
 ## Tradeoffs
 
-Compared to `stolon-proxy`, Service publishing removes one TCP hop and one
+Compared to `stolon proxy`, Service publishing removes one TCP hop and one
 runtime component from the data path.
 
 The tradeoff is that Kubernetes networking owns connection routing once
@@ -145,7 +145,7 @@ are not actively closed by Stolon during failover.
 Applications must tolerate broken or stale connections
 and reconnect according to their PostgreSQL client policy.
 
-`stolon-proxy` remains the stricter option when Stolon
+`stolon proxy` remains the stricter option when Stolon
 should directly close connections,
 gate proxy activation through proxy heartbeats,
 and control read/write routing behavior in process.
@@ -162,3 +162,4 @@ The sentinel ServiceAccount needs namespace-scoped access to:
 The Service managed by Stolon must not define a selector.
 If a Service with the configured name already exists and has a selector,
 the sentinel refuses to manage it.
+

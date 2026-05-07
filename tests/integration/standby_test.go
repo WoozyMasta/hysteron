@@ -295,7 +295,7 @@ func TestPromoteStandbyCluster(t *testing.T) {
 	}
 
 	// promote the standby cluster to a primary cluster
-	err = StolonCtl(t, clusterName, tstore.storeBackend, storeEndpoints, "promote", "-y")
+	err = StolonCluster(t, clusterName, tstore.storeBackend, storeEndpoints, "promote", "-y")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -457,7 +457,7 @@ func TestPromoteStandbyClusterArchiveRecovery(t *testing.T) {
 	}
 
 	// promote the standby cluster to a primary cluster
-	err = StolonCtl(t, clusterName, tstore.storeBackend, storeEndpoints, "promote", "-y")
+	err = StolonCluster(t, clusterName, tstore.storeBackend, storeEndpoints, "promote", "-y")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}

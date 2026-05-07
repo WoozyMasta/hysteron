@@ -33,4 +33,4 @@ EXPOSE 5432
 # copy the agola-web dist
 COPY --from=builder /stolon/bin/ /usr/local/bin
 
-RUN chmod +x /usr/local/bin/stolon-keeper /usr/local/bin/stolon-sentinel /usr/local/bin/stolon-proxy /usr/local/bin/stolonctl
+RUN chmod +x /usr/local/bin/stolon

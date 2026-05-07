@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/sorintlab/stolon/internal/cluster"
-	"github.com/sorintlab/stolon/internal/util"
+	k8sutil "github.com/sorintlab/stolon/internal/utils/k8s"
 
 	jsonpatch "github.com/evanphx/json-patch"
 	v1 "k8s.io/api/core/v1"
@@ -97,14 +97,14 @@ func NewKubeStore(
 
 func (s *KubeStore) clusterLabels() map[string]string {
 	return map[string]string{
-		util.KubeClusterLabel: s.clusterName,
+		k8sutil.KubeClusterLabel: s.clusterName,
 	}
 }
 
 func (s *KubeStore) labelSelector(componentLabel ComponentLabelValue) labels.Selector {
 	selector := map[string]string{
-		DefaultComponentLabel: string(componentLabel),
-		util.KubeClusterLabel: s.clusterName,
+		DefaultComponentLabel:    string(componentLabel),
+		k8sutil.KubeClusterLabel: s.clusterName,
 	}
 	return labels.SelectorFromSet(selector)
 }
@@ -125,7 +125,7 @@ func (s *KubeStore) patchKubeStatusAnnotation(ctx context.Context, annotationDat
 		if pod.Annotations == nil {
 			pod.Annotations = map[string]string{}
 		}
-		pod.Annotations[util.KubeStatusAnnnotation] = string(annotationData)
+		pod.Annotations[k8sutil.KubeStatusAnnnotation] = string(annotationData)
 
 		newPodJSON, err := json.Marshal(pod)
 		if err != nil {
@@ -171,7 +171,7 @@ func (s *KubeStore) atomicPutConfigMapClusterData(ctx context.Context, cdj []byt
 
 			if previous == nil {
 				if result.Annotations != nil {
-					_, ok := result.Annotations[util.KubeClusterDataAnnotation]
+					_, ok := result.Annotations[k8sutil.KubeClusterDataAnnotation]
 					if ok {
 						// cd exists but previous is nil
 						return ErrKeyModified
@@ -184,7 +184,7 @@ func (s *KubeStore) atomicPutConfigMapClusterData(ctx context.Context, cdj []byt
 					// empty annotations but previous isn't nil
 					return ErrKeyModified
 				}
-				curcd, ok := result.Annotations[util.KubeClusterDataAnnotation]
+				curcd, ok := result.Annotations[k8sutil.KubeClusterDataAnnotation]
 				if ok {
 					// check that the previous cd is the same as the current one in the
 					// configmap annotation
@@ -203,7 +203,7 @@ func (s *KubeStore) atomicPutConfigMapClusterData(ctx context.Context, cdj []byt
 				result.Labels = map[string]string{}
 			}
 			maps.Copy(result.Labels, s.clusterLabels())
-			result.Annotations[util.KubeClusterDataAnnotation] = string(cdj)
+			result.Annotations[k8sutil.KubeClusterDataAnnotation] = string(cdj)
 			_, err = epsClient.Update(ctx, result, metav1.UpdateOptions{})
 			return err
 		}
@@ -213,7 +213,7 @@ func (s *KubeStore) atomicPutConfigMapClusterData(ctx context.Context, cdj []byt
 		if previous != nil {
 			return ErrKeyModified
 		}
-		annotations := map[string]string{util.KubeClusterDataAnnotation: string(cdj)}
+		annotations := map[string]string{k8sutil.KubeClusterDataAnnotation: string(cdj)}
 		_, err = epsClient.Create(ctx, &v1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:        s.resourceName,
@@ -239,13 +239,13 @@ func (s *KubeStore) atomicPutSecretClusterData(ctx context.Context, cdj []byte, 
 		}
 		if !apierrors.IsNotFound(err) {
 			if previous == nil {
-				if _, ok := result.Data[util.KubeClusterDataKey]; ok {
+				if _, ok := result.Data[k8sutil.KubeClusterDataKey]; ok {
 					return ErrKeyModified
 				}
 			}
 
 			if previous != nil {
-				curcd, ok := result.Data[util.KubeClusterDataKey]
+				curcd, ok := result.Data[k8sutil.KubeClusterDataKey]
 				if !ok || string(previous.Value) != string(curcd) {
 					return ErrKeyModified
 				}
@@ -257,7 +257,7 @@ func (s *KubeStore) atomicPutSecretClusterData(ctx context.Context, cdj []byte, 
 				result.Labels = map[string]string{}
 			}
 			maps.Copy(result.Labels, s.clusterLabels())
-			result.Data[util.KubeClusterDataKey] = cdj
+			result.Data[k8sutil.KubeClusterDataKey] = cdj
 			_, err = secretsClient.Update(ctx, result, metav1.UpdateOptions{})
 			return err
 		}
@@ -271,7 +271,7 @@ func (s *KubeStore) atomicPutSecretClusterData(ctx context.Context, cdj []byte, 
 				Labels: s.clusterLabels(),
 			},
 			Type: v1.SecretTypeOpaque,
-			Data: map[string][]byte{util.KubeClusterDataKey: cdj},
+			Data: map[string][]byte{k8sutil.KubeClusterDataKey: cdj},
 		}, metav1.CreateOptions{})
 		return err
 	})
@@ -310,12 +310,12 @@ func (s *KubeStore) putConfigMapClusterData(ctx context.Context, cdj []byte) err
 				result.Labels = map[string]string{}
 			}
 			maps.Copy(result.Labels, s.clusterLabels())
-			result.Annotations[util.KubeClusterDataAnnotation] = string(cdj)
+			result.Annotations[k8sutil.KubeClusterDataAnnotation] = string(cdj)
 			_, err = epsClient.Update(ctx, result, metav1.UpdateOptions{})
 			return err
 		}
 		// configmap does not exists
-		annotations := map[string]string{util.KubeClusterDataAnnotation: string(cdj)}
+		annotations := map[string]string{k8sutil.KubeClusterDataAnnotation: string(cdj)}
 		_, err = epsClient.Create(ctx, &v1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:        s.resourceName,
@@ -347,7 +347,7 @@ func (s *KubeStore) putSecretClusterData(ctx context.Context, cdj []byte) error 
 				result.Labels = map[string]string{}
 			}
 			maps.Copy(result.Labels, s.clusterLabels())
-			result.Data[util.KubeClusterDataKey] = cdj
+			result.Data[k8sutil.KubeClusterDataKey] = cdj
 			_, err = secretsClient.Update(ctx, result, metav1.UpdateOptions{})
 			return err
 		}
@@ -357,7 +357,7 @@ func (s *KubeStore) putSecretClusterData(ctx context.Context, cdj []byte) error 
 				Labels: s.clusterLabels(),
 			},
 			Type: v1.SecretTypeOpaque,
-			Data: map[string][]byte{util.KubeClusterDataKey: cdj},
+			Data: map[string][]byte{k8sutil.KubeClusterDataKey: cdj},
 		}, metav1.CreateOptions{})
 		return err
 	})
@@ -384,7 +384,7 @@ func (s *KubeStore) getConfigMapClusterData(ctx context.Context) (*cluster.Clust
 		}
 		return nil, nil, fmt.Errorf("failed to get latest version of configmap: %v", err)
 	}
-	cdj, ok := result.Annotations[util.KubeClusterDataAnnotation]
+	cdj, ok := result.Annotations[k8sutil.KubeClusterDataAnnotation]
 	if !ok {
 		return nil, nil, nil
 	}
@@ -406,7 +406,7 @@ func (s *KubeStore) getSecretClusterData(ctx context.Context) (*cluster.ClusterD
 		}
 		return nil, nil, fmt.Errorf("failed to get latest version of secret: %v", err)
 	}
-	cdj, ok := result.Data[util.KubeClusterDataKey]
+	cdj, ok := result.Data[k8sutil.KubeClusterDataKey]
 	if !ok {
 		return nil, nil, nil
 	}
@@ -445,7 +445,7 @@ func (s *KubeStore) GetKeepersInfo(ctx context.Context) (cluster.KeepersInfo, er
 	pods := result.Items
 	for _, pod := range pods {
 		var ki cluster.KeeperInfo
-		if kij, ok := pod.Annotations[util.KubeStatusAnnnotation]; ok {
+		if kij, ok := pod.Annotations[k8sutil.KubeStatusAnnnotation]; ok {
 			err = json.Unmarshal([]byte(kij), &ki)
 			if err != nil {
 				return nil, err
@@ -482,7 +482,7 @@ func (s *KubeStore) GetSentinelsInfo(ctx context.Context) (cluster.SentinelsInfo
 	pods := result.Items
 	for _, pod := range pods {
 		var si cluster.SentinelInfo
-		if sij, ok := pod.Annotations[util.KubeStatusAnnnotation]; ok {
+		if sij, ok := pod.Annotations[k8sutil.KubeStatusAnnnotation]; ok {
 			err = json.Unmarshal([]byte(sij), &si)
 			if err != nil {
 				return nil, err
@@ -519,7 +519,7 @@ func (s *KubeStore) GetProxiesInfo(ctx context.Context) (cluster.ProxiesInfo, er
 	pods := result.Items
 	for _, pod := range pods {
 		var pi cluster.ProxyInfo
-		if pij, ok := pod.Annotations[util.KubeStatusAnnnotation]; ok {
+		if pij, ok := pod.Annotations[k8sutil.KubeStatusAnnnotation]; ok {
 			err = json.Unmarshal([]byte(pij), &pi)
 			if err != nil {
 				return nil, err

@@ -33,8 +33,12 @@ The provided example uses `sorintlab/stolon:master-pg10`
 
 This example has some predefined values that you'd like to change:
 
-* The cluster name is `kube-stolon`. It's set in the various `stolon-cluster` labels and in the component `--cluster-name` option. The labels and the `--cluster-name` option must be in sync.
-* It uses the kubernetes backend. You can also choose other backends (like etcdv3) setting the `ST${COMPONENT}_STORE_*` environment variables (see the [commands invocation documentation](/doc/commands_invocation.md)).
+* The cluster name is `kube-stolon`. It's set in the various `stolon-cluster`
+  labels and in the component `--cluster-name` option. The labels and the
+  `--cluster-name` option must be in sync.
+* It uses the Kubernetes backend. You can also choose other backends (like
+  etcd v3) using the unified `stolon` command options and environment
+  variables (see the [commands invocation documentation](/doc/commands_invocation.md)).
 
 If your k8s cluster has RBAC enabled you should create a role and a rolebinding to a service account. As an example take a look at the provided [role](role.yaml) and [role-binding](role-binding.yaml) example definitions that define a `stolon` role bound to the `default` service account in the `default` namespace.
 
@@ -42,18 +46,19 @@ If your k8s cluster has RBAC enabled you should create a role and a rolebinding 
 
 All the stolon components wait for an existing clusterdata entry in the store. So the first time you have to initialize a new cluster. For more details see the [cluster initialization doc](/doc/initialization.md). You can do this step at every moment, now or after having started the stolon components.
 
-You can execute stolonctl in different ways:
+You can execute cluster initialization with the unified `stolon` CLI in
+different ways:
 
 * as a one shot command executed inside a temporary pod:
 
 ```
-kubectl run -i -t stolonctl --image=sorintlab/stolon:master-pg10 --restart=Never --rm -- /usr/local/bin/stolonctl --cluster-name=kube-stolon --store-backend=kubernetes --kube-resource-kind=configmap init
+kubectl run -i -t stolon --image=sorintlab/stolon:master-pg10 --restart=Never --rm -- /usr/local/bin/stolon cluster --cluster-name=kube-stolon --store-backend=kubernetes --k8s-resource-kind=configmap initialize
 ```
 
 * from a machine that can access the store backend:
 
 ```
-stolonctl --cluster-name=kube-stolon --store-backend=kubernetes --kube-resource-kind=configmap init
+stolon cluster --cluster-name=kube-stolon --store-backend=kubernetes --k8s-resource-kind=configmap initialize
 ```
 
 `--kube-resource-kind=secret` can be used instead of `configmap` when cluster

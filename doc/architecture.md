@@ -49,7 +49,7 @@ write to a quorate partition of the store (the stolon component is
 partitioned, the store is partitioned, the store is down etc...) it will
 just retry talking with it.
 
-In addition, the stolon-proxy, to avoid sending client connections to a
+In addition, the stolon proxy, to avoid sending client connections to a
 partioned master, will drop all the connections since it cannot know if the
 cluster data has changed (for example if the proxy has problems reading from
 the store but the sentinel can write to it).
@@ -99,11 +99,11 @@ or you'll lose your cluster data. The legacy ConfigMap backend stores
 clusterdata inside a metadata annotation called `stolon-clusterdata`. Users
 should not manually modify this resource.
 
-Use `--kube-resource-name` to change the Kubernetes object name used for
+Use `--k8s-resource-name` to change the Kubernetes object name used for
 clusterdata and sentinel leader election. The value supports `{cluster}` as
 a cluster-name placeholder and must be a valid Kubernetes DNS label.
 
-As an alternative, `--kube-resource-kind=secret` stores clusterdata in an
+As an alternative, `--k8s-resource-kind=secret` stores clusterdata in an
 opaque Secret with the same `stolon-$CLUSTERNAME` name, using the
 `clusterdata` data key. This allows a different Kubernetes RBAC policy and
 reduces accidental visibility, but it is not a replacement for Kubernetes
@@ -119,19 +119,17 @@ the pod definition (see the [kubernetes example](/examples/kubernetes)).
 They are:
 
 `component` set to the component type: `stolon-keeper`, `stolon-sentinel`,
-`stolon-proxy` `stolon-cluster` set to the stolon cluster name
+`stolon-proxy`; `stolon-cluster` set to the stolon cluster name.
 
 Every components also saves its state in an annotation of their own pod
 called `stolon-status`
 
-`stolonctl` may be executed inside a pod running a stolon component or also
-externally. It'll behave like `kubectl` when choosing how to access the k8s
-API servers: When run inside a pod it'll use the pod service account to
-connect to the k8s API servers. When run externally it'll honor the
-`$KUBECONFIG` environment variable, use the default `~/.kube/config` file or
-you can override the `kube-config` file path, the context and the namespace
-to use with the `stolonctl` options `--kubeconfig`, `--kube-context` and
-`--kube-namespace`.
+`stolon cluster ...` management commands may be executed inside a pod running
+a Stolon component or externally. They behave like `kubectl` when choosing how
+to access the k8s API servers: when run inside a pod they use the pod service
+account; when run externally they honor `$KUBECONFIG`, default to
+`~/.kube/config`, and can be overridden with `--k8s-config`,
+`--k8s-context`, and `--k8s-namespace`.
 
 ### Handling permanent loss of the store
 
@@ -193,3 +191,4 @@ Superuser connections will instead continue working until exceeding the
 to the db as superuser should be avoided or they can exhaust the
 `superuser_reserved_connections` blocking the keeper from correctly managing
 and querying the instance status (reporting the instance as not healthy).
+

@@ -1427,6 +1427,30 @@ func managedReplicationSlots(
 	return internalReplSlots, ignoredSlots
 }
 
+func staleSlotsWithXmin(
+	slots []pg.PhysicalReplicationSlot,
+	managedSlots, ignoredSlots map[string]struct{},
+) []string {
+	stale := []string{}
+	for _, slot := range slots {
+		if !common.IsHysteronName(slot.Name) {
+			continue
+		}
+		if slot.Active || !slot.HasXmin {
+			continue
+		}
+		if _, ignored := ignoredSlots[slot.Name]; ignored {
+			continue
+		}
+		if _, managed := managedSlots[slot.Name]; managed {
+			continue
+		}
+		stale = append(stale, slot.Name)
+	}
+	slices.Sort(stale)
+	return stale
+}
+
 func (p *PostgresKeeper) refreshReplicationSlots(db *cluster.DB) error {
 	var currentReplicationSlots []string
 	currentReplicationSlots, err := p.pgm.GetReplicationSlots()
@@ -1439,6 +1463,12 @@ func (p *PostgresKeeper) refreshReplicationSlots(db *cluster.DB) error {
 	}
 
 	followersUIDs := db.Spec.Followers
+	managedSlots, ignoredSlots := managedReplicationSlots(
+		db.UID,
+		followersUIDs,
+		db.Spec.AdditionalReplicationSlots,
+		db.Spec.IgnoreReplicationSlots,
+	)
 
 	if err = p.updateReplSlots(
 		currentReplicationSlots,
@@ -1452,6 +1482,21 @@ func (p *PostgresKeeper) refreshReplicationSlots(db *cluster.DB) error {
 			Err(err).
 			Msg("error updating replication slots")
 		return err
+	}
+
+	physicalSlots, err := p.pgm.GetPhysicalReplicationSlots()
+	if err != nil {
+		p.baseLog().
+			Debug().
+			Err(err).
+			Msg("failed to inspect physical replication slots for xmin guard")
+		return nil
+	}
+	if stale := staleSlotsWithXmin(physicalSlots, managedSlots, ignoredSlots); len(stale) > 0 {
+		p.baseLog().
+			Warn().
+			Strs("stale_slots", stale).
+			Msg("detected inactive unmanaged hysteron physical slots with xmin; consider cleanup to avoid vacuum horizon retention")
 	}
 
 	return nil

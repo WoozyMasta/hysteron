@@ -117,6 +117,13 @@ type RestartRequirement struct {
 	PendingParams []string
 }
 
+// PhysicalReplicationSlot describes one physical replication slot status.
+type PhysicalReplicationSlot struct {
+	Name    string
+	Active  bool
+	HasXmin bool
+}
+
 // RecoveryMode defines PostgreSQL startup recovery mode.
 type RecoveryMode int
 
@@ -684,6 +691,13 @@ func (p *Manager) GetReplicationSlots() ([]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeoutValue())
 	defer cancel()
 	return getReplicationSlots(ctx, p.localConnParams)
+}
+
+// GetPhysicalReplicationSlots returns non-temporary physical replication slots.
+func (p *Manager) GetPhysicalReplicationSlots() ([]PhysicalReplicationSlot, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeoutValue())
+	defer cancel()
+	return getPhysicalReplicationSlots(ctx, p.localConnParams)
 }
 
 // CreateReplicationSlot creates a physical replication slot.

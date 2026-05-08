@@ -15,9 +15,11 @@
 package keeper
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/woozymasta/hysteron/internal/common"
+	pg "github.com/woozymasta/hysteron/internal/postgresql"
 )
 
 func TestEvaluatePgrewindDecision(t *testing.T) {
@@ -127,5 +129,36 @@ func TestManagedReplicationSlotsRespectsIgnoreList(t *testing.T) {
 	}
 	if _, ok := internalSlots[managedFollowerSlot]; !ok {
 		t.Fatalf("expected managed follower slot %q in managed set", managedFollowerSlot)
+	}
+}
+
+func TestStaleSlotsWithXmin(t *testing.T) {
+	slots := []pg.PhysicalReplicationSlot{
+		{Name: "hysteron_db2", Active: false, HasXmin: true},
+		{Name: "hysteron_db3", Active: true, HasXmin: true},
+		{Name: "hysteron_db4", Active: false, HasXmin: false},
+		{Name: "hysteron_extra", Active: false, HasXmin: true},
+		{Name: "manualslot", Active: false, HasXmin: true},
+	}
+
+	managed := map[string]struct{}{
+		"hysteron_db2": {},
+	}
+	ignored := map[string]struct{}{
+		"hysteron_extra": {},
+	}
+
+	got := staleSlotsWithXmin(slots, managed, ignored)
+	want := []string{}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("unexpected stale slots, got: %v, want: %v", got, want)
+	}
+
+	got = staleSlotsWithXmin(slots, map[string]struct{}{}, ignored)
+	want = []string{"hysteron_db2"}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("unexpected stale slots, got: %v, want: %v", got, want)
 	}
 }

@@ -229,6 +229,46 @@ func getReplicationSlots(ctx context.Context, connParams ConnParams) ([]string, 
 	return replSlots, nil
 }
 
+func getPhysicalReplicationSlots(
+	ctx context.Context,
+	connParams ConnParams,
+) ([]PhysicalReplicationSlot, error) {
+	db, err := openDB(connParams)
+	if err != nil {
+		return nil, err
+	}
+	defer ignoreClose(db)
+
+	rows, err := query(
+		ctx,
+		db,
+		"select slot_name, active, coalesce(xmin::text, '') "+
+			"from pg_replication_slots "+
+			"where temporary is false and slot_type = 'physical' "+
+			"order by slot_name",
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	slots := []PhysicalReplicationSlot{}
+	for rows.Next() {
+		var slot PhysicalReplicationSlot
+		var xmin string
+		if err := rows.Scan(&slot.Name, &slot.Active, &xmin); err != nil {
+			return nil, err
+		}
+		slot.HasXmin = xmin != ""
+		slots = append(slots, slot)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return slots, nil
+}
+
 func createReplicationSlot(ctx context.Context, connParams ConnParams, name string) error {
 	db, err := openDB(connParams)
 	if err != nil {

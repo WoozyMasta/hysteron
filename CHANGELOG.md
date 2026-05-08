@@ -166,6 +166,9 @@ The format is based on [Keep a Changelog][], and this project adheres to
   inactive unmanaged `hysteron_*` logical slots.
 * Add integration coverage for managed logical slots lifecycle with
   `TestManagedLogicalReplicationSlots`.
+* Add managed logical slot mismatch safety coverage:
+  when desired plugin/database mismatches an existing slot, keeper logs a
+  warning and does not perform destructive drop/recreate.
 
 ## v0.17.0
 

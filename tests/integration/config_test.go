@@ -53,6 +53,29 @@ func getLogicalReplicationSlotsByName(q Querier) ([]string, error) {
 	return out, nil
 }
 
+func getLogicalSlotPluginAndDatabase(
+	q Querier,
+	slotName string,
+) (string, string, error) {
+	rows, err := q.Query(
+		"select database, plugin from pg_replication_slots where slot_name = $1",
+		slotName,
+	)
+	if err != nil {
+		return "", "", err
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		return "", "", fmt.Errorf("slot %q not found", slotName)
+	}
+	var database, plugin string
+	if err := rows.Scan(&database, &plugin); err != nil {
+		return "", "", err
+	}
+	return database, plugin, nil
+}
+
 func waitLogicalReplicationSlotPresent(
 	q Querier,
 	slotName string,
@@ -986,6 +1009,87 @@ func TestManagedLogicalReplicationSlots(t *testing.T) {
 
 	if err := waitLogicalReplicationSlotAbsent(master, slotName, 30*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
+	}
+}
+
+func TestManagedLogicalReplicationSlotsMismatchNoDestructiveAction(t *testing.T) {
+	t.Parallel()
+
+	dir, err := os.MkdirTemp("", "hysteron")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	clusterName := uuid.NewString()
+	tks, tss, tp, tstore := setupServers(
+		t,
+		clusterName,
+		dir,
+		1,
+		1,
+		false,
+		false,
+		nil,
+		func(spec *cluster.ClusterSpec) {
+			spec.PGParameters = cluster.PGParameters{
+				"wal_level": "logical",
+			}
+		},
+	)
+	defer shutdown(tks, tss, tp, tstore)
+
+	storeEndpoints := fmt.Sprintf("%s:%s", tstore.listenAddress, tstore.port)
+	storePath := filepath.Join(common.StorePrefix, clusterName)
+	sm := store.NewKVBackedStore(tstore.store, storePath)
+
+	master, _ := waitMasterStandbysReady(t, sm, tks)
+
+	slotName := "hysteron_logic02"
+	err = HysteronCluster(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		"update",
+		"--patch",
+		`{ "managedLogicalReplicationSlots" : [ { "name" : "hysteron_logic02", "database" : "postgres", "plugin" : "pgoutput" } ] }`,
+	)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := waitLogicalReplicationSlotPresent(master, slotName, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	// Change desired plugin for existing slot. Keeper must not drop/recreate.
+	err = HysteronCluster(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		"update",
+		"--patch",
+		`{ "managedLogicalReplicationSlots" : [ { "name" : "hysteron_logic02", "database" : "postgres", "plugin" : "test_decoding" } ] }`,
+	)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	// Slot should still exist with old plugin (no destructive action).
+	if err := waitLogicalReplicationSlotPresent(master, slotName, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	database, plugin, err := getLogicalSlotPluginAndDatabase(master, slotName)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if database != "postgres" || plugin != "pgoutput" {
+		t.Fatalf(
+			"expected existing logical slot to stay unchanged on mismatch, got database=%q plugin=%q",
+			database,
+			plugin,
+		)
 	}
 }
 

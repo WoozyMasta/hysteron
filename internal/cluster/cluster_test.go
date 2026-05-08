@@ -188,6 +188,14 @@ func TestClusterSpecValidate(t *testing.T) {
 			wantErr: "invalid HA timing: sleepInterval + 2*requestTimeout must be less than or equal to failInterval",
 		},
 		{
+			name: "ha timing uses effective defaults for partially configured values",
+			spec: &ClusterSpec{
+				InitMode:      &newMode,
+				SleepInterval: &Duration{Duration: 10 * time.Second},
+			},
+			wantErr: "invalid HA timing: sleepInterval + 2*requestTimeout must be less than or equal to failInterval",
+		},
+		{
 			name:    "max standbys must be positive",
 			spec:    &ClusterSpec{InitMode: &newMode, MaxStandbys: &zero},
 			wantErr: "maxStandbys must be at least 1",

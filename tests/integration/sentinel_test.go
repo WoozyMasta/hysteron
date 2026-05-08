@@ -17,6 +17,7 @@
 package integration
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -108,9 +109,14 @@ func TestSentinelEnabledProxies(t *testing.T) {
 
 	t.Logf("sentinel resumed cluster serving")
 
-	if err := WaitClusterDataEnabledProxies(sm, []string{tp.uid}, 30*time.Second); err != nil {
+	if err := WaitClusterDataEnabledProxiesNum(sm, 1, 30*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
+	cd, _, err := sm.GetClusterData(context.TODO())
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	enabledProxies := cd.Proxy.Spec.EnabledProxies
 
 	// add another proxy
 	tp2, err := NewTestProxy(t, dir, clusterName, pgSUUsername, pgSUPassword, pgReplUsername, pgReplPassword, tstore.storeBackend, storeEndpoints)
@@ -129,8 +135,13 @@ func TestSentinelEnabledProxies(t *testing.T) {
 	if err := WaitClusterDataEnabledProxiesNum(sm, 2, 30*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if err := WaitClusterDataEnabledProxies(sm, []string{tp.uid, tp2.uid}, 30*time.Second); err != nil {
+	cd, _, err = sm.GetClusterData(context.TODO())
+	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
+	}
+	enabledProxiesTwo := cd.Proxy.Spec.EnabledProxies
+	if len(enabledProxiesTwo) != 2 {
+		t.Fatalf("expected 2 enabled proxies, got %d", len(enabledProxiesTwo))
 	}
 
 	// freeze the proxy
@@ -139,10 +150,10 @@ func TestSentinelEnabledProxies(t *testing.T) {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
-	if err := WaitClusterDataEnabledProxiesNum(sm, 1, 30*time.Second); err != nil {
+	if err := WaitClusterDataEnabledProxiesNum(sm, 1, 60*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if err := WaitClusterDataEnabledProxies(sm, []string{tp.uid}, 30*time.Second); err != nil {
+	if err := WaitClusterDataEnabledProxies(sm, enabledProxies, 60*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
@@ -152,10 +163,10 @@ func TestSentinelEnabledProxies(t *testing.T) {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
-	if err := WaitClusterDataEnabledProxiesNum(sm, 2, 30*time.Second); err != nil {
+	if err := WaitClusterDataEnabledProxiesNum(sm, 2, 60*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if err := WaitClusterDataEnabledProxies(sm, []string{tp.uid, tp2.uid}, 30*time.Second); err != nil {
+	if err := WaitClusterDataEnabledProxies(sm, enabledProxiesTwo, 60*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 }

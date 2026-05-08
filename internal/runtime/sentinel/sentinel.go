@@ -2027,7 +2027,6 @@ func (s *Sentinel) updateCluster(
 		}
 		// Sort followers so the slice won't be considered changed due to different order of the same entries.
 		sort.Strings(masterDB.Spec.Followers)
-
 	default:
 		return nil, fmt.Errorf(
 			"unknown cluster phase %s",
@@ -2037,6 +2036,29 @@ func (s *Sentinel) updateCluster(
 
 	// Copy the clusterSpec parameters to the dbSpec
 	s.setDBSpecFromClusterSpec(newcd)
+
+	if masterUID := newcd.Cluster.Status.Master; masterUID != "" {
+		if masterDB, ok := newcd.DBs[masterUID]; ok && masterDB.Spec != nil {
+			ttl := newcd.Cluster.DefSpec().MemberReplicationSlotTTL
+			if ttl != nil && ttl.Duration > 0 {
+				prevFollowers := []string{}
+				if prevMasterDB, ok := cd.DBs[masterUID]; ok && prevMasterDB.Spec != nil {
+					prevFollowers = prevMasterDB.Spec.Followers
+				}
+				masterChanged := cd.Cluster.Status.Master != "" &&
+					cd.Cluster.Status.Master != masterUID
+				masterDB.Status.OrphanMemberSlots = computeOrphanMemberSlots(
+					prevFollowers,
+					masterDB.Spec.Followers,
+					masterDB.Status.OrphanMemberSlots,
+					masterChanged,
+					time.Now(),
+				)
+			} else {
+				masterDB.Status.OrphanMemberSlots = nil
+			}
+		}
+	}
 
 	// Update generation on DBs if they have changed
 	for dbUID, db := range newcd.DBs {
@@ -2061,6 +2083,45 @@ func (s *Sentinel) updateCluster(
 		)
 	}
 	return newcd, nil
+}
+
+func computeOrphanMemberSlots(
+	prevFollowers, currentFollowers []string,
+	prevOrphans map[string]time.Time,
+	masterChanged bool,
+	now time.Time,
+) map[string]time.Time {
+	if masterChanged {
+		return nil
+	}
+
+	out := map[string]time.Time{}
+	for slot, ts := range prevOrphans {
+		out[slot] = ts
+	}
+
+	current := map[string]struct{}{}
+	for _, followerUID := range currentFollowers {
+		slot := common.HysteronName(followerUID)
+		current[slot] = struct{}{}
+		delete(out, slot)
+	}
+
+	for _, followerUID := range prevFollowers {
+		slot := common.HysteronName(followerUID)
+		if _, managedNow := current[slot]; managedNow {
+			continue
+		}
+		if _, alreadyTracked := out[slot]; alreadyTracked {
+			continue
+		}
+		out[slot] = now
+	}
+
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func (s *Sentinel) updateChangeTimes(cd, newcd *cluster.ClusterData) {

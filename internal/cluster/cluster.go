@@ -823,6 +823,9 @@ type DBStatus struct {
 	XLogPos uint64 `json:"xLogPos,omitempty"`
 	// Healthy reports PostgreSQL health.
 	Healthy bool `json:"healthy,omitempty"`
+	// OrphanMemberSlots stores first-observed timestamps for orphaned member
+	// replication slots (`hysteron_<dbuid>`) tracked on the current master.
+	OrphanMemberSlots map[string]time.Time `json:"orphanMemberSlots,omitempty"`
 }
 
 // DB is a database object in cluster data.

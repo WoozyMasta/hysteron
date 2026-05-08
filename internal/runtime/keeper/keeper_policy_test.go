@@ -325,3 +325,36 @@ func TestEvaluateManagedLogicalSlotsDecision(t *testing.T) {
 		}
 	})
 }
+
+func TestShouldReconcileManagedLogicalSlots(t *testing.T) {
+	t.Run("disabled when not configured", func(t *testing.T) {
+		ok, reason := shouldReconcileManagedLogicalSlots(nil, cluster.PGParameters{})
+		if ok || reason != "not_configured" {
+			t.Fatalf("unexpected result: ok=%v reason=%s", ok, reason)
+		}
+	})
+
+	t.Run("disabled when wal_level is not logical", func(t *testing.T) {
+		ok, reason := shouldReconcileManagedLogicalSlots(
+			[]cluster.ManagedLogicalReplicationSlot{
+				{Name: "hysteron_slot1", Database: "postgres", Plugin: "pgoutput"},
+			},
+			cluster.PGParameters{"wal_level": "replica"},
+		)
+		if ok || reason != "wal_level_not_logical" {
+			t.Fatalf("unexpected result: ok=%v reason=%s", ok, reason)
+		}
+	})
+
+	t.Run("enabled when configured and wal_level logical", func(t *testing.T) {
+		ok, reason := shouldReconcileManagedLogicalSlots(
+			[]cluster.ManagedLogicalReplicationSlot{
+				{Name: "hysteron_slot1", Database: "postgres", Plugin: "pgoutput"},
+			},
+			cluster.PGParameters{"wal_level": "logical"},
+		)
+		if !ok || reason != "enabled" {
+			t.Fatalf("unexpected result: ok=%v reason=%s", ok, reason)
+		}
+	})
+}

@@ -1521,6 +1521,20 @@ type managedLogicalSlotsDecision struct {
 	active   []string
 }
 
+func shouldReconcileManagedLogicalSlots(
+	desired []cluster.ManagedLogicalReplicationSlot,
+	currentPGParameters cluster.PGParameters,
+) (bool, string) {
+	if len(desired) == 0 {
+		return false, "not_configured"
+	}
+	walLevel := strings.ToLower(strings.TrimSpace(currentPGParameters["wal_level"]))
+	if walLevel != "logical" {
+		return false, "wal_level_not_logical"
+	}
+	return true, "enabled"
+}
+
 func evaluateManagedLogicalSlotsDecision(
 	desired []cluster.ManagedLogicalReplicationSlot,
 	current []pg.LogicalReplicationSlot,
@@ -1640,6 +1654,20 @@ func (p *PostgresKeeper) refreshReplicationSlots(
 			Warn().
 			Strs("stale_slots", stale).
 			Msg("detected inactive unmanaged hysteron physical slots with xmin; consider cleanup to avoid vacuum horizon retention")
+	}
+
+	reconcileLogicalSlots, reason := shouldReconcileManagedLogicalSlots(
+		db.Spec.ManagedLogicalReplicationSlots,
+		db.Status.PGParameters,
+	)
+	if !reconcileLogicalSlots {
+		if reason == "wal_level_not_logical" {
+			p.baseLog().
+				Warn().
+				Str("wal_level", db.Status.PGParameters["wal_level"]).
+				Msg("managed logical replication slots configured but wal_level is not logical; skipping logical slot reconcile")
+		}
+		return nil
 	}
 
 	currentLogicalSlots, err := p.pgm.GetLogicalReplicationSlots()

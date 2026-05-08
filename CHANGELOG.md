@@ -172,6 +172,9 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Validate managed logical slots configuration up front:
   `managedLogicalReplicationSlots` now requires
   `pgParameters.wal_level="logical"` to avoid repeated runtime creation errors.
+* Add integration test coverage for this guardrail:
+  managed logical slot updates are rejected unless `wal_level` is set to
+  `logical`.
 
 ## v0.17.0
 

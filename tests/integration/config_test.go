@@ -1093,6 +1093,38 @@ func TestManagedLogicalReplicationSlotsMismatchNoDestructiveAction(t *testing.T)
 	}
 }
 
+func TestManagedLogicalReplicationSlotsRequiresLogicalWalLevel(t *testing.T) {
+	t.Parallel()
+
+	dir, err := os.MkdirTemp("", "hysteron")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	clusterName := uuid.NewString()
+	tks, tss, tp, tstore := setupServers(t, clusterName, dir, 1, 1, false, false, nil)
+	defer shutdown(tks, tss, tp, tstore)
+
+	storeEndpoints := fmt.Sprintf("%s:%s", tstore.listenAddress, tstore.port)
+	storePath := filepath.Join(common.StorePrefix, clusterName)
+	sm := store.NewKVBackedStore(tstore.store, storePath)
+	_, _ = waitMasterStandbysReady(t, sm, tks)
+
+	err = HysteronCluster(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		"update",
+		"--patch",
+		`{ "managedLogicalReplicationSlots" : [ { "name" : "hysteron_logic03", "database" : "postgres", "plugin" : "pgoutput" } ] }`,
+	)
+	if err == nil {
+		t.Fatalf("expected cluster update to fail when wal_level is not logical")
+	}
+}
+
 func TestAdvertise(t *testing.T) {
 	t.Parallel()
 

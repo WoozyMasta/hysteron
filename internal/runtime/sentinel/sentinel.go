@@ -2165,6 +2165,19 @@ func (s *Sentinel) updateDBConvergenceInfos(cd *cluster.ClusterData) {
 	}
 }
 
+func (s *Sentinel) runLeadershipSanitySweep(cd *cluster.ClusterData) {
+	s.keeperErrorTimers = make(map[string]int64)
+	s.dbErrorTimers = make(map[string]int64)
+	s.dbNotIncreasingXLogPos = make(map[string]int64)
+	s.keeperInfoHistories = make(KeeperInfoHistories)
+	s.dbConvergenceInfos = make(map[string]*DBConvergenceInfo)
+	s.proxyInfoHistories = make(ProxyInfoHistories)
+
+	// Rebuild convergence tracking from current cluster data so post-pause
+	// reconcile starts from a consistent in-memory state.
+	s.updateDBConvergenceInfos(cd)
+}
+
 func (s *Sentinel) dbConvergenceState(
 	db *cluster.DB,
 	timeout time.Duration,
@@ -2532,15 +2545,10 @@ func (s *Sentinel) clusterSentinelCheck(pctx context.Context) {
 	// if this is the first check after (re)gaining leadership reset all
 	// the internal timers
 	if firstRun {
-		s.keeperErrorTimers = make(map[string]int64)
-		s.dbErrorTimers = make(map[string]int64)
-		s.dbNotIncreasingXLogPos = make(map[string]int64)
-		s.keeperInfoHistories = make(KeeperInfoHistories)
-		s.dbConvergenceInfos = make(map[string]*DBConvergenceInfo)
-		s.proxyInfoHistories = make(ProxyInfoHistories)
-
-		// Update db convergence timers since its the first run
-		s.updateDBConvergenceInfos(cd)
+		s.log.Info().
+			Uint("leadership_epoch", leadershipCount).
+			Msg("running post-leadership sanity sweep")
+		s.runLeadershipSanitySweep(cd)
 	}
 
 	newcd, newKeeperInfoHistories, err := s.updateKeepersStatus(

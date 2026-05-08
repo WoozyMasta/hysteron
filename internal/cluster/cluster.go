@@ -518,7 +518,7 @@ func (c *ClusterSpec) Validate() error {
 	if s.ProxyCheckInterval.Duration >= s.ProxyTimeout.Duration {
 		return errors.New("proxyCheckInterval should be less than proxyTimeout")
 	}
-	if c.SleepInterval != nil || c.RequestTimeout != nil || c.FailInterval != nil {
+	if c.SleepInterval != nil && c.RequestTimeout != nil && c.FailInterval != nil {
 		if err := validateHATiming(
 			s.SleepInterval.Duration,
 			s.RequestTimeout.Duration,

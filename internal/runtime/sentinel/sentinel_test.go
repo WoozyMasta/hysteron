@@ -6321,3 +6321,61 @@ func TestClusterSpecFiles(t *testing.T) {
 		})
 	}
 }
+
+func TestRunLeadershipSanitySweepResetsTransientState(t *testing.T) {
+	db := &cluster.DB{
+		UID:        "db1",
+		Generation: 2,
+		Status: cluster.DBStatus{
+			CurrentGeneration: 1,
+		},
+	}
+	cd := &cluster.ClusterData{
+		DBs: cluster.DBs{
+			db.UID: db,
+		},
+	}
+
+	s := &Sentinel{
+		keeperErrorTimers: map[string]int64{"keeper1": timer.Now()},
+		dbErrorTimers:     map[string]int64{"db1": timer.Now()},
+		dbNotIncreasingXLogPos: map[string]int64{
+			"db1": 3,
+		},
+		dbConvergenceInfos: map[string]*DBConvergenceInfo{
+			"old": {Generation: 1, Timer: timer.Now()},
+		},
+		keeperInfoHistories: KeeperInfoHistories{
+			"keeper1": {KeeperInfo: &cluster.KeeperInfo{UID: "keeper1"}},
+		},
+		proxyInfoHistories: ProxyInfoHistories{
+			"proxy1": {ProxyInfo: &cluster.ProxyInfo{UID: "proxy1"}},
+		},
+	}
+
+	s.runLeadershipSanitySweep(cd)
+
+	if len(s.keeperErrorTimers) != 0 {
+		t.Fatalf("keeperErrorTimers not reset: %v", s.keeperErrorTimers)
+	}
+	if len(s.dbErrorTimers) != 0 {
+		t.Fatalf("dbErrorTimers not reset: %v", s.dbErrorTimers)
+	}
+	if len(s.dbNotIncreasingXLogPos) != 0 {
+		t.Fatalf("dbNotIncreasingXLogPos not reset: %v", s.dbNotIncreasingXLogPos)
+	}
+	if len(s.keeperInfoHistories) != 0 {
+		t.Fatalf("keeperInfoHistories not reset: %v", s.keeperInfoHistories)
+	}
+	if len(s.proxyInfoHistories) != 0 {
+		t.Fatalf("proxyInfoHistories not reset: %v", s.proxyInfoHistories)
+	}
+	if len(s.dbConvergenceInfos) != 1 {
+		t.Fatalf("dbConvergenceInfos not rebuilt: %v", s.dbConvergenceInfos)
+	}
+	if info, ok := s.dbConvergenceInfos[db.UID]; !ok {
+		t.Fatalf("dbConvergenceInfos missing db %q after sweep", db.UID)
+	} else if info.Generation != db.Generation {
+		t.Fatalf("unexpected convergence generation: got=%d want=%d", info.Generation, db.Generation)
+	}
+}

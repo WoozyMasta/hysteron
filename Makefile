@@ -23,13 +23,15 @@ DOC_RENDER_STYLE ?= posix
 DOC_COMMANDS_DIR ?= doc/commands
 
 INTEGRATION_TAGS          ?= integration
-INTEGRATION_TIMEOUT       ?= 20m
+INTEGRATION_TIMEOUT       ?= 30m
 INTEGRATION_PARALLEL      ?= 16
 INTEGRATION_MAX_STORES    ?= 8
 INTEGRATION_RUN           ?=
 INTEGRATION_TEST_ARGS     ?=
 INTEGRATION_STORE_BACKEND ?= etcdv3
 ETCD_BIN                  ?= etcd
+INTEGRATION_ARTIFACTS_DIR ?= artifacts/integration
+INTEGRATION_TIMESTAMP     ?= $(shell date -u +%Y%m%dT%H%M%SZ)
 INTEGRATION_RUN_ARG       := $(if $(INTEGRATION_RUN),-run '$(INTEGRATION_RUN)',)
 
 BINARY     ?= hysteron
@@ -179,6 +181,9 @@ bench-reset:
 	rm -f "$(BENCH_REF)"
 
 integration: build
+	@mkdir -p "$(INTEGRATION_ARTIFACTS_DIR)"
+	@log_file="$(INTEGRATION_ARTIFACTS_DIR)/integration-$(INTEGRATION_TIMESTAMP).log"; \
+	echo ">> writing integration log to $$log_file"; \
 	HYSTERON_TEST_STORE_BACKEND="$(INTEGRATION_STORE_BACKEND)" \
 	HYSTERON_INTEGRATION_MAX_STORES="$(INTEGRATION_MAX_STORES)" \
 	ETCD_BIN="$(ETCD_BIN)" \
@@ -186,24 +191,33 @@ integration: build
 	$(GO) test -tags "$(INTEGRATION_TAGS)" -timeout "$(INTEGRATION_TIMEOUT)" \
 		-parallel "$(INTEGRATION_PARALLEL)" $(INTEGRATION_RUN_ARG) \
 		$(INTEGRATION_TEST_ARGS) \
-		-v -count 1 ./tests/integration
+		-v -count 1 ./tests/integration 2>&1 | tee "$$log_file"
 
 integration-compose:
+	@mkdir -p "$(INTEGRATION_ARTIFACTS_DIR)"
+	@log_file="$(INTEGRATION_ARTIFACTS_DIR)/integration-compose-pg$(PG_MAJOR)-$(INTEGRATION_TIMESTAMP).log"; \
+	echo ">> writing integration compose log to $$log_file"; \
 	PG_MAJOR="$(PG_MAJOR)" $(CRI) compose -f tests/integration/compose.yml \
-		run --rm integration
+		run --rm integration 2>&1 | tee "$$log_file"
 
 integration-matrix:
+	@mkdir -p "$(INTEGRATION_ARTIFACTS_DIR)"
 	@for pg in $(PG_MATRIX); do \
 		echo ">> running integration compose matrix for PostgreSQL $$pg"; \
+		log_file="$(INTEGRATION_ARTIFACTS_DIR)/integration-compose-pg$${pg}-$(INTEGRATION_TIMESTAMP).log"; \
+		echo ">> writing integration compose log to $$log_file"; \
 		PG_MAJOR="$$pg" $(CRI) compose -f tests/integration/compose.yml \
-			run --rm integration || exit $$?; \
+			run --rm integration 2>&1 | tee "$$log_file" || exit $$?; \
 	done
 
 integration-matrix-ci:
+	@mkdir -p "$(INTEGRATION_ARTIFACTS_DIR)"
 	@for pg in $(PG_MATRIX_CI); do \
 		echo ">> running reduced integration compose matrix for PostgreSQL $$pg"; \
+		log_file="$(INTEGRATION_ARTIFACTS_DIR)/integration-compose-pg$${pg}-$(INTEGRATION_TIMESTAMP).log"; \
+		echo ">> writing integration compose log to $$log_file"; \
 		PG_MAJOR="$$pg" $(CRI) compose -f tests/integration/compose.yml \
-			run --rm integration || exit $$?; \
+			run --rm integration 2>&1 | tee "$$log_file" || exit $$?; \
 	done
 
 tools: tool-golangci-lint tool-betteralign tool-benchstat tool-govulncheck

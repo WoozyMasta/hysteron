@@ -22,7 +22,9 @@ services:
         PG_MAJOR: ${PG_MAJOR:-18}
     environment:
       DEBUG: ${INTEGRATION_DEBUG:-}
+      DOC_BUILD: "0"
       GOCACHE: /tmp/go-build
+      GOTOOLCHAIN: auto
       GOFLAGS: -buildvcs=false -trimpath
       GOMODCACHE: /tmp/go-mod
       INTEGRATION_RUN: ${INTEGRATION_RUN:-}

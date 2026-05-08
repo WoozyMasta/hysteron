@@ -1094,8 +1094,8 @@ func (p *Manager) OlderWalFile() (string, error) {
 	return "", nil
 }
 
-// IsRestartRequired returns if a postgres restart is necessary
-func (p *Manager) IsRestartRequired(_ []string) (bool, error) {
+// IsRestartRequired returns if a postgres restart is necessary.
+func (p *Manager) IsRestartRequired() (bool, error) {
 	requirement, err := p.IsRestartRequiredDetailed()
 	if err != nil {
 		return false, err

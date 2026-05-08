@@ -148,7 +148,7 @@ func BenchmarkKeeperUpdateReplSlotsNoChanges(b *testing.B) {
 
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		if err := p.updateReplSlots(curReplSlots, uid, followersUIDs, additionalReplSlots); err != nil {
+		if err := p.updateReplSlots(curReplSlots, uid, followersUIDs, additionalReplSlots, nil); err != nil {
 			b.Fatal(err)
 		}
 	}

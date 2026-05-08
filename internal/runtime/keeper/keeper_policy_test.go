@@ -14,7 +14,11 @@
 
 package keeper
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/woozymasta/hysteron/internal/common"
+)
 
 func TestEvaluatePgrewindDecision(t *testing.T) {
 	t.Run("disabled when database is not initialized", func(t *testing.T) {
@@ -95,4 +99,33 @@ func TestEvaluatePgrewindDecision(t *testing.T) {
 			t.Fatalf("unexpected wal check error: %v", d.walCheckErr)
 		}
 	})
+}
+
+func TestManagedReplicationSlotsRespectsIgnoreList(t *testing.T) {
+	ignoredFollowerSlot := common.HysteronName("db2")
+	ignoredAdditionalSlot := common.HysteronName("extra")
+	managedFollowerSlot := common.HysteronName("db3")
+
+	internalSlots, ignoredSlots := managedReplicationSlots(
+		"db1",
+		[]string{"db1", "db2", "db3"},
+		[]string{"extra"},
+		[]string{ignoredFollowerSlot, ignoredAdditionalSlot},
+	)
+
+	if _, ok := ignoredSlots[ignoredFollowerSlot]; !ok {
+		t.Fatalf("expected ignored follower slot %q in ignored set", ignoredFollowerSlot)
+	}
+	if _, ok := ignoredSlots[ignoredAdditionalSlot]; !ok {
+		t.Fatalf("expected ignored additional slot %q in ignored set", ignoredAdditionalSlot)
+	}
+	if _, ok := internalSlots[ignoredFollowerSlot]; ok {
+		t.Fatalf("did not expect ignored follower slot %q in managed set", ignoredFollowerSlot)
+	}
+	if _, ok := internalSlots[ignoredAdditionalSlot]; ok {
+		t.Fatalf("did not expect ignored additional slot %q in managed set", ignoredAdditionalSlot)
+	}
+	if _, ok := internalSlots[managedFollowerSlot]; !ok {
+		t.Fatalf("expected managed follower slot %q in managed set", managedFollowerSlot)
+	}
 }

@@ -363,6 +363,9 @@ type ClusterSpec struct { //nolint:revive
 	// here will be dropped from the master instance (i.e. manually created
 	// replication slots will be removed).
 	AdditionalMasterReplicationSlots []string `json:"additionalMasterReplicationSlots"`
+	// IgnoreMasterReplicationSlots defines replication slots that hysteron
+	// should not create, alter, or drop on the current master instance.
+	IgnoreMasterReplicationSlots []string `json:"ignoreMasterReplicationSlots"`
 	// Additional pg_hba.conf entries
 	// we don't set omitempty since we want to distinguish between null or empty slice
 	PGHBA []string `json:"pgHBA"`
@@ -547,6 +550,11 @@ func (c *ClusterSpec) Validate() error {
 			return err
 		}
 	}
+	for _, replicationSlot := range s.IgnoreMasterReplicationSlots {
+		if err := validateReplicationSlotName(replicationSlot); err != nil {
+			return err
+		}
+	}
 
 	// The unique validation we're doing on pgHBA entries is that they don't contain a newline character
 	for _, e := range s.PGHBA {
@@ -619,11 +627,18 @@ func validateHATiming(
 }
 
 func validateReplicationSlot(replicationSlot string) error {
-	if !util.IsValidReplSlotName(replicationSlot) {
-		return fmt.Errorf("wrong replication slot name: %q", replicationSlot)
+	if err := validateReplicationSlotName(replicationSlot); err != nil {
+		return err
 	}
 	if common.IsHysteronName(replicationSlot) {
 		return fmt.Errorf("replication slot name is reserved: %q", replicationSlot)
+	}
+	return nil
+}
+
+func validateReplicationSlotName(replicationSlot string) error {
+	if !util.IsValidReplSlotName(replicationSlot) {
+		return fmt.Errorf("wrong replication slot name: %q", replicationSlot)
 	}
 	return nil
 }
@@ -736,6 +751,9 @@ type DBSpec struct {
 	// Replication slots not defined here will be dropped from the instance
 	// (i.e. manually created replication slots will be removed).
 	AdditionalReplicationSlots []string `json:"additionalReplicationSlots"`
+	// IgnoreReplicationSlots defines replication slots that hysteron should not
+	// create, alter, or drop on the instance.
+	IgnoreReplicationSlots []string `json:"ignoreReplicationSlots"`
 	// Additional pg_hba.conf entries
 	// We don't set omitempty since we want to distinguish between null or empty slice
 	PGHBA []string `json:"pgHBA"`

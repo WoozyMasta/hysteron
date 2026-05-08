@@ -1338,26 +1338,21 @@ func (p *PostgresKeeper) isDifferentTimelineBranch(
 func (p *PostgresKeeper) updateReplSlots(
 	curReplSlots []string,
 	uid string,
-	followersUIDs, additionalReplSlots []string,
+	followersUIDs, additionalReplSlots, ignoredReplSlots []string,
 ) error {
-	internalReplSlots := map[string]struct{}{}
-
-	// Create a list of the wanted internal replication slots
-	for _, followerUID := range followersUIDs {
-		if followerUID == uid {
-			continue
-		}
-		internalReplSlots[common.HysteronName(followerUID)] = struct{}{}
-	}
-
-	// Add AdditionalReplicationSlots
-	for _, slot := range additionalReplSlots {
-		internalReplSlots[common.HysteronName(slot)] = struct{}{}
-	}
+	internalReplSlots, ignoredSlots := managedReplicationSlots(
+		uid,
+		followersUIDs,
+		additionalReplSlots,
+		ignoredReplSlots,
+	)
 
 	// Drop internal replication slots
 	for _, slot := range curReplSlots {
 		if !common.IsHysteronName(slot) {
+			continue
+		}
+		if _, ignored := ignoredSlots[slot]; ignored {
 			continue
 		}
 		if _, ok := internalReplSlots[slot]; !ok {
@@ -1397,6 +1392,41 @@ func (p *PostgresKeeper) updateReplSlots(
 	return nil
 }
 
+func managedReplicationSlots(
+	uid string,
+	followersUIDs, additionalReplSlots, ignoredReplSlots []string,
+) (map[string]struct{}, map[string]struct{}) {
+	internalReplSlots := map[string]struct{}{}
+	ignoredSlots := map[string]struct{}{}
+
+	for _, slot := range ignoredReplSlots {
+		ignoredSlots[slot] = struct{}{}
+	}
+
+	// Create a list of the wanted internal replication slots.
+	for _, followerUID := range followersUIDs {
+		if followerUID == uid {
+			continue
+		}
+		slot := common.HysteronName(followerUID)
+		if _, ignored := ignoredSlots[slot]; ignored {
+			continue
+		}
+		internalReplSlots[slot] = struct{}{}
+	}
+
+	// Add AdditionalReplicationSlots.
+	for _, slot := range additionalReplSlots {
+		hysteronSlot := common.HysteronName(slot)
+		if _, ignored := ignoredSlots[hysteronSlot]; ignored {
+			continue
+		}
+		internalReplSlots[hysteronSlot] = struct{}{}
+	}
+
+	return internalReplSlots, ignoredSlots
+}
+
 func (p *PostgresKeeper) refreshReplicationSlots(db *cluster.DB) error {
 	var currentReplicationSlots []string
 	currentReplicationSlots, err := p.pgm.GetReplicationSlots()
@@ -1410,7 +1440,13 @@ func (p *PostgresKeeper) refreshReplicationSlots(db *cluster.DB) error {
 
 	followersUIDs := db.Spec.Followers
 
-	if err = p.updateReplSlots(currentReplicationSlots, db.UID, followersUIDs, db.Spec.AdditionalReplicationSlots); err != nil {
+	if err = p.updateReplSlots(
+		currentReplicationSlots,
+		db.UID,
+		followersUIDs,
+		db.Spec.AdditionalReplicationSlots,
+		db.Spec.IgnoreReplicationSlots,
+	); err != nil {
 		p.baseLog().
 			Error().
 			Err(err).
@@ -2357,7 +2393,6 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 	}
 
 	needsReload := false
-	changedParams := pgParameters.Diff(pgm.CurParameters())
 
 	if !pgParameters.Equals(pgm.CurParameters()) {
 		p.baseLog().Info().Msg("postgres parameters changed, reloading postgres instance")
@@ -2416,7 +2451,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 		clusterSpec := cd.Cluster.DefSpec()
 		automaticPgRestartEnabled := *clusterSpec.AutomaticPgRestart
 
-		needsRestart, err := pgm.IsRestartRequired(changedParams)
+		restartRequirement, err := pgm.IsRestartRequiredDetailed()
 		if err != nil {
 			p.baseLog().
 				Error().
@@ -2424,8 +2459,12 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 				Msg("failed to check if restart is required")
 		}
 
-		if needsRestart {
+		if restartRequirement != nil && restartRequirement.Required {
 			needsRestartGauge.Set(1) // mark as restart needed
+			p.baseLog().
+				Warn().
+				Strs("pending_restart_params", restartRequirement.PendingParams).
+				Msg("PostgreSQL reports pending restart parameters")
 			if automaticPgRestartEnabled {
 				p.baseLog().Info().Msg("automatic PostgreSQL restart scheduled")
 				if err := pgm.Restart(true); err != nil {

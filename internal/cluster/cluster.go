@@ -387,6 +387,9 @@ type ClusterSpec struct { //nolint:revive
 	// BeforeStopCommand defines a best-effort command executed by keeper before
 	// stopping PostgreSQL. Command failures are logged and do not block stop.
 	BeforeStopCommand string `json:"beforeStopCommand,omitempty"`
+	// PrePromoteCommand defines a fencing command executed by keeper before
+	// promoting standby to primary. Command failures block promotion.
+	PrePromoteCommand string `json:"prePromoteCommand,omitempty"`
 	// Additional pg_hba.conf entries
 	// we don't set omitempty since we want to distinguish between null or empty slice
 	PGHBA []string `json:"pgHBA"`
@@ -840,6 +843,9 @@ type DBSpec struct {
 	// BeforeStopCommand defines a best-effort command executed by keeper before
 	// stopping PostgreSQL for this DB assignment.
 	BeforeStopCommand string `json:"beforeStopCommand,omitempty"`
+	// PrePromoteCommand defines a fencing command executed by keeper before
+	// promoting this standby to primary.
+	PrePromoteCommand string `json:"prePromoteCommand,omitempty"`
 	// Additional pg_hba.conf entries
 	// We don't set omitempty since we want to distinguish between null or empty slice
 	PGHBA []string `json:"pgHBA"`
@@ -868,6 +874,10 @@ type DBSpec struct {
 type DBStatus struct {
 	// PGParameters are PostgreSQL parameters currently reported by the instance.
 	PGParameters PGParameters `json:"pgParameters,omitempty"`
+
+	// OrphanMemberSlots stores first-observed timestamps for orphaned member
+	// replication slots (`hysteron_<dbuid>`) tracked on the current master.
+	OrphanMemberSlots map[string]time.Time `json:"orphanMemberSlots,omitempty"`
 
 	// ListenAddress is PostgreSQL listen address.
 	ListenAddress string `json:"listenAddress,omitempty"`
@@ -902,17 +912,14 @@ type DBStatus struct {
 	XLogPos uint64 `json:"xLogPos,omitempty"`
 	// Healthy reports PostgreSQL health.
 	Healthy bool `json:"healthy,omitempty"`
-	// OrphanMemberSlots stores first-observed timestamps for orphaned member
-	// replication slots (`hysteron_<dbuid>`) tracked on the current master.
-	OrphanMemberSlots map[string]time.Time `json:"orphanMemberSlots,omitempty"`
 }
 
 // DB is a database object in cluster data.
 type DB struct {
+	Status     DBStatus  `json:"status,omitzero"`
 	ChangeTime time.Time `json:"changeTime,omitzero"`
 	Spec       *DBSpec   `json:"spec,omitempty"`
 	UID        string    `json:"uid,omitempty"`
-	Status     DBStatus  `json:"status,omitzero"`
 	Generation int64     `json:"generation,omitempty"`
 }
 

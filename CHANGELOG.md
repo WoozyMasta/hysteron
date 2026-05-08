@@ -190,6 +190,11 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Add optional `beforeStopCommand` cluster setting propagated to DB spec and
   executed by keeper as a best-effort pre-stop hook before managed PostgreSQL
   stop operations.
+* Add sentinel leader-race backoff hardening:
+  failover election is deferred temporarily (bounded by `failInterval`) only
+  when a failed-master path still has candidate standbys with recently
+  observed WAL progress, reducing false elections during transient visibility
+  races.
 
 ## v0.17.0
 

@@ -113,8 +113,8 @@ type Manager struct {
 // RestartRequirement describes whether a PostgreSQL restart is required and
 // which settings currently require it.
 type RestartRequirement struct {
-	Required      bool
 	PendingParams []string
+	Required      bool
 }
 
 // PhysicalReplicationSlot describes one physical replication slot status.

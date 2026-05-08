@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"math/rand"
 	"net/http"
 	"os"
@@ -345,6 +346,10 @@ func (s *Sentinel) updateKeepersStatus(
 			s.SetDBNotIncreasingXLogPos(db.UID)
 		} else {
 			s.CleanDBNotIncreasingXLogPos(db.UID)
+			if s.dbIncreasingXLogPosObservedAt == nil {
+				s.dbIncreasingXLogPosObservedAt = make(map[string]int64)
+			}
+			s.dbIncreasingXLogPosObservedAt[db.UID] = timer.Now()
 		}
 
 		db.Status.ListenAddress = dbs.ListenAddress
@@ -450,6 +455,7 @@ func (s *Sentinel) setDBSpecFromClusterSpec(cd *cluster.ClusterData) {
 		db.Spec.PGParameters = clusterSpec.PGParameters
 		db.Spec.PGHBA = clusterSpec.PGHBA
 		db.Spec.BeforeStopCommand = clusterSpec.BeforeStopCommand
+		db.Spec.PrePromoteCommand = clusterSpec.PrePromoteCommand
 		if db.Spec.FollowConfig != nil &&
 			db.Spec.FollowConfig.Type == cluster.FollowTypeExternal {
 			db.Spec.FollowConfig.StandbySettings = clusterSpec.StandbyConfig.StandbySettings
@@ -1261,35 +1267,25 @@ func (s *Sentinel) updateCluster(
 				Msg("trying to find a new master to replace failed master")
 			bestNewMasters := s.findBestNewMasters(newcd, curMasterDB)
 			if len(bestNewMasters) == 0 {
+				delete(s.leaderRaceBackoffTimers, curMasterDBUID)
 				s.log.Error().Msg("no eligible masters")
 			} else {
-				// if synchronous replication is enabled, only choose new master in the synchronous replication standbys.
-				var bestNewMasterDB *cluster.DB
-				if curMasterDB.Spec.SynchronousReplication {
-					commonSyncStandbys := slicesutil.CommonElements(curMasterDB.Status.SynchronousStandbys, curMasterDB.Spec.SynchronousStandbys)
-					if len(commonSyncStandbys) == 0 {
-						s.log.Warn().
-							Strs(
-								"reported_sync_standbys",
-								curMasterDB.Status.SynchronousStandbys,
-							).
-							Strs(
-								"spec_sync_standbys",
-								curMasterDB.Spec.SynchronousStandbys,
-							).
-							Msg(
-								"cannot choose synchronous standby since there are no " +
-									"common elements between the latest master reported " +
-									"synchronous standbys and the db spec ones",
-							)
-					} else {
-						for _, nm := range bestNewMasters {
-							if slices.Contains(commonSyncStandbys, nm.UID) {
-								bestNewMasterDB = nm
-								break
-							}
-						}
-						if bestNewMasterDB == nil {
+				delayLeaderRace := s.shouldDelayLeaderRace(
+					curMasterDB,
+					bestNewMasters,
+					clusterSpec.FailInterval.Duration,
+				)
+				if delayLeaderRace {
+					s.log.Warn().
+						Str(slog.FieldDBUID, curMasterDB.UID).
+						Dur("leader_race_backoff_window", clusterSpec.FailInterval.Duration).
+						Msg("deferring leader race because standby WAL position is still advancing")
+				} else {
+					// if synchronous replication is enabled, only choose new master in the synchronous replication standbys.
+					var bestNewMasterDB *cluster.DB
+					if curMasterDB.Spec.SynchronousReplication {
+						commonSyncStandbys := slicesutil.CommonElements(curMasterDB.Status.SynchronousStandbys, curMasterDB.Spec.SynchronousStandbys)
+						if len(commonSyncStandbys) == 0 {
 							s.log.Warn().
 								Strs(
 									"reported_sync_standbys",
@@ -1299,30 +1295,56 @@ func (s *Sentinel) updateCluster(
 									"spec_sync_standbys",
 									curMasterDB.Spec.SynchronousStandbys,
 								).
-								Strs("common_sync_standbys", commonSyncStandbys).
-								Interface(
-									"possible_masters",
-									cluster.LogSummaryDBList(bestNewMasters),
-								).
 								Msg(
-									"cannot choose synchronous standby: no match between " +
-										"possible masters and usable synchronous standbys",
+									"cannot choose synchronous standby since there are no " +
+										"common elements between the latest master reported " +
+										"synchronous standbys and the db spec ones",
 								)
+						} else {
+							for _, nm := range bestNewMasters {
+								if slices.Contains(commonSyncStandbys, nm.UID) {
+									bestNewMasterDB = nm
+									break
+								}
+							}
+							if bestNewMasterDB == nil {
+								s.log.Warn().
+									Strs(
+										"reported_sync_standbys",
+										curMasterDB.Status.SynchronousStandbys,
+									).
+									Strs(
+										"spec_sync_standbys",
+										curMasterDB.Spec.SynchronousStandbys,
+									).
+									Strs("common_sync_standbys", commonSyncStandbys).
+									Interface(
+										"possible_masters",
+										cluster.LogSummaryDBList(bestNewMasters),
+									).
+									Msg(
+										"cannot choose synchronous standby: no match between " +
+											"possible masters and usable synchronous standbys",
+									)
+							}
 						}
+					} else {
+						bestNewMasterDB = bestNewMasters[0]
 					}
-				} else {
-					bestNewMasterDB = bestNewMasters[0]
-				}
-				if bestNewMasterDB != nil {
-					s.log.Info().
-						Str(slog.FieldDBUID, bestNewMasterDB.UID).
-						Str(slog.FieldKeeperUID, bestNewMasterDB.Spec.KeeperUID).
-						Msg("electing db as the new master")
-					wantedMasterDBUID = bestNewMasterDB.UID
-				} else {
-					s.log.Error().Msg("no eligible masters")
+					if bestNewMasterDB != nil {
+						s.log.Info().
+							Str(slog.FieldDBUID, bestNewMasterDB.UID).
+							Str(slog.FieldKeeperUID, bestNewMasterDB.Spec.KeeperUID).
+							Msg("electing db as the new master")
+						wantedMasterDBUID = bestNewMasterDB.UID
+						delete(s.leaderRaceBackoffTimers, curMasterDBUID)
+					} else {
+						s.log.Error().Msg("no eligible masters")
+					}
 				}
 			}
+		} else {
+			delete(s.leaderRaceBackoffTimers, curMasterDBUID)
 		}
 
 		// New master elected
@@ -2099,9 +2121,7 @@ func computeOrphanMemberSlots(
 	}
 
 	out := map[string]time.Time{}
-	for slot, ts := range prevOrphans {
-		out[slot] = ts
-	}
+	maps.Copy(out, prevOrphans)
 
 	current := map[string]struct{}{}
 	for _, followerUID := range currentFollowers {
@@ -2235,13 +2255,63 @@ func (s *Sentinel) runLeadershipSanitySweep(cd *cluster.ClusterData) {
 	s.keeperErrorTimers = make(map[string]int64)
 	s.dbErrorTimers = make(map[string]int64)
 	s.dbNotIncreasingXLogPos = make(map[string]int64)
+	s.dbIncreasingXLogPosObservedAt = make(map[string]int64)
 	s.keeperInfoHistories = make(KeeperInfoHistories)
 	s.dbConvergenceInfos = make(map[string]*DBConvergenceInfo)
+	s.leaderRaceBackoffTimers = make(map[string]int64)
 	s.proxyInfoHistories = make(ProxyInfoHistories)
 
 	// Rebuild convergence tracking from current cluster data so post-pause
 	// reconcile starts from a consistent in-memory state.
 	s.updateDBConvergenceInfos(cd)
+}
+
+func (s *Sentinel) shouldDelayLeaderRace(
+	failedMaster *cluster.DB,
+	candidates []*cluster.DB,
+	window time.Duration,
+) bool {
+	if s.leaderRaceBackoffTimers == nil {
+		s.leaderRaceBackoffTimers = make(map[string]int64)
+	}
+	if s.dbIncreasingXLogPosObservedAt == nil {
+		s.dbIncreasingXLogPosObservedAt = make(map[string]int64)
+	}
+	if failedMaster == nil || failedMaster.UID == "" {
+		return false
+	}
+	if window <= 0 || len(candidates) == 0 {
+		delete(s.leaderRaceBackoffTimers, failedMaster.UID)
+		return false
+	}
+
+	for _, candidate := range candidates {
+		lastIncreaseAt, ok := s.dbIncreasingXLogPosObservedAt[candidate.UID]
+		if !ok {
+			continue
+		}
+		if !s.isDBIncreasingXLogPos(candidate) {
+			continue
+		}
+		if timer.Since(lastIncreaseAt) >= window {
+			continue
+		}
+
+		startedAt, ok := s.leaderRaceBackoffTimers[failedMaster.UID]
+		if !ok {
+			s.leaderRaceBackoffTimers[failedMaster.UID] = timer.Now()
+			return true
+		}
+		if timer.Since(startedAt) < window {
+			return true
+		}
+
+		delete(s.leaderRaceBackoffTimers, failedMaster.UID)
+		return false
+	}
+
+	delete(s.leaderRaceBackoffTimers, failedMaster.UID)
+	return false
 }
 
 func (s *Sentinel) dbConvergenceState(
@@ -2375,8 +2445,12 @@ type Sentinel struct {
 	dbErrorTimers map[string]int64
 	// Timers for DBs not advancing WAL position.
 	dbNotIncreasingXLogPos map[string]int64
+	// Last observed timestamps of DB WAL position increases.
+	dbIncreasingXLogPosObservedAt map[string]int64
 	// Cached convergence tracking keyed by DB UID.
 	dbConvergenceInfos map[string]*DBConvergenceInfo
+	// Backoff timers for delayed leader race keyed by failed master DB UID.
+	leaderRaceBackoffTimers map[string]int64
 
 	// History of keeper heartbeats and state transitions.
 	keeperInfoHistories KeeperInfoHistories
@@ -2485,6 +2559,9 @@ func NewSentinel(
 
 		sleepInterval:  cluster.DefaultSleepInterval,
 		requestTimeout: cluster.DefaultRequestTimeout,
+
+		dbIncreasingXLogPosObservedAt: make(map[string]int64),
+		leaderRaceBackoffTimers:       make(map[string]int64),
 	}, nil
 }
 

@@ -780,11 +780,11 @@ func (p *PostgresKeeper) usePgrewind(db *cluster.DB) bool {
 }
 
 type pgrewindDecision struct {
-	try         bool
-	reason      string
 	walCheckErr error
+	reason      string
 	requiredWal string
 	olderWal    string
+	try         bool
 }
 
 const (
@@ -2486,6 +2486,14 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 		}
 
 		if localRole == common.RoleStandby {
+			if err = p.runPrePromoteHook(db); err != nil {
+				p.baseLog().
+					Error().
+					Err(err).
+					Str(slog.FieldDBUID, db.UID).
+					Msg("pre-promote hook failed; refusing promote")
+				return
+			}
 			p.baseLog().Info().Msg("promoting standby to master")
 			if err = pgm.Promote(); err != nil {
 				p.baseLog().
@@ -2842,16 +2850,35 @@ func (p *PostgresKeeper) runBeforeStopHook(db *cluster.DB) {
 	if db == nil || db.Spec == nil {
 		return
 	}
-	command := strings.TrimSpace(db.Spec.BeforeStopCommand)
+	_ = p.runHookCommand(db, db.Spec.BeforeStopCommand, "before-stop")
+}
+
+func (p *PostgresKeeper) runPrePromoteHook(db *cluster.DB) error {
+	if db == nil || db.Spec == nil {
+		return nil
+	}
+	return p.runHookCommand(db, db.Spec.PrePromoteCommand, "pre-promote")
+}
+
+func (p *PostgresKeeper) runHookCommand(
+	db *cluster.DB,
+	command string,
+	hookName string,
+) error {
+	if db == nil || db.Spec == nil {
+		return nil
+	}
+	command = strings.TrimSpace(command)
 	if command == "" {
-		return
+		return nil
 	}
 
 	p.baseLog().
 		Info().
 		Str(slog.FieldDBUID, db.UID).
-		Str("before_stop_command", command).
-		Msg("executing before-stop command")
+		Str("hook", hookName).
+		Str("hook_command", command).
+		Msg("executing keeper hook command")
 
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
@@ -2867,15 +2894,18 @@ func (p *PostgresKeeper) runBeforeStopHook(db *cluster.DB) {
 			Warn().
 			Err(err).
 			Str(slog.FieldDBUID, db.UID).
-			Str("before_stop_command", command).
-			Msg("before-stop command failed; continuing with PostgreSQL stop")
-		return
+			Str("hook", hookName).
+			Str("hook_command", command).
+			Msg("keeper hook command failed")
+		return err
 	}
 
 	p.baseLog().
 		Info().
 		Str(slog.FieldDBUID, db.UID).
-		Msg("before-stop command completed")
+		Str("hook", hookName).
+		Msg("keeper hook command completed")
+	return nil
 }
 
 func (p *PostgresKeeper) keeperLocalStateFilePath() string {

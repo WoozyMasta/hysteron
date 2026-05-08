@@ -587,3 +587,31 @@ func TestEnsureStandbyWALReplayRunning(t *testing.T) {
 		}
 	})
 }
+
+func TestRunPrePromoteHookEmpty(t *testing.T) {
+	p := &PostgresKeeper{cfg: &config{}}
+	db := &cluster.DB{
+		UID: "db1",
+		Spec: &cluster.DBSpec{
+			PrePromoteCommand: "",
+		},
+	}
+
+	if err := p.runPrePromoteHook(db); err != nil {
+		t.Fatalf("unexpected empty pre-promote hook error: %v", err)
+	}
+}
+
+func TestRunPrePromoteHookFailure(t *testing.T) {
+	p := &PostgresKeeper{cfg: &config{}}
+	db := &cluster.DB{
+		UID: "db1",
+		Spec: &cluster.DBSpec{
+			PrePromoteCommand: "command-that-does-not-exist-keeper-hook",
+		},
+	}
+
+	if err := p.runPrePromoteHook(db); err == nil {
+		t.Fatalf("expected pre-promote hook failure")
+	}
+}

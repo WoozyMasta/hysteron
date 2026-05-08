@@ -6139,7 +6139,7 @@ func TestUpdateCluster(t *testing.T) {
 	}
 }
 
-func TestSetDBSpecFromClusterSpecBeforeStopCommand(t *testing.T) {
+func TestSetDBSpecFromClusterSpecHookCommands(t *testing.T) {
 	s := &Sentinel{}
 	cs := &cluster.ClusterSpec{
 		InitMode:             cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
@@ -6149,6 +6149,7 @@ func TestSetDBSpecFromClusterSpecBeforeStopCommand(t *testing.T) {
 		UsePgrewind:          cluster.BoolP(true),
 		AdditionalWalSenders: cluster.Uint16P(1),
 		BeforeStopCommand:    "echo pre-stop",
+		PrePromoteCommand:    "echo pre-promote",
 	}
 	cd := &cluster.ClusterData{
 		Cluster: &cluster.Cluster{
@@ -6185,6 +6186,12 @@ func TestSetDBSpecFromClusterSpecBeforeStopCommand(t *testing.T) {
 	}
 	if got := cd.DBs["db2"].Spec.BeforeStopCommand; got != "echo pre-stop" {
 		t.Fatalf("standby beforeStopCommand mismatch: got %q want %q", got, "echo pre-stop")
+	}
+	if got := cd.DBs["db1"].Spec.PrePromoteCommand; got != "echo pre-promote" {
+		t.Fatalf("primary prePromoteCommand mismatch: got %q want %q", got, "echo pre-promote")
+	}
+	if got := cd.DBs["db2"].Spec.PrePromoteCommand; got != "echo pre-promote" {
+		t.Fatalf("standby prePromoteCommand mismatch: got %q want %q", got, "echo pre-promote")
 	}
 }
 

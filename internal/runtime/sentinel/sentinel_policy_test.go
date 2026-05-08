@@ -19,7 +19,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/woozymasta/hysteron/internal/cluster"
 	"github.com/woozymasta/hysteron/internal/common"
+	"github.com/woozymasta/hysteron/internal/utils/timer"
 )
 
 func TestComputeOrphanMemberSlots(t *testing.T) {
@@ -69,6 +71,66 @@ func TestComputeOrphanMemberSlots(t *testing.T) {
 		)
 		if got != nil {
 			t.Fatalf("expected orphan map reset on master change, got: %#v", got)
+		}
+	})
+}
+
+func TestShouldDelayLeaderRace(t *testing.T) {
+	failedMaster := &cluster.DB{UID: "master1"}
+	candidate := &cluster.DB{UID: "standby1"}
+	window := 5 * time.Second
+
+	t.Run("starts backoff when wal is increasing", func(t *testing.T) {
+		s := &Sentinel{
+			dbNotIncreasingXLogPos: map[string]int64{},
+			dbIncreasingXLogPosObservedAt: map[string]int64{
+				candidate.UID: timer.Now(),
+			},
+			leaderRaceBackoffTimers: map[string]int64{},
+		}
+		if !s.shouldDelayLeaderRace(failedMaster, []*cluster.DB{candidate}, window) {
+			t.Fatalf("expected leader race delay on first observation")
+		}
+		if _, ok := s.leaderRaceBackoffTimers[failedMaster.UID]; !ok {
+			t.Fatalf("expected backoff timer to be created")
+		}
+	})
+
+	t.Run("stops delaying after window elapses", func(t *testing.T) {
+		s := &Sentinel{
+			dbNotIncreasingXLogPos: map[string]int64{},
+			dbIncreasingXLogPosObservedAt: map[string]int64{
+				candidate.UID: timer.Now(),
+			},
+			leaderRaceBackoffTimers: map[string]int64{
+				failedMaster.UID: timer.Now() - int64(window) - int64(time.Second),
+			},
+		}
+		if s.shouldDelayLeaderRace(failedMaster, []*cluster.DB{candidate}, window) {
+			t.Fatalf("expected leader race delay to expire")
+		}
+		if _, ok := s.leaderRaceBackoffTimers[failedMaster.UID]; ok {
+			t.Fatalf("expected expired backoff timer to be cleared")
+		}
+	})
+
+	t.Run("does not delay when wal is stalled", func(t *testing.T) {
+		s := &Sentinel{
+			dbNotIncreasingXLogPos: map[string]int64{
+				candidate.UID: cluster.DefaultDBNotIncreasingXLogPosTimes + 1,
+			},
+			dbIncreasingXLogPosObservedAt: map[string]int64{
+				candidate.UID: timer.Now(),
+			},
+			leaderRaceBackoffTimers: map[string]int64{
+				failedMaster.UID: timer.Now(),
+			},
+		}
+		if s.shouldDelayLeaderRace(failedMaster, []*cluster.DB{candidate}, window) {
+			t.Fatalf("did not expect leader race delay when wal is stalled")
+		}
+		if _, ok := s.leaderRaceBackoffTimers[failedMaster.UID]; ok {
+			t.Fatalf("expected stale backoff timer to be cleared")
 		}
 	})
 }

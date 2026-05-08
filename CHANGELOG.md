@@ -135,6 +135,25 @@ The format is based on [Keep a Changelog][], and this project adheres to
   `include-primary`).
 * Remove legacy internal cluster v0 model package (`internal/cluster/v0`) as
   part of new cleanup; no backward-compatibility layer is kept in-tree.
+* Harden HA timing validation using effective values with explicit guardrail
+  `sleepInterval + 2*requestTimeout <= failInterval`, and add regression
+  tests for partial timing overrides.
+* Add sentinel post-leadership sanity sweep on leader regain to reset
+  transient convergence caches before the next decision loop.
+* Harden keeper rewind policy with explicit decision reasons
+  (`not_initialized`, `system_id_mismatch`, `no_master`,
+  `wal_check_error`, `required_wal_missing`, `allowed`) and improved runtime
+  observability.
+* Extend PostgreSQL restart checks with detailed pending-restart parameter
+  reporting and wire these details into keeper restart decisions and logs.
+* Add slot-policy hardening features:
+  `ignoreMasterReplicationSlots`, stale physical slot `xmin` warning guard,
+  `memberReplicationSlotTTL` contract validation, sentinel orphan-member-slot
+  tracking, and keeper TTL-aware guarded slot cleanup that requires orphan age
+  threshold, inactivity, and no `xmin`.
+* Add integration coverage for new slot policies and rewind behavior,
+  including `TestAdditionalReplicationSlots`, `TestMemberReplicationSlotTTLGuardsXmin`,
+  and `TestTimelineForkPgrewind`.
 
 ## v0.17.0
 

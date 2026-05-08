@@ -540,3 +540,50 @@ func TestCreateRecoveryOptions(t *testing.T) {
 		}
 	})
 }
+
+type fakeStandbyReplayController struct {
+	isPausedErr error
+	paused      bool
+	resumeErr   error
+	resumeCalls int
+}
+
+func (f *fakeStandbyReplayController) IsWALReplayPaused() (bool, error) {
+	if f.isPausedErr != nil {
+		return false, f.isPausedErr
+	}
+	return f.paused, nil
+}
+
+func (f *fakeStandbyReplayController) ResumeWALReplay() error {
+	f.resumeCalls++
+	return f.resumeErr
+}
+
+func TestEnsureStandbyWALReplayRunning(t *testing.T) {
+	p := &PostgresKeeper{cfg: &config{}}
+
+	t.Run("no resume when replay is not paused", func(t *testing.T) {
+		replay := &fakeStandbyReplayController{paused: false}
+		p.ensureStandbyWALReplayRunning(replay, "db1")
+		if replay.resumeCalls != 0 {
+			t.Fatalf("unexpected resume calls: got %d want %d", replay.resumeCalls, 0)
+		}
+	})
+
+	t.Run("resume attempted when replay is paused", func(t *testing.T) {
+		replay := &fakeStandbyReplayController{paused: true}
+		p.ensureStandbyWALReplayRunning(replay, "db1")
+		if replay.resumeCalls != 1 {
+			t.Fatalf("unexpected resume calls: got %d want %d", replay.resumeCalls, 1)
+		}
+	})
+
+	t.Run("no resume when pause status check fails", func(t *testing.T) {
+		replay := &fakeStandbyReplayController{isPausedErr: errors.New("boom")}
+		p.ensureStandbyWALReplayRunning(replay, "db1")
+		if replay.resumeCalls != 0 {
+			t.Fatalf("unexpected resume calls: got %d want %d", replay.resumeCalls, 0)
+		}
+	})
+}

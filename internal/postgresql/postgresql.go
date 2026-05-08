@@ -743,6 +743,20 @@ func (p *Manager) DropLogicalReplicationSlot(name string) error {
 	return dropLogicalReplicationSlot(ctx, p.localConnParams, name)
 }
 
+// IsWALReplayPaused reports whether WAL replay is currently paused.
+func (p *Manager) IsWALReplayPaused() (bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeoutValue())
+	defer cancel()
+	return isWALReplayPaused(ctx, p.localConnParams)
+}
+
+// ResumeWALReplay resumes WAL replay when recovery is paused.
+func (p *Manager) ResumeWALReplay() error {
+	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeoutValue())
+	defer cancel()
+	return resumeWALReplay(ctx, p.localConnParams)
+}
+
 // BinaryVersion returns the PostgreSQL binary major and minor version.
 func (p *Manager) BinaryVersion() (int, int, error) {
 	name := filepath.Join(p.pgBinPath, "postgres")

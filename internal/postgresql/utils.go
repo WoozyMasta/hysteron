@@ -366,6 +366,47 @@ func dropLogicalReplicationSlot(ctx context.Context, connParams ConnParams, name
 	return err
 }
 
+func isWALReplayPaused(ctx context.Context, connParams ConnParams) (bool, error) {
+	db, err := openDB(connParams)
+	if err != nil {
+		return false, err
+	}
+	defer ignoreClose(db)
+
+	rows, err := query(ctx, db, "select pg_is_wal_replay_paused()")
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return false, err
+		}
+		return false, errors.New("query returned 0 rows")
+	}
+
+	var paused bool
+	if err := rows.Scan(&paused); err != nil {
+		return false, err
+	}
+	if err := rows.Err(); err != nil {
+		return false, err
+	}
+	return paused, nil
+}
+
+func resumeWALReplay(ctx context.Context, connParams ConnParams) error {
+	db, err := openDB(connParams)
+	if err != nil {
+		return err
+	}
+	defer ignoreClose(db)
+
+	_, err = dbExec(ctx, db, "select pg_wal_replay_resume()")
+	return err
+}
+
 func getSyncStandbys(ctx context.Context, connParams ConnParams) ([]string, error) {
 	db, err := openDB(connParams)
 	if err != nil {

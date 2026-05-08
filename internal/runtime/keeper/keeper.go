@@ -649,6 +649,11 @@ type PostgresKeeper struct {
 	waitSyncStandbysSynced bool
 }
 
+type standbyReplayController interface {
+	IsWALReplayPaused() (bool, error)
+	ResumeWALReplay() error
+}
+
 // baseLog is the structured logger with stable keeper identity (use for all
 // PostgresKeeper events).
 func (p *PostgresKeeper) baseLog() *zerolog.Logger {
@@ -2658,6 +2663,8 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 				}
 			}
 
+			p.ensureStandbyWALReplayRunning(pgm, db.UID)
+
 		case common.RoleUndefined:
 			p.baseLog().Info().Msg("current database role is undefined")
 			return
@@ -2790,6 +2797,38 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 	// We want to set this only if no error has occurred. We should be able to identify
 	// keeper issues by watching for this value becoming stale.
 	lastSyncSuccessSeconds.SetToCurrentTime()
+}
+
+func (p *PostgresKeeper) ensureStandbyWALReplayRunning(replay standbyReplayController, dbUID string) {
+	paused, err := replay.IsWALReplayPaused()
+	if err != nil {
+		p.baseLog().
+			Warn().
+			Err(err).
+			Str(slog.FieldDBUID, dbUID).
+			Msg("failed to check WAL replay pause status")
+		return
+	}
+	if !paused {
+		return
+	}
+
+	p.baseLog().
+		Warn().
+		Str(slog.FieldDBUID, dbUID).
+		Msg("WAL replay is paused on standby; attempting resume")
+	if err := replay.ResumeWALReplay(); err != nil {
+		p.baseLog().
+			Warn().
+			Err(err).
+			Str(slog.FieldDBUID, dbUID).
+			Msg("failed to resume paused WAL replay on standby")
+		return
+	}
+	p.baseLog().
+		Info().
+		Str(slog.FieldDBUID, dbUID).
+		Msg("resumed paused WAL replay on standby")
 }
 
 func (p *PostgresKeeper) keeperLocalStateFilePath() string {

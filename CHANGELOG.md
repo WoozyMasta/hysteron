@@ -183,6 +183,10 @@ The format is based on [Keep a Changelog][], and this project adheres to
   `recoveryTarget*`, and only `recoveryTarget="immediate"` when set), while
   keeper sets `recovery_target_action=promote` only when a recovery target is
   explicitly selected.
+* Add standby WAL replay safety hook:
+  keeper now detects paused standby replay and safely attempts
+  `pg_wal_replay_resume()`, with warning-level observability for check/resume
+  failures.
 
 ## v0.17.0
 

@@ -219,6 +219,14 @@ func TestClusterSpecValidate(t *testing.T) {
 			wantErr: `wrong replication slot name: "bad-slot-name"`,
 		},
 		{
+			name: "negative member replication slot ttl is rejected",
+			spec: &ClusterSpec{
+				InitMode:                 &newMode,
+				MemberReplicationSlotTTL: negativeDuration,
+			},
+			wantErr: "memberReplicationSlotTTL must be positive",
+		},
+		{
 			name:    "pg hba entries cannot contain newline characters",
 			spec:    &ClusterSpec{InitMode: &newMode, PGHBA: []string{"host all all 127.0.0.1/32 trust\n"}},
 			wantErr: "pgHBA entries cannot contain newline characters",

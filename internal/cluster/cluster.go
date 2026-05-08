@@ -366,6 +366,10 @@ type ClusterSpec struct { //nolint:revive
 	// IgnoreMasterReplicationSlots defines replication slots that hysteron
 	// should not create, alter, or drop on the current master instance.
 	IgnoreMasterReplicationSlots []string `json:"ignoreMasterReplicationSlots"`
+	// MemberReplicationSlotTTL defines how long orphaned member replication slots
+	// may remain before cleanup is considered. Zero or nil disables TTL-based
+	// cleanup.
+	MemberReplicationSlotTTL *Duration `json:"memberReplicationSlotTTL,omitempty"`
 	// Additional pg_hba.conf entries
 	// we don't set omitempty since we want to distinguish between null or empty slice
 	PGHBA []string `json:"pgHBA"`
@@ -554,6 +558,9 @@ func (c *ClusterSpec) Validate() error {
 		if err := validateReplicationSlotName(replicationSlot); err != nil {
 			return err
 		}
+	}
+	if s.MemberReplicationSlotTTL != nil && s.MemberReplicationSlotTTL.Duration < 0 {
+		return errors.New("memberReplicationSlotTTL must be positive")
 	}
 
 	// The unique validation we're doing on pgHBA entries is that they don't contain a newline character

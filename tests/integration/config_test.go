@@ -662,6 +662,73 @@ func TestAdditionalReplicationSlots(t *testing.T) {
 	}
 }
 
+func TestMemberReplicationSlotTTLGuardsXmin(t *testing.T) {
+	t.Parallel()
+
+	dir, err := os.MkdirTemp("", "")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	clusterName := uuid.NewString()
+	tks, tss, tp, tstore := setupServers(t, clusterName, dir, 2, 1, false, false, nil)
+	defer shutdown(tks, tss, tp, tstore)
+
+	storeEndpoints := fmt.Sprintf("%s:%s", tstore.listenAddress, tstore.port)
+	storePath := filepath.Join(common.StorePrefix, clusterName)
+	sm := store.NewKVBackedStore(tstore.store, storePath)
+
+	master, standbys := waitMasterStandbysReady(t, sm, tks)
+	standby := standbys[0]
+
+	cd, _, err := sm.GetClusterData(context.TODO())
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	var standbyDBUID string
+	for _, db := range cd.DBs {
+		if db.Spec.KeeperUID == standby.uid {
+			standbyDBUID = db.UID
+		}
+	}
+	if standbyDBUID == "" {
+		t.Fatal("standby db uid not found")
+	}
+
+	if err := waitHysteronReplicationSlots(master, []string{standbyDBUID}, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	err = HysteronCluster(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		"update",
+		"--patch",
+		`{ "memberReplicationSlotTTL" : "8s" }`,
+	)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	t.Logf("stopping standby keeper: %s", standby.uid)
+	standby.Stop()
+
+	// Slot should survive before TTL.
+	if err := waitHysteronReplicationSlots(master, []string{standbyDBUID}, 5*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	// Even with TTL enabled, slot should survive in this degraded scenario and
+	// must not be dropped prematurely by keeper policy.
+	if err := waitHysteronReplicationSlots(master, []string{standbyDBUID}, 40*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+}
+
 func TestAutomaticPgRestart(t *testing.T) {
 	t.Parallel()
 

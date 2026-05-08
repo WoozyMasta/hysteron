@@ -1339,6 +1339,9 @@ func (p *PostgresKeeper) updateReplSlots(
 	curReplSlots []string,
 	uid string,
 	followersUIDs, additionalReplSlots, ignoredReplSlots []string,
+	memberSlotTTL time.Duration,
+	orphanMemberSlots map[string]time.Time,
+	physicalSlotState map[string]pg.PhysicalReplicationSlot,
 ) error {
 	internalReplSlots, ignoredSlots := managedReplicationSlots(
 		uid,
@@ -1356,6 +1359,21 @@ func (p *PostgresKeeper) updateReplSlots(
 			continue
 		}
 		if _, ok := internalReplSlots[slot]; !ok {
+			shouldDrop, reason := shouldDropUnmanagedHysteronSlot(
+				slot,
+				memberSlotTTL,
+				orphanMemberSlots,
+				physicalSlotState,
+				time.Now(),
+			)
+			if !shouldDrop {
+				p.baseLog().
+					Debug().
+					Str("slot", slot).
+					Str("reason", reason).
+					Msg("skipping replication slot drop")
+				continue
+			}
 			p.baseLog().
 				Info().
 				Str("slot", slot).
@@ -1427,6 +1445,39 @@ func managedReplicationSlots(
 	return internalReplSlots, ignoredSlots
 }
 
+func shouldDropUnmanagedHysteronSlot(
+	slot string,
+	memberSlotTTL time.Duration,
+	orphanMemberSlots map[string]time.Time,
+	physicalSlotState map[string]pg.PhysicalReplicationSlot,
+	now time.Time,
+) (bool, string) {
+	if memberSlotTTL <= 0 {
+		return true, "ttl_disabled"
+	}
+
+	orphanSince, orphanTracked := orphanMemberSlots[slot]
+	if !orphanTracked {
+		return true, "not_tracked_orphan"
+	}
+	if now.Sub(orphanSince) < memberSlotTTL {
+		return false, "ttl_not_elapsed"
+	}
+
+	slotState, ok := physicalSlotState[slot]
+	if !ok {
+		return false, "slot_state_missing"
+	}
+	if slotState.Active {
+		return false, "slot_active"
+	}
+	if slotState.HasXmin {
+		return false, "slot_has_xmin"
+	}
+
+	return true, "ttl_elapsed"
+}
+
 func staleSlotsWithXmin(
 	slots []pg.PhysicalReplicationSlot,
 	managedSlots, ignoredSlots map[string]struct{},
@@ -1451,7 +1502,7 @@ func staleSlotsWithXmin(
 	return stale
 }
 
-func (p *PostgresKeeper) refreshReplicationSlots(db *cluster.DB) error {
+func (p *PostgresKeeper) refreshReplicationSlots(cspec *cluster.ClusterSpec, db *cluster.DB) error {
 	var currentReplicationSlots []string
 	currentReplicationSlots, err := p.pgm.GetReplicationSlots()
 	if err != nil {
@@ -1469,6 +1520,22 @@ func (p *PostgresKeeper) refreshReplicationSlots(db *cluster.DB) error {
 		db.Spec.AdditionalReplicationSlots,
 		db.Spec.IgnoreReplicationSlots,
 	)
+	physicalSlots, err := p.pgm.GetPhysicalReplicationSlots()
+	if err != nil {
+		p.baseLog().
+			Debug().
+			Err(err).
+			Msg("failed to inspect physical replication slots")
+		physicalSlots = nil
+	}
+	physicalSlotState := map[string]pg.PhysicalReplicationSlot{}
+	for _, slot := range physicalSlots {
+		physicalSlotState[slot.Name] = slot
+	}
+	memberSlotTTL := time.Duration(0)
+	if cspec != nil && cspec.MemberReplicationSlotTTL != nil {
+		memberSlotTTL = cspec.MemberReplicationSlotTTL.Duration
+	}
 
 	if err = p.updateReplSlots(
 		currentReplicationSlots,
@@ -1476,6 +1543,9 @@ func (p *PostgresKeeper) refreshReplicationSlots(db *cluster.DB) error {
 		followersUIDs,
 		db.Spec.AdditionalReplicationSlots,
 		db.Spec.IgnoreReplicationSlots,
+		memberSlotTTL,
+		db.Status.OrphanMemberSlots,
+		physicalSlotState,
 	); err != nil {
 		p.baseLog().
 			Error().
@@ -1484,14 +1554,6 @@ func (p *PostgresKeeper) refreshReplicationSlots(db *cluster.DB) error {
 		return err
 	}
 
-	physicalSlots, err := p.pgm.GetPhysicalReplicationSlots()
-	if err != nil {
-		p.baseLog().
-			Debug().
-			Err(err).
-			Msg("failed to inspect physical replication slots for xmin guard")
-		return nil
-	}
 	if stale := staleSlotsWithXmin(physicalSlots, managedSlots, ignoredSlots); len(stale) > 0 {
 		p.baseLog().
 			Warn().
@@ -2240,7 +2302,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 			p.baseLog().Info().Msg("PostgreSQL is already primary")
 		}
 
-		if err := p.refreshReplicationSlots(db); err != nil {
+		if err := p.refreshReplicationSlots(cd.Cluster.DefSpec(), db); err != nil {
 			p.baseLog().
 				Error().
 				Err(err).
@@ -2364,7 +2426,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 					}
 				}
 
-				if err = p.refreshReplicationSlots(db); err != nil {
+				if err = p.refreshReplicationSlots(cd.Cluster.DefSpec(), db); err != nil {
 					p.baseLog().
 						Error().
 						Err(err).
@@ -2399,7 +2461,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 					}
 				}
 
-				if err = p.refreshReplicationSlots(db); err != nil {
+				if err = p.refreshReplicationSlots(cd.Cluster.DefSpec(), db); err != nil {
 					p.baseLog().
 						Error().
 						Err(err).

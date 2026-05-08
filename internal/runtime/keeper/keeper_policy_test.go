@@ -17,6 +17,7 @@ package keeper
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/woozymasta/hysteron/internal/common"
 	pg "github.com/woozymasta/hysteron/internal/postgresql"
@@ -161,4 +162,83 @@ func TestStaleSlotsWithXmin(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("unexpected stale slots, got: %v, want: %v", got, want)
 	}
+}
+
+func TestShouldDropUnmanagedHysteronSlot(t *testing.T) {
+	now := time.Unix(1000, 0).UTC()
+	slot := common.HysteronName("db2")
+
+	t.Run("ttl disabled keeps legacy drop behavior", func(t *testing.T) {
+		drop, reason := shouldDropUnmanagedHysteronSlot(slot, 0, nil, nil, now)
+		if !drop || reason != "ttl_disabled" {
+			t.Fatalf("unexpected decision: drop=%v reason=%s", drop, reason)
+		}
+	})
+
+	t.Run("untracked slot drops immediately even with ttl", func(t *testing.T) {
+		drop, reason := shouldDropUnmanagedHysteronSlot(
+			slot,
+			10*time.Minute,
+			map[string]time.Time{},
+			nil,
+			now,
+		)
+		if !drop || reason != "not_tracked_orphan" {
+			t.Fatalf("unexpected decision: drop=%v reason=%s", drop, reason)
+		}
+	})
+
+	t.Run("tracked orphan respects ttl and state", func(t *testing.T) {
+		orphan := map[string]time.Time{slot: now.Add(-5 * time.Minute)}
+		state := map[string]pg.PhysicalReplicationSlot{
+			slot: {Name: slot, Active: false, HasXmin: false},
+		}
+
+		drop, reason := shouldDropUnmanagedHysteronSlot(
+			slot,
+			10*time.Minute,
+			orphan,
+			state,
+			now,
+		)
+		if drop || reason != "ttl_not_elapsed" {
+			t.Fatalf("unexpected decision before ttl: drop=%v reason=%s", drop, reason)
+		}
+
+		orphan[slot] = now.Add(-15 * time.Minute)
+		drop, reason = shouldDropUnmanagedHysteronSlot(
+			slot,
+			10*time.Minute,
+			orphan,
+			state,
+			now,
+		)
+		if !drop || reason != "ttl_elapsed" {
+			t.Fatalf("unexpected decision after ttl: drop=%v reason=%s", drop, reason)
+		}
+
+		state[slot] = pg.PhysicalReplicationSlot{Name: slot, Active: true, HasXmin: false}
+		drop, reason = shouldDropUnmanagedHysteronSlot(
+			slot,
+			10*time.Minute,
+			orphan,
+			state,
+			now,
+		)
+		if drop || reason != "slot_active" {
+			t.Fatalf("unexpected active-slot decision: drop=%v reason=%s", drop, reason)
+		}
+
+		state[slot] = pg.PhysicalReplicationSlot{Name: slot, Active: false, HasXmin: true}
+		drop, reason = shouldDropUnmanagedHysteronSlot(
+			slot,
+			10*time.Minute,
+			orphan,
+			state,
+			now,
+		)
+		if drop || reason != "slot_has_xmin" {
+			t.Fatalf("unexpected xmin decision: drop=%v reason=%s", drop, reason)
+		}
+	})
 }

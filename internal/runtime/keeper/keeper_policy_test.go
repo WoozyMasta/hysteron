@@ -169,18 +169,47 @@ func TestShouldDropUnmanagedHysteronSlot(t *testing.T) {
 	slot := common.HysteronName("db2")
 
 	t.Run("ttl disabled keeps legacy drop behavior", func(t *testing.T) {
-		drop, reason := shouldDropUnmanagedHysteronSlot(slot, 0, nil, nil, now)
+		drop, reason := shouldDropUnmanagedHysteronSlot(slot, 0, nil, nil, nil, now)
 		if !drop || reason != "ttl_disabled" {
 			t.Fatalf("unexpected decision: drop=%v reason=%s", drop, reason)
 		}
 	})
 
-	t.Run("untracked slot drops immediately even with ttl", func(t *testing.T) {
+	t.Run("known member slot waits for orphan tracking", func(t *testing.T) {
 		drop, reason := shouldDropUnmanagedHysteronSlot(
 			slot,
 			10*time.Minute,
 			map[string]time.Time{},
 			nil,
+			map[string]struct{}{"db2": {}},
+			now,
+		)
+		if drop || reason != "awaiting_orphan_tracking" {
+			t.Fatalf("unexpected decision: drop=%v reason=%s", drop, reason)
+		}
+	})
+
+	t.Run("untracked unknown slot drops even with ttl", func(t *testing.T) {
+		drop, reason := shouldDropUnmanagedHysteronSlot(
+			slot,
+			10*time.Minute,
+			map[string]time.Time{},
+			nil,
+			map[string]struct{}{},
+			now,
+		)
+		if !drop || reason != "not_tracked_orphan" {
+			t.Fatalf("unexpected decision: drop=%v reason=%s", drop, reason)
+		}
+	})
+
+	t.Run("untracked non-member slot drops immediately even with ttl", func(t *testing.T) {
+		drop, reason := shouldDropUnmanagedHysteronSlot(
+			common.HysteronName("extra"),
+			10*time.Minute,
+			map[string]time.Time{},
+			nil,
+			map[string]struct{}{"db2": {}},
 			now,
 		)
 		if !drop || reason != "not_tracked_orphan" {
@@ -199,6 +228,7 @@ func TestShouldDropUnmanagedHysteronSlot(t *testing.T) {
 			10*time.Minute,
 			orphan,
 			state,
+			map[string]struct{}{"db2": {}},
 			now,
 		)
 		if drop || reason != "ttl_not_elapsed" {
@@ -211,6 +241,7 @@ func TestShouldDropUnmanagedHysteronSlot(t *testing.T) {
 			10*time.Minute,
 			orphan,
 			state,
+			map[string]struct{}{"db2": {}},
 			now,
 		)
 		if !drop || reason != "ttl_elapsed" {
@@ -223,6 +254,7 @@ func TestShouldDropUnmanagedHysteronSlot(t *testing.T) {
 			10*time.Minute,
 			orphan,
 			state,
+			map[string]struct{}{"db2": {}},
 			now,
 		)
 		if drop || reason != "slot_active" {
@@ -235,6 +267,7 @@ func TestShouldDropUnmanagedHysteronSlot(t *testing.T) {
 			10*time.Minute,
 			orphan,
 			state,
+			map[string]struct{}{"db2": {}},
 			now,
 		)
 		if drop || reason != "slot_has_xmin" {

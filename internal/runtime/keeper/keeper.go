@@ -1342,6 +1342,7 @@ func (p *PostgresKeeper) updateReplSlots(
 	memberSlotTTL time.Duration,
 	orphanMemberSlots map[string]time.Time,
 	physicalSlotState map[string]pg.PhysicalReplicationSlot,
+	knownDBUIDs map[string]struct{},
 ) error {
 	internalReplSlots, ignoredSlots := managedReplicationSlots(
 		uid,
@@ -1364,6 +1365,7 @@ func (p *PostgresKeeper) updateReplSlots(
 				memberSlotTTL,
 				orphanMemberSlots,
 				physicalSlotState,
+				knownDBUIDs,
 				time.Now(),
 			)
 			if !shouldDrop {
@@ -1450,10 +1452,20 @@ func shouldDropUnmanagedHysteronSlot(
 	memberSlotTTL time.Duration,
 	orphanMemberSlots map[string]time.Time,
 	physicalSlotState map[string]pg.PhysicalReplicationSlot,
+	knownDBUIDs map[string]struct{},
 	now time.Time,
 ) (bool, string) {
 	if memberSlotTTL <= 0 {
 		return true, "ttl_disabled"
+	}
+
+	if common.IsHysteronName(slot) {
+		slotUID := common.NameFromHysteronName(slot)
+		if _, known := knownDBUIDs[slotUID]; known {
+			if _, tracked := orphanMemberSlots[slot]; !tracked {
+				return false, "awaiting_orphan_tracking"
+			}
+		}
 	}
 
 	orphanSince, orphanTracked := orphanMemberSlots[slot]
@@ -1502,7 +1514,11 @@ func staleSlotsWithXmin(
 	return stale
 }
 
-func (p *PostgresKeeper) refreshReplicationSlots(cspec *cluster.ClusterSpec, db *cluster.DB) error {
+func (p *PostgresKeeper) refreshReplicationSlots(
+	cspec *cluster.ClusterSpec,
+	db *cluster.DB,
+	dbs cluster.DBs,
+) error {
 	var currentReplicationSlots []string
 	currentReplicationSlots, err := p.pgm.GetReplicationSlots()
 	if err != nil {
@@ -1536,6 +1552,10 @@ func (p *PostgresKeeper) refreshReplicationSlots(cspec *cluster.ClusterSpec, db 
 	if cspec != nil && cspec.MemberReplicationSlotTTL != nil {
 		memberSlotTTL = cspec.MemberReplicationSlotTTL.Duration
 	}
+	knownDBUIDs := map[string]struct{}{}
+	for dbUID := range dbs {
+		knownDBUIDs[dbUID] = struct{}{}
+	}
 
 	if err = p.updateReplSlots(
 		currentReplicationSlots,
@@ -1546,6 +1566,7 @@ func (p *PostgresKeeper) refreshReplicationSlots(cspec *cluster.ClusterSpec, db 
 		memberSlotTTL,
 		db.Status.OrphanMemberSlots,
 		physicalSlotState,
+		knownDBUIDs,
 	); err != nil {
 		p.baseLog().
 			Error().
@@ -2025,6 +2046,10 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 			)
 			tryPgrewind := decision.try
 			switch decision.reason {
+			case pgrewindReasonNotInitialized:
+				p.baseLog().Info().Msg("pg_rewind disabled because local database is not initialized")
+			case pgrewindReasonSystemIDDiff:
+				p.baseLog().Warn().Msg("pg_rewind disabled because local and followed system IDs differ")
 			case pgrewindReasonNoMaster:
 				p.baseLog().Warn().Msg("pg_rewind disabled because no master database is available")
 			case pgrewindReasonWalCheckErr:
@@ -2302,7 +2327,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 			p.baseLog().Info().Msg("PostgreSQL is already primary")
 		}
 
-		if err := p.refreshReplicationSlots(cd.Cluster.DefSpec(), db); err != nil {
+		if err := p.refreshReplicationSlots(cd.Cluster.DefSpec(), db, cd.DBs); err != nil {
 			p.baseLog().
 				Error().
 				Err(err).
@@ -2426,7 +2451,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 					}
 				}
 
-				if err = p.refreshReplicationSlots(cd.Cluster.DefSpec(), db); err != nil {
+				if err = p.refreshReplicationSlots(cd.Cluster.DefSpec(), db, cd.DBs); err != nil {
 					p.baseLog().
 						Error().
 						Err(err).
@@ -2461,7 +2486,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 					}
 				}
 
-				if err = p.refreshReplicationSlots(cd.Cluster.DefSpec(), db); err != nil {
+				if err = p.refreshReplicationSlots(cd.Cluster.DefSpec(), db, cd.DBs); err != nil {
 					p.baseLog().
 						Error().
 						Err(err).

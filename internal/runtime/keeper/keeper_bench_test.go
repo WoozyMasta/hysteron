@@ -157,6 +157,7 @@ func BenchmarkKeeperUpdateReplSlotsNoChanges(b *testing.B) {
 			0,
 			nil,
 			nil,
+			nil,
 		); err != nil {
 			b.Fatal(err)
 		}

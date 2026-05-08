@@ -110,6 +110,13 @@ type Manager struct {
 	requestTimeoutMu sync.RWMutex
 }
 
+// RestartRequirement describes whether a PostgreSQL restart is required and
+// which settings currently require it.
+type RestartRequirement struct {
+	Required      bool
+	PendingParams []string
+}
+
 // RecoveryMode defines PostgreSQL startup recovery mode.
 type RecoveryMode int
 
@@ -1089,9 +1096,19 @@ func (p *Manager) OlderWalFile() (string, error) {
 
 // IsRestartRequired returns if a postgres restart is necessary
 func (p *Manager) IsRestartRequired(_ []string) (bool, error) {
+	requirement, err := p.IsRestartRequiredDetailed()
+	if err != nil {
+		return false, err
+	}
+	return requirement.Required, nil
+}
+
+// IsRestartRequiredDetailed returns whether a restart is required plus the
+// list of pending-restart parameter names currently reported by PostgreSQL.
+func (p *Manager) IsRestartRequiredDetailed() (*RestartRequirement, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeoutValue())
 	defer cancel()
-	return isRestartRequiredUsingPendingRestart(ctx, p.localConnParams)
+	return restartRequirementUsingPendingRestart(ctx, p.localConnParams)
 }
 
 func ignoreClose(c io.Closer) {

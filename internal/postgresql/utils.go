@@ -485,29 +485,41 @@ func hasPGFileSettings(ctx context.Context, db *sql.DB) (bool, error) {
 	return false, nil
 }
 
-func isRestartRequiredUsingPendingRestart(ctx context.Context, connParams ConnParams) (bool, error) {
-	isRestartRequired := false
+func restartRequirementUsingPendingRestart(ctx context.Context, connParams ConnParams) (*RestartRequirement, error) {
 	db, err := openDB(connParams)
 	if err != nil {
-		return isRestartRequired, err
+		return nil, err
 	}
 	defer ignoreClose(db)
 
-	rows, err := query(ctx, db, "select count(*) > 0 from pg_settings where pending_restart;")
+	rows, err := query(ctx, db, "select name from pg_settings where pending_restart order by name;")
 	if err != nil {
-		return isRestartRequired, err
+		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
+	pendingParams := make([]string, 0)
 	if rows.Next() {
-		if err := rows.Scan(&isRestartRequired); err != nil {
-			return isRestartRequired, err
+		var paramName string
+		if err := rows.Scan(&paramName); err != nil {
+			return nil, err
 		}
+		pendingParams = append(pendingParams, paramName)
+	}
+	for rows.Next() {
+		var paramName string
+		if err := rows.Scan(&paramName); err != nil {
+			return nil, err
+		}
+		pendingParams = append(pendingParams, paramName)
 	}
 	if err := rows.Err(); err != nil {
-		return isRestartRequired, err
+		return nil, err
 	}
 
-	return isRestartRequired, nil
+	return &RestartRequirement{
+		Required:      len(pendingParams) > 0,
+		PendingParams: pendingParams,
+	}, nil
 }
 
 // ParseBinaryVersion parses postgres --version output.

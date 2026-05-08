@@ -750,10 +750,20 @@ func (p *PostgresKeeper) usePgrewind(db *cluster.DB) bool {
 
 type pgrewindDecision struct {
 	try         bool
+	reason      string
 	walCheckErr error
 	requiredWal string
 	olderWal    string
 }
+
+const (
+	pgrewindReasonNotInitialized = "not_initialized"
+	pgrewindReasonSystemIDDiff   = "system_id_mismatch"
+	pgrewindReasonNoMaster       = "no_master"
+	pgrewindReasonWalCheckErr    = "wal_check_error"
+	pgrewindReasonWalMissing     = "required_wal_missing"
+	pgrewindReasonAllowed        = "allowed"
+)
 
 func evaluatePgrewindDecision(
 	initialized bool,
@@ -764,13 +774,13 @@ func evaluatePgrewindDecision(
 	masterOlderWal string,
 ) pgrewindDecision {
 	if !initialized {
-		return pgrewindDecision{}
+		return pgrewindDecision{reason: pgrewindReasonNotInitialized}
 	}
 	if localSystemID != followedSystemID {
-		return pgrewindDecision{}
+		return pgrewindDecision{reason: pgrewindReasonSystemIDDiff}
 	}
 	if !hasMaster {
-		return pgrewindDecision{}
+		return pgrewindDecision{reason: pgrewindReasonNoMaster}
 	}
 
 	walAvailable, walErr := pg.IsRequiredWalAvailable(
@@ -781,19 +791,24 @@ func evaluatePgrewindDecision(
 	if walErr != nil {
 		// Keep warning-only behavior: inability to verify WAL availability
 		// should not disable pg_rewind path.
-		return pgrewindDecision{try: true, walCheckErr: walErr}
+		return pgrewindDecision{
+			try:         true,
+			reason:      pgrewindReasonWalCheckErr,
+			walCheckErr: walErr,
+		}
 	}
 	if !walAvailable {
 		requiredWal := pg.XlogPosToWalFileNameNoTimeline(dbXLogPos, pg.WalSegSize)
 		olderWal, _ := pg.WalFileNameNoTimeLine(masterOlderWal)
 		return pgrewindDecision{
 			try:         false,
+			reason:      pgrewindReasonWalMissing,
 			requiredWal: requiredWal,
 			olderWal:    olderWal,
 		}
 	}
 
-	return pgrewindDecision{try: true}
+	return pgrewindDecision{try: true, reason: pgrewindReasonAllowed}
 }
 
 func (p *PostgresKeeper) updateKeeperInfo() error {
@@ -1866,15 +1881,15 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 				masterOlderWal,
 			)
 			tryPgrewind := decision.try
-			if initialized && systemID == followedDB.Status.SystemID && !ok {
+			switch decision.reason {
+			case pgrewindReasonNoMaster:
 				p.baseLog().Warn().Msg("pg_rewind disabled because no master database is available")
-			}
-			if decision.walCheckErr != nil {
+			case pgrewindReasonWalCheckErr:
 				p.baseLog().Warn().
 					Err(decision.walCheckErr).
 					Str("older_master_wal", masterOlderWal).
 					Msg("cannot verify required WAL availability for pg_rewind path")
-			} else if !tryPgrewind && decision.requiredWal != "" {
+			case pgrewindReasonWalMissing:
 				p.baseLog().Info().
 					Str("required_wal", decision.requiredWal).
 					Str("older_master_wal", decision.olderWal).

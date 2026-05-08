@@ -22,12 +22,18 @@ func TestEvaluatePgrewindDecision(t *testing.T) {
 		if d.try {
 			t.Fatal("expected pg_rewind to be disabled")
 		}
+		if d.reason != pgrewindReasonNotInitialized {
+			t.Fatalf("unexpected reason: %q", d.reason)
+		}
 	})
 
 	t.Run("disabled when system IDs differ", func(t *testing.T) {
 		d := evaluatePgrewindDecision(true, "sys1", "sys2", true, 0, "")
 		if d.try {
 			t.Fatal("expected pg_rewind to be disabled")
+		}
+		if d.reason != pgrewindReasonSystemIDDiff {
+			t.Fatalf("unexpected reason: %q", d.reason)
 		}
 	})
 
@@ -36,12 +42,18 @@ func TestEvaluatePgrewindDecision(t *testing.T) {
 		if d.try {
 			t.Fatal("expected pg_rewind to be disabled")
 		}
+		if d.reason != pgrewindReasonNoMaster {
+			t.Fatalf("unexpected reason: %q", d.reason)
+		}
 	})
 
 	t.Run("wal check error keeps pg_rewind enabled", func(t *testing.T) {
 		d := evaluatePgrewindDecision(true, "sys1", "sys1", true, 0, "bad-wal")
 		if !d.try {
 			t.Fatal("expected pg_rewind to stay enabled when wal check fails")
+		}
+		if d.reason != pgrewindReasonWalCheckErr {
+			t.Fatalf("unexpected reason: %q", d.reason)
 		}
 		if d.walCheckErr == nil {
 			t.Fatal("expected wal check error")
@@ -60,6 +72,9 @@ func TestEvaluatePgrewindDecision(t *testing.T) {
 		if d.try {
 			t.Fatal("expected pg_rewind to be disabled")
 		}
+		if d.reason != pgrewindReasonWalMissing {
+			t.Fatalf("unexpected reason: %q", d.reason)
+		}
 		if d.requiredWal == "" {
 			t.Fatal("expected required wal to be populated")
 		}
@@ -72,6 +87,9 @@ func TestEvaluatePgrewindDecision(t *testing.T) {
 		d := evaluatePgrewindDecision(true, "sys1", "sys1", true, 0, "")
 		if !d.try {
 			t.Fatal("expected pg_rewind to be enabled")
+		}
+		if d.reason != pgrewindReasonAllowed {
+			t.Fatalf("unexpected reason: %q", d.reason)
 		}
 		if d.walCheckErr != nil {
 			t.Fatalf("unexpected wal check error: %v", d.walCheckErr)

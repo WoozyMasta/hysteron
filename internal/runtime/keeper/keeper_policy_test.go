@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/woozymasta/hysteron/internal/cluster"
 	"github.com/woozymasta/hysteron/internal/common"
 	pg "github.com/woozymasta/hysteron/internal/postgresql"
 )
@@ -272,6 +273,55 @@ func TestShouldDropUnmanagedHysteronSlot(t *testing.T) {
 		)
 		if drop || reason != "slot_has_xmin" {
 			t.Fatalf("unexpected xmin decision: drop=%v reason=%s", drop, reason)
+		}
+	})
+}
+
+func TestEvaluateManagedLogicalSlotsDecision(t *testing.T) {
+	t.Run("creates missing managed slots", func(t *testing.T) {
+		decision := evaluateManagedLogicalSlotsDecision(
+			[]cluster.ManagedLogicalReplicationSlot{
+				{Name: "hysteron_slot1", Database: "postgres", Plugin: "pgoutput"},
+			},
+			nil,
+		)
+		if len(decision.create) != 1 || decision.create[0].Name != "hysteron_slot1" {
+			t.Fatalf("unexpected create decision: %+v", decision.create)
+		}
+	})
+
+	t.Run("flags mismatched managed slot", func(t *testing.T) {
+		decision := evaluateManagedLogicalSlotsDecision(
+			[]cluster.ManagedLogicalReplicationSlot{
+				{Name: "hysteron_slot1", Database: "postgres", Plugin: "pgoutput"},
+			},
+			[]pg.LogicalReplicationSlot{
+				{Name: "hysteron_slot1", Database: "postgres", Plugin: "wal2json"},
+			},
+		)
+		if !reflect.DeepEqual(decision.mismatch, []string{"hysteron_slot1"}) {
+			t.Fatalf("unexpected mismatch decision: %+v", decision.mismatch)
+		}
+	})
+
+	t.Run("drops only inactive unmanaged hysteron slots", func(t *testing.T) {
+		decision := evaluateManagedLogicalSlotsDecision(
+			[]cluster.ManagedLogicalReplicationSlot{
+				{Name: "hysteron_slot1", Database: "postgres", Plugin: "pgoutput"},
+			},
+			[]pg.LogicalReplicationSlot{
+				{Name: "hysteron_slot1", Database: "postgres", Plugin: "pgoutput", Active: true},
+				{Name: "hysteron_old", Database: "postgres", Plugin: "pgoutput", Active: false},
+				{Name: "hysteron_active", Database: "postgres", Plugin: "pgoutput", Active: true},
+				{Name: "external_slot", Database: "postgres", Plugin: "pgoutput", Active: false},
+			},
+		)
+
+		if !reflect.DeepEqual(decision.drop, []string{"hysteron_old"}) {
+			t.Fatalf("unexpected drop decision: %+v", decision.drop)
+		}
+		if !reflect.DeepEqual(decision.active, []string{"hysteron_active"}) {
+			t.Fatalf("unexpected active decision: %+v", decision.active)
 		}
 	})
 }

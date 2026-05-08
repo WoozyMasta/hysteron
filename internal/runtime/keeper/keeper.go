@@ -1514,6 +1514,66 @@ func staleSlotsWithXmin(
 	return stale
 }
 
+type managedLogicalSlotsDecision struct {
+	create   []cluster.ManagedLogicalReplicationSlot
+	drop     []string
+	mismatch []string
+	active   []string
+}
+
+func evaluateManagedLogicalSlotsDecision(
+	desired []cluster.ManagedLogicalReplicationSlot,
+	current []pg.LogicalReplicationSlot,
+) managedLogicalSlotsDecision {
+	decision := managedLogicalSlotsDecision{
+		create:   make([]cluster.ManagedLogicalReplicationSlot, 0),
+		drop:     make([]string, 0),
+		mismatch: make([]string, 0),
+		active:   make([]string, 0),
+	}
+
+	desiredByName := make(map[string]cluster.ManagedLogicalReplicationSlot, len(desired))
+	for _, slot := range desired {
+		desiredByName[slot.Name] = slot
+	}
+
+	currentByName := make(map[string]pg.LogicalReplicationSlot, len(current))
+	for _, slot := range current {
+		currentByName[slot.Name] = slot
+	}
+
+	for _, desiredSlot := range desired {
+		currentSlot, ok := currentByName[desiredSlot.Name]
+		if !ok {
+			decision.create = append(decision.create, desiredSlot)
+			continue
+		}
+		if currentSlot.Database != desiredSlot.Database || currentSlot.Plugin != desiredSlot.Plugin {
+			decision.mismatch = append(decision.mismatch, desiredSlot.Name)
+		}
+	}
+
+	for _, currentSlot := range current {
+		if _, ok := desiredByName[currentSlot.Name]; ok {
+			continue
+		}
+		// Safety-first: clean up only reserved hysteron namespace slots.
+		if !common.IsHysteronName(currentSlot.Name) {
+			continue
+		}
+		if currentSlot.Active {
+			decision.active = append(decision.active, currentSlot.Name)
+			continue
+		}
+		decision.drop = append(decision.drop, currentSlot.Name)
+	}
+
+	slices.Sort(decision.mismatch)
+	slices.Sort(decision.drop)
+	slices.Sort(decision.active)
+	return decision
+}
+
 func (p *PostgresKeeper) refreshReplicationSlots(
 	cspec *cluster.ClusterSpec,
 	db *cluster.DB,
@@ -1580,6 +1640,58 @@ func (p *PostgresKeeper) refreshReplicationSlots(
 			Warn().
 			Strs("stale_slots", stale).
 			Msg("detected inactive unmanaged hysteron physical slots with xmin; consider cleanup to avoid vacuum horizon retention")
+	}
+
+	currentLogicalSlots, err := p.pgm.GetLogicalReplicationSlots()
+	if err != nil {
+		p.baseLog().
+			Debug().
+			Err(err).
+			Msg("failed to inspect logical replication slots")
+		return nil
+	}
+
+	logicalDecision := evaluateManagedLogicalSlotsDecision(
+		db.Spec.ManagedLogicalReplicationSlots,
+		currentLogicalSlots,
+	)
+	for _, slot := range logicalDecision.mismatch {
+		p.baseLog().
+			Warn().
+			Str("slot", slot).
+			Msg("managed logical replication slot exists with different database or plugin; skipping destructive action")
+	}
+	for _, slot := range logicalDecision.active {
+		p.baseLog().
+			Warn().
+			Str("slot", slot).
+			Msg("logical replication slot scheduled for cleanup is active; skipping drop")
+	}
+	for _, desiredSlot := range logicalDecision.create {
+		p.baseLog().Info().
+			Str("slot", desiredSlot.Name).
+			Str("database", desiredSlot.Database).
+			Str("plugin", desiredSlot.Plugin).
+			Msg("creating managed logical replication slot")
+		if err := p.pgm.CreateLogicalReplicationSlot(
+			desiredSlot.Name,
+			desiredSlot.Database,
+			desiredSlot.Plugin,
+		); err != nil {
+			return fmt.Errorf(
+				"failed to create managed logical replication slot %q: %w",
+				desiredSlot.Name,
+				err,
+			)
+		}
+	}
+	for _, slot := range logicalDecision.drop {
+		p.baseLog().Info().
+			Str("slot", slot).
+			Msg("dropping unmanaged hysteron logical replication slot")
+		if err := p.pgm.DropLogicalReplicationSlot(slot); err != nil {
+			return fmt.Errorf("failed to drop logical replication slot %q: %w", slot, err)
+		}
 	}
 
 	return nil

@@ -791,6 +791,9 @@ type DBSpec struct {
 	// IgnoreReplicationSlots defines replication slots that hysteron should not
 	// create, alter, or drop on the instance.
 	IgnoreReplicationSlots []string `json:"ignoreReplicationSlots"`
+	// ManagedLogicalReplicationSlots defines logical slots managed by hysteron
+	// on this database instance.
+	ManagedLogicalReplicationSlots []ManagedLogicalReplicationSlot `json:"managedLogicalReplicationSlots,omitempty"`
 	// Additional pg_hba.conf entries
 	// We don't set omitempty since we want to distinguish between null or empty slice
 	PGHBA []string `json:"pgHBA"`

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -31,6 +32,72 @@ import (
 
 	"github.com/google/uuid"
 )
+
+func getLogicalReplicationSlotsByName(q Querier) ([]string, error) {
+	rows, err := q.Query(
+		"select slot_name from pg_replication_slots where slot_type = 'logical' and temporary is false",
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := []string{}
+	for rows.Next() {
+		var slot string
+		if err := rows.Scan(&slot); err != nil {
+			return nil, err
+		}
+		out = append(out, slot)
+	}
+	return out, nil
+}
+
+func waitLogicalReplicationSlotPresent(
+	q Querier,
+	slotName string,
+	timeout time.Duration,
+) error {
+	start := time.Now()
+	var last []string
+	var lastErr error
+	for time.Since(start) < timeout {
+		last, lastErr = getLogicalReplicationSlotsByName(q)
+		if lastErr == nil && slices.Contains(last, slotName) {
+			return nil
+		}
+		time.Sleep(2 * time.Second)
+	}
+	return fmt.Errorf(
+		"timeout waiting logical slot %q present, got: %v, last err: %v",
+		slotName,
+		last,
+		lastErr,
+	)
+}
+
+func waitLogicalReplicationSlotAbsent(
+	q Querier,
+	slotName string,
+	timeout time.Duration,
+) error {
+	start := time.Now()
+	var last []string
+	var lastErr error
+	for time.Since(start) < timeout {
+		last, lastErr = getLogicalReplicationSlotsByName(q)
+		if lastErr == nil && !slices.Contains(last, slotName) {
+			return nil
+		}
+		time.Sleep(2 * time.Second)
+	}
+	return fmt.Errorf(
+		"timeout waiting logical slot %q absent, got: %v, last err: %v",
+		slotName,
+		last,
+		lastErr,
+	)
+}
 
 func TestServerParameters(t *testing.T) {
 	t.Parallel()
@@ -850,6 +917,75 @@ func TestAutomaticPgRestart(t *testing.T) {
 		if maxConnections != 150 {
 			t.Errorf("expected max_connections %d is not equal to actual %d", 150, maxConnections)
 		}
+	}
+}
+
+func TestManagedLogicalReplicationSlots(t *testing.T) {
+	t.Parallel()
+
+	dir, err := os.MkdirTemp("", "hysteron")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	clusterName := uuid.NewString()
+	tks, tss, tp, tstore := setupServers(
+		t,
+		clusterName,
+		dir,
+		1,
+		1,
+		false,
+		false,
+		nil,
+		func(spec *cluster.ClusterSpec) {
+			spec.PGParameters = cluster.PGParameters{
+				"wal_level": "logical",
+			}
+		},
+	)
+	defer shutdown(tks, tss, tp, tstore)
+
+	storeEndpoints := fmt.Sprintf("%s:%s", tstore.listenAddress, tstore.port)
+	storePath := filepath.Join(common.StorePrefix, clusterName)
+	sm := store.NewKVBackedStore(tstore.store, storePath)
+
+	master, _ := waitMasterStandbysReady(t, sm, tks)
+
+	slotName := "hysteron_logic01"
+	err = HysteronCluster(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		"update",
+		"--patch",
+		`{ "managedLogicalReplicationSlots" : [ { "name" : "hysteron_logic01", "database" : "postgres", "plugin" : "pgoutput" } ] }`,
+	)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	if err := waitLogicalReplicationSlotPresent(master, slotName, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	err = HysteronCluster(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		"update",
+		"--patch",
+		`{ "managedLogicalReplicationSlots" : null }`,
+	)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	if err := waitLogicalReplicationSlotAbsent(master, slotName, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
 	}
 }
 

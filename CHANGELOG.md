@@ -159,6 +159,13 @@ The format is based on [Keep a Changelog][], and this project adheres to
   duplicates, and required `database`/`plugin` fields.
 * Add PostgreSQL helper API for managed logical slots lifecycle:
   list logical slots and create/drop logical replication slots.
+* Wire managed logical slots into runtime reconciliation:
+  sentinel now propagates `managedLogicalReplicationSlots` to primary DB spec,
+  and keeper reconciles them on primary by creating missing slots, warning on
+  plugin/database mismatches, skipping active-slot cleanup, and dropping only
+  inactive unmanaged `hysteron_*` logical slots.
+* Add integration coverage for managed logical slots lifecycle with
+  `TestManagedLogicalReplicationSlots`.
 
 ## v0.17.0
 

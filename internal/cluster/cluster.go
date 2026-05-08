@@ -69,7 +69,7 @@ const (
 	// DefaultDBWaitReadyTimeout is the default timeout for database readiness.
 	DefaultDBWaitReadyTimeout = 60 * time.Second
 	// DefaultFailInterval is the default interval before marking a component unhealthy.
-	DefaultFailInterval = 20 * time.Second
+	DefaultFailInterval = 30 * time.Second
 	// DefaultDeadKeeperRemovalInterval is the default interval before removing dead keepers.
 	DefaultDeadKeeperRemovalInterval = 48 * time.Hour
 	// DefaultProxyCheckInterval is the default interval between proxy checks.
@@ -539,14 +539,12 @@ func (c *ClusterSpec) Validate() error {
 	if s.ProxyCheckInterval.Duration >= s.ProxyTimeout.Duration {
 		return errors.New("proxyCheckInterval should be less than proxyTimeout")
 	}
-	if c.SleepInterval != nil && c.RequestTimeout != nil && c.FailInterval != nil {
-		if err := validateHATiming(
-			s.SleepInterval.Duration,
-			s.RequestTimeout.Duration,
-			s.FailInterval.Duration,
-		); err != nil {
-			return err
-		}
+	if err := validateHATiming(
+		s.SleepInterval.Duration,
+		s.RequestTimeout.Duration,
+		s.FailInterval.Duration,
+	); err != nil {
+		return err
 	}
 	if *s.MaxStandbys < 1 {
 		return errors.New("maxStandbys must be at least 1")
@@ -632,6 +630,9 @@ func (c *ClusterSpec) Validate() error {
 		if s.PITRConfig.RecoveryTargetSettings != nil && *s.Role == ClusterRoleStandby {
 			return errors.New("cannot define pitrConfig.RecoveryTargetSettings when required cluster role is standby")
 		}
+		if err := validateRecoveryTargetSettings(s.PITRConfig.RecoveryTargetSettings); err != nil {
+			return err
+		}
 
 	default:
 		return fmt.Errorf("unknown initMode: %q", *s.InitMode)
@@ -685,6 +686,37 @@ func validateReplicationSlotName(replicationSlot string) error {
 	if !util.IsValidReplSlotName(replicationSlot) {
 		return fmt.Errorf("wrong replication slot name: %q", replicationSlot)
 	}
+	return nil
+}
+
+func validateRecoveryTargetSettings(settings *RecoveryTargetSettings) error {
+	if settings == nil {
+		return nil
+	}
+
+	recoveryTarget := strings.TrimSpace(settings.RecoveryTarget)
+	if recoveryTarget != "" && recoveryTarget != "immediate" {
+		return fmt.Errorf("recoveryTarget must be \"immediate\" when defined, got %q", settings.RecoveryTarget)
+	}
+
+	targets := 0
+	for _, value := range []string{
+		recoveryTarget,
+		strings.TrimSpace(settings.RecoveryTargetLsn),
+		strings.TrimSpace(settings.RecoveryTargetName),
+		strings.TrimSpace(settings.RecoveryTargetTime),
+		strings.TrimSpace(settings.RecoveryTargetXid),
+	} {
+		if value != "" {
+			targets++
+		}
+	}
+	if targets > 1 {
+		return errors.New(
+			"only one recovery target selector can be set among recoveryTarget, recoveryTargetLsn, recoveryTargetName, recoveryTargetTime, recoveryTargetXid",
+		)
+	}
+
 	return nil
 }
 

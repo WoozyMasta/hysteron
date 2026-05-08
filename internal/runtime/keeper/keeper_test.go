@@ -508,3 +508,35 @@ func TestParseWalKeepSizeBytes(t *testing.T) {
 		})
 	}
 }
+
+func TestCreateRecoveryOptions(t *testing.T) {
+	p := &PostgresKeeper{}
+
+	t.Run("defaults timeline to latest without recovery target action", func(t *testing.T) {
+		options := p.createRecoveryOptions(pg.RecoveryModeRecovery, nil, nil, &cluster.RecoveryTargetSettings{})
+		if got := options.RecoveryParameters["recovery_target_timeline"]; got != "latest" {
+			t.Fatalf("unexpected recovery_target_timeline: got %q want %q", got, "latest")
+		}
+		if _, ok := options.RecoveryParameters["recovery_target_action"]; ok {
+			t.Fatalf("recovery_target_action must not be set without a recovery target selector")
+		}
+	})
+
+	t.Run("sets promote action when recovery target selector is defined", func(t *testing.T) {
+		options := p.createRecoveryOptions(
+			pg.RecoveryModeRecovery,
+			nil,
+			nil,
+			&cluster.RecoveryTargetSettings{
+				RecoveryTargetName:     "rp1",
+				RecoveryTargetTimeline: "3",
+			},
+		)
+		if got := options.RecoveryParameters["recovery_target_timeline"]; got != "3" {
+			t.Fatalf("unexpected recovery_target_timeline: got %q want %q", got, "3")
+		}
+		if got := options.RecoveryParameters["recovery_target_action"]; got != "promote" {
+			t.Fatalf("unexpected recovery_target_action: got %q want %q", got, "promote")
+		}
+	})
+}

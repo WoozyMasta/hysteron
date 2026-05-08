@@ -175,6 +175,14 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Add integration test coverage for this guardrail:
   managed logical slot updates are rejected unless `wal_level` is set to
   `logical`.
+* Finalize HA timing guardrail behavior using effective values
+  (`sleepInterval + 2*requestTimeout <= failInterval`) and align defaults by
+  raising `failInterval` to `30s`.
+* Harden PITR recovery-target handling:
+  cluster spec now validates `recoveryTargetSettings` (single selector across
+  `recoveryTarget*`, and only `recoveryTarget="immediate"` when set), while
+  keeper sets `recovery_target_action=promote` only when a recovery target is
+  explicitly selected.
 
 ## v0.17.0
 

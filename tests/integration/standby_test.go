@@ -51,6 +51,7 @@ func TestInitStandbyCluster(t *testing.T) {
 	initialClusterSpec := &cluster.ClusterSpec{
 		InitMode:           cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
 		SleepInterval:      &cluster.Duration{Duration: 2 * time.Second},
+		RequestTimeout:     &cluster.Duration{Duration: 1 * time.Second},
 		FailInterval:       &cluster.Duration{Duration: 5 * time.Second},
 		ConvergenceTimeout: &cluster.Duration{Duration: 30 * time.Second},
 	}
@@ -110,6 +111,7 @@ func TestInitStandbyCluster(t *testing.T) {
 		InitMode:           cluster.ClusterInitModeP(cluster.ClusterInitModePITR),
 		Role:               cluster.ClusterRoleP(cluster.ClusterRoleStandby),
 		SleepInterval:      &cluster.Duration{Duration: 2 * time.Second},
+		RequestTimeout:     &cluster.Duration{Duration: 1 * time.Second},
 		FailInterval:       &cluster.Duration{Duration: 5 * time.Second},
 		ConvergenceTimeout: &cluster.Duration{Duration: 30 * time.Second},
 		MaxStandbyLag:      cluster.Uint32P(50 * 1024), // limit lag to 50kiB
@@ -184,6 +186,7 @@ func TestPromoteStandbyCluster(t *testing.T) {
 	initialClusterSpec := &cluster.ClusterSpec{
 		InitMode:           cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
 		SleepInterval:      &cluster.Duration{Duration: 2 * time.Second},
+		RequestTimeout:     &cluster.Duration{Duration: 1 * time.Second},
 		FailInterval:       &cluster.Duration{Duration: 5 * time.Second},
 		ConvergenceTimeout: &cluster.Duration{Duration: 30 * time.Second},
 	}
@@ -243,6 +246,7 @@ func TestPromoteStandbyCluster(t *testing.T) {
 		InitMode:           cluster.ClusterInitModeP(cluster.ClusterInitModePITR),
 		Role:               cluster.ClusterRoleP(cluster.ClusterRoleStandby),
 		SleepInterval:      &cluster.Duration{Duration: 2 * time.Second},
+		RequestTimeout:     &cluster.Duration{Duration: 1 * time.Second},
 		FailInterval:       &cluster.Duration{Duration: 5 * time.Second},
 		ConvergenceTimeout: &cluster.Duration{Duration: 30 * time.Second},
 		MaxStandbyLag:      cluster.Uint32P(50 * 1024), // limit lag to 50kiB
@@ -333,6 +337,7 @@ func TestPromoteStandbyClusterArchiveRecovery(t *testing.T) {
 	initialClusterSpec := &cluster.ClusterSpec{
 		InitMode:           cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
 		SleepInterval:      &cluster.Duration{Duration: 2 * time.Second},
+		RequestTimeout:     &cluster.Duration{Duration: 1 * time.Second},
 		FailInterval:       &cluster.Duration{Duration: 5 * time.Second},
 		ConvergenceTimeout: &cluster.Duration{Duration: 30 * time.Second},
 		PGParameters: pgParametersWithDefaults(cluster.PGParameters{
@@ -396,6 +401,7 @@ func TestPromoteStandbyClusterArchiveRecovery(t *testing.T) {
 		InitMode:           cluster.ClusterInitModeP(cluster.ClusterInitModePITR),
 		Role:               cluster.ClusterRoleP(cluster.ClusterRoleStandby),
 		SleepInterval:      &cluster.Duration{Duration: 2 * time.Second},
+		RequestTimeout:     &cluster.Duration{Duration: 1 * time.Second},
 		FailInterval:       &cluster.Duration{Duration: 5 * time.Second},
 		ConvergenceTimeout: &cluster.Duration{Duration: 30 * time.Second},
 		MaxStandbyLag:      cluster.Uint32P(50 * 1024), // limit lag to 50kiB

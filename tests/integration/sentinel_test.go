@@ -52,6 +52,7 @@ func TestSentinelEnabledProxies(t *testing.T) {
 	initialClusterSpec := &cluster.ClusterSpec{
 		InitMode:           cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
 		SleepInterval:      &cluster.Duration{Duration: 2 * time.Second},
+		RequestTimeout:     &cluster.Duration{Duration: 1 * time.Second},
 		FailInterval:       &cluster.Duration{Duration: 5 * time.Second},
 		ConvergenceTimeout: &cluster.Duration{Duration: 30 * time.Second},
 		PGParameters:       defaultPGParameters,

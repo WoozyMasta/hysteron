@@ -143,6 +143,7 @@ func setupServers(t *testing.T, clusterName, dir string, numKeepers, numSentinel
 		initialClusterSpec = &cluster.ClusterSpec{
 			InitMode:               cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
 			SleepInterval:          &cluster.Duration{Duration: 2 * time.Second},
+			RequestTimeout:         &cluster.Duration{Duration: 1 * time.Second},
 			FailInterval:           &cluster.Duration{Duration: 5 * time.Second},
 			ConvergenceTimeout:     &cluster.Duration{Duration: 30 * time.Second},
 			MaxStandbyLag:          cluster.Uint32P(50 * 1024), // limit lag to 50kiB
@@ -167,6 +168,7 @@ func setupServers(t *testing.T, clusterName, dir string, numKeepers, numSentinel
 			InitMode:               cluster.ClusterInitModeP(cluster.ClusterInitModePITR),
 			Role:                   cluster.ClusterRoleP(cluster.ClusterRoleStandby),
 			SleepInterval:          &cluster.Duration{Duration: 2 * time.Second},
+			RequestTimeout:         &cluster.Duration{Duration: 1 * time.Second},
 			FailInterval:           &cluster.Duration{Duration: 5 * time.Second},
 			ConvergenceTimeout:     &cluster.Duration{Duration: 30 * time.Second},
 			MaxStandbyLag:          cluster.Uint32P(50 * 1024), // limit lag to 50kiB
@@ -1307,6 +1309,7 @@ func TestFailedStandby(t *testing.T) {
 	initialClusterSpec := &cluster.ClusterSpec{
 		InitMode:             cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
 		SleepInterval:        &cluster.Duration{Duration: 2 * time.Second},
+		RequestTimeout:       &cluster.Duration{Duration: 1 * time.Second},
 		FailInterval:         &cluster.Duration{Duration: 5 * time.Second},
 		ConvergenceTimeout:   &cluster.Duration{Duration: 30 * time.Second},
 		MaxStandbysPerSender: cluster.Uint16P(1),
@@ -1398,6 +1401,7 @@ func TestLoweredMaxStandbysPerSender(t *testing.T) {
 	initialClusterSpec := &cluster.ClusterSpec{
 		InitMode:             cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
 		SleepInterval:        &cluster.Duration{Duration: 2 * time.Second},
+		RequestTimeout:       &cluster.Duration{Duration: 1 * time.Second},
 		FailInterval:         &cluster.Duration{Duration: 5 * time.Second},
 		ConvergenceTimeout:   &cluster.Duration{Duration: 30 * time.Second},
 		MaxStandbysPerSender: cluster.Uint16P(2),
@@ -1463,6 +1467,7 @@ func TestKeeperRemoval(t *testing.T) {
 	initialClusterSpec := &cluster.ClusterSpec{
 		InitMode:           cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
 		SleepInterval:      &cluster.Duration{Duration: 2 * time.Second},
+		RequestTimeout:     &cluster.Duration{Duration: 1 * time.Second},
 		FailInterval:       &cluster.Duration{Duration: 5 * time.Second},
 		ConvergenceTimeout: &cluster.Duration{Duration: 30 * time.Second},
 		// very low DeadKeeperRemovalInterval to test this behavior
@@ -1571,6 +1576,7 @@ func testKeeperRemovalHysteronCluster(t *testing.T, syncRepl bool) {
 	initialClusterSpec := &cluster.ClusterSpec{
 		InitMode:               cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
 		SleepInterval:          &cluster.Duration{Duration: 2 * time.Second},
+		RequestTimeout:         &cluster.Duration{Duration: 1 * time.Second},
 		FailInterval:           &cluster.Duration{Duration: 5 * time.Second},
 		ConvergenceTimeout:     &cluster.Duration{Duration: 30 * time.Second},
 		SynchronousReplication: cluster.BoolP(syncRepl),
@@ -1695,6 +1701,7 @@ func TestStandbyCantSync(t *testing.T) {
 	initialClusterSpec := &cluster.ClusterSpec{
 		InitMode:           cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
 		SleepInterval:      &cluster.Duration{Duration: 2 * time.Second},
+		RequestTimeout:     &cluster.Duration{Duration: 1 * time.Second},
 		FailInterval:       &cluster.Duration{Duration: 5 * time.Second},
 		ConvergenceTimeout: &cluster.Duration{Duration: 30 * time.Second},
 		PGParameters: pgParametersWithDefaults(cluster.PGParameters{

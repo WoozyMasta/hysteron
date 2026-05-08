@@ -188,11 +188,39 @@ func TestClusterSpecValidate(t *testing.T) {
 			wantErr: "invalid HA timing: sleepInterval + 2*requestTimeout must be less than or equal to failInterval",
 		},
 		{
-			name: "ha timing check is skipped for partially configured values",
+			name: "ha timing check applies to partial overrides with defaults",
 			spec: &ClusterSpec{
 				InitMode:      &newMode,
-				SleepInterval: &Duration{Duration: 10 * time.Second},
+				SleepInterval: &Duration{Duration: 11 * time.Second},
 			},
+			wantErr: "invalid HA timing: sleepInterval + 2*requestTimeout must be less than or equal to failInterval",
+		},
+		{
+			name: "pitr rejects conflicting recovery target selectors",
+			spec: &ClusterSpec{
+				InitMode: &pitrMode,
+				PITRConfig: &PITRConfig{
+					DataRestoreCommand: "restore",
+					RecoveryTargetSettings: &RecoveryTargetSettings{
+						RecoveryTargetName: "rp1",
+						RecoveryTargetXid:  "123",
+					},
+				},
+			},
+			wantErr: "only one recovery target selector can be set among recoveryTarget, recoveryTargetLsn, recoveryTargetName, recoveryTargetTime, recoveryTargetXid",
+		},
+		{
+			name: "pitr rejects unsupported recoveryTarget value",
+			spec: &ClusterSpec{
+				InitMode: &pitrMode,
+				PITRConfig: &PITRConfig{
+					DataRestoreCommand: "restore",
+					RecoveryTargetSettings: &RecoveryTargetSettings{
+						RecoveryTarget: "latest",
+					},
+				},
+			},
+			wantErr: `recoveryTarget must be "immediate" when defined, got "latest"`,
 		},
 		{
 			name:    "max standbys must be positive",

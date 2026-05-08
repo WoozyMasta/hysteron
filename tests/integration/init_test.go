@@ -50,6 +50,7 @@ func TestInit(t *testing.T) {
 	initialClusterSpec := &cluster.ClusterSpec{
 		InitMode:           cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
 		SleepInterval:      &cluster.Duration{Duration: 2 * time.Second},
+		RequestTimeout:     &cluster.Duration{Duration: 1 * time.Second},
 		FailInterval:       &cluster.Duration{Duration: 5 * time.Second},
 		ConvergenceTimeout: &cluster.Duration{Duration: 30 * time.Second},
 		PGParameters:       defaultPGParameters,
@@ -192,6 +193,7 @@ func testInitExisting(t *testing.T, merge bool) {
 	initialClusterSpec := &cluster.ClusterSpec{
 		InitMode:           cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
 		SleepInterval:      &cluster.Duration{Duration: 2 * time.Second},
+		RequestTimeout:     &cluster.Duration{Duration: 1 * time.Second},
 		FailInterval:       &cluster.Duration{Duration: 5 * time.Second},
 		ConvergenceTimeout: &cluster.Duration{Duration: 30 * time.Second},
 		PGParameters: pgParametersWithDefaults(cluster.PGParameters{
@@ -238,6 +240,7 @@ func testInitExisting(t *testing.T, merge bool) {
 	initialClusterSpec = &cluster.ClusterSpec{
 		InitMode:           cluster.ClusterInitModeP(cluster.ClusterInitModeExisting),
 		SleepInterval:      &cluster.Duration{Duration: 2 * time.Second},
+		RequestTimeout:     &cluster.Duration{Duration: 1 * time.Second},
 		FailInterval:       &cluster.Duration{Duration: 5 * time.Second},
 		ConvergenceTimeout: &cluster.Duration{Duration: 30 * time.Second},
 		MergePgParameters:  &merge,
@@ -340,6 +343,7 @@ func TestInitUsers(t *testing.T) {
 	initialClusterSpec := &cluster.ClusterSpec{
 		InitMode:           cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
 		SleepInterval:      &cluster.Duration{Duration: 2 * time.Second},
+		RequestTimeout:     &cluster.Duration{Duration: 1 * time.Second},
 		FailInterval:       &cluster.Duration{Duration: 5 * time.Second},
 		ConvergenceTimeout: &cluster.Duration{Duration: 30 * time.Second},
 		PGParameters:       defaultPGParameters,
@@ -437,6 +441,7 @@ func TestInitialClusterSpec(t *testing.T) {
 	initialClusterSpec := &cluster.ClusterSpec{
 		InitMode:               cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
 		SleepInterval:          &cluster.Duration{Duration: 2 * time.Second},
+		RequestTimeout:         &cluster.Duration{Duration: 1 * time.Second},
 		FailInterval:           &cluster.Duration{Duration: 5 * time.Second},
 		ConvergenceTimeout:     &cluster.Duration{Duration: 30 * time.Second},
 		SynchronousReplication: cluster.BoolP(true),
@@ -489,6 +494,7 @@ func TestSentinelMultiCluster(t *testing.T) {
 	initialClusterSpec := &cluster.ClusterSpec{
 		InitMode:           cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
 		SleepInterval:      &cluster.Duration{Duration: 2 * time.Second},
+		RequestTimeout:     &cluster.Duration{Duration: 1 * time.Second},
 		FailInterval:       &cluster.Duration{Duration: 5 * time.Second},
 		ConvergenceTimeout: &cluster.Duration{Duration: 30 * time.Second},
 		PGParameters:       defaultPGParameters,
@@ -596,6 +602,7 @@ func TestExclusiveLock(t *testing.T) {
 	initialClusterSpec := &cluster.ClusterSpec{
 		InitMode:           cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
 		SleepInterval:      &cluster.Duration{Duration: 2 * time.Second},
+		RequestTimeout:     &cluster.Duration{Duration: 1 * time.Second},
 		FailInterval:       &cluster.Duration{Duration: 5 * time.Second},
 		ConvergenceTimeout: &cluster.Duration{Duration: 30 * time.Second},
 		PGParameters:       defaultPGParameters,
@@ -674,6 +681,7 @@ func TestPasswordTrailingNewLine(t *testing.T) {
 	initialClusterSpec := &cluster.ClusterSpec{
 		InitMode:           cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
 		SleepInterval:      &cluster.Duration{Duration: 2 * time.Second},
+		RequestTimeout:     &cluster.Duration{Duration: 1 * time.Second},
 		FailInterval:       &cluster.Duration{Duration: 5 * time.Second},
 		ConvergenceTimeout: &cluster.Duration{Duration: 30 * time.Second},
 		PGParameters:       defaultPGParameters,

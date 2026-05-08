@@ -526,27 +526,33 @@ func (p *PostgresKeeper) createRecoveryOptions(
 		parameters["restore_command"] = archiveRecoverySettings.RestoreCommand
 	}
 
+	parameters["recovery_target_timeline"] = "latest"
 	if recoveryTargetSettings == nil {
-		parameters["recovery_target_timeline"] = "latest"
-	} else {
-		if recoveryTargetSettings.RecoveryTarget != "" {
-			parameters["recovery_target"] = recoveryTargetSettings.RecoveryTarget
+		return &pg.RecoveryOptions{
+			RecoveryMode:       recoveryMode,
+			RecoveryParameters: parameters,
 		}
-		if recoveryTargetSettings.RecoveryTargetLsn != "" {
-			parameters["recovery_target_lsn"] = recoveryTargetSettings.RecoveryTargetLsn
-		}
-		if recoveryTargetSettings.RecoveryTargetName != "" {
-			parameters["recovery_target_name"] = recoveryTargetSettings.RecoveryTargetName
-		}
-		if recoveryTargetSettings.RecoveryTargetTime != "" {
-			parameters["recovery_target_time"] = recoveryTargetSettings.RecoveryTargetTime
-		}
-		if recoveryTargetSettings.RecoveryTargetXid != "" {
-			parameters["recovery_target_xid"] = recoveryTargetSettings.RecoveryTargetXid
-		}
-		if recoveryTargetSettings.RecoveryTargetTimeline != "" {
-			parameters["recovery_target_timeline"] = recoveryTargetSettings.RecoveryTargetTimeline
-		}
+	}
+
+	if recoveryTargetSettings.RecoveryTargetTimeline != "" {
+		parameters["recovery_target_timeline"] = recoveryTargetSettings.RecoveryTargetTimeline
+	}
+	if recoveryTargetSettings.RecoveryTarget != "" {
+		parameters["recovery_target"] = recoveryTargetSettings.RecoveryTarget
+	}
+	if recoveryTargetSettings.RecoveryTargetLsn != "" {
+		parameters["recovery_target_lsn"] = recoveryTargetSettings.RecoveryTargetLsn
+	}
+	if recoveryTargetSettings.RecoveryTargetName != "" {
+		parameters["recovery_target_name"] = recoveryTargetSettings.RecoveryTargetName
+	}
+	if recoveryTargetSettings.RecoveryTargetTime != "" {
+		parameters["recovery_target_time"] = recoveryTargetSettings.RecoveryTargetTime
+	}
+	if recoveryTargetSettings.RecoveryTargetXid != "" {
+		parameters["recovery_target_xid"] = recoveryTargetSettings.RecoveryTargetXid
+	}
+	if hasRecoveryTargetSelector(recoveryTargetSettings) {
 		parameters["recovery_target_action"] = "promote"
 	}
 
@@ -554,6 +560,24 @@ func (p *PostgresKeeper) createRecoveryOptions(
 		RecoveryMode:       recoveryMode,
 		RecoveryParameters: parameters,
 	}
+}
+
+func hasRecoveryTargetSelector(recoveryTargetSettings *cluster.RecoveryTargetSettings) bool {
+	if recoveryTargetSettings == nil {
+		return false
+	}
+	for _, value := range []string{
+		recoveryTargetSettings.RecoveryTarget,
+		recoveryTargetSettings.RecoveryTargetLsn,
+		recoveryTargetSettings.RecoveryTargetName,
+		recoveryTargetSettings.RecoveryTargetTime,
+		recoveryTargetSettings.RecoveryTargetXid,
+	} {
+		if strings.TrimSpace(value) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // PostgresKeeper reconciles local PostgreSQL state with cluster data.

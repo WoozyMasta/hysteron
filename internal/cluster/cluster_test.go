@@ -178,6 +178,16 @@ func TestClusterSpecValidate(t *testing.T) {
 			wantErr: "proxyCheckInterval should be less than proxyTimeout",
 		},
 		{
+			name: "ha timing must fit fail interval budget",
+			spec: &ClusterSpec{
+				InitMode:       &newMode,
+				SleepInterval:  &Duration{Duration: 5 * time.Second},
+				RequestTimeout: &Duration{Duration: 10 * time.Second},
+				FailInterval:   &Duration{Duration: 20 * time.Second},
+			},
+			wantErr: "invalid HA timing: sleepInterval + 2*requestTimeout must be less than or equal to failInterval",
+		},
+		{
 			name:    "max standbys must be positive",
 			spec:    &ClusterSpec{InitMode: &newMode, MaxStandbys: &zero},
 			wantErr: "maxStandbys must be at least 1",

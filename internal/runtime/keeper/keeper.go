@@ -748,6 +748,54 @@ func (p *PostgresKeeper) usePgrewind(db *cluster.DB) bool {
 		db.Spec.UsePgrewind
 }
 
+type pgrewindDecision struct {
+	try         bool
+	walCheckErr error
+	requiredWal string
+	olderWal    string
+}
+
+func evaluatePgrewindDecision(
+	initialized bool,
+	localSystemID string,
+	followedSystemID string,
+	hasMaster bool,
+	dbXLogPos uint64,
+	masterOlderWal string,
+) pgrewindDecision {
+	if !initialized {
+		return pgrewindDecision{}
+	}
+	if localSystemID != followedSystemID {
+		return pgrewindDecision{}
+	}
+	if !hasMaster {
+		return pgrewindDecision{}
+	}
+
+	walAvailable, walErr := pg.IsRequiredWalAvailable(
+		dbXLogPos,
+		masterOlderWal,
+		pg.WalSegSize,
+	)
+	if walErr != nil {
+		// Keep warning-only behavior: inability to verify WAL availability
+		// should not disable pg_rewind path.
+		return pgrewindDecision{try: true, walCheckErr: walErr}
+	}
+	if !walAvailable {
+		requiredWal := pg.XlogPosToWalFileNameNoTimeline(dbXLogPos, pg.WalSegSize)
+		olderWal, _ := pg.WalFileNameNoTimeLine(masterOlderWal)
+		return pgrewindDecision{
+			try:         false,
+			requiredWal: requiredWal,
+			olderWal:    olderWal,
+		}
+	}
+
+	return pgrewindDecision{try: true}
+}
+
 func (p *PostgresKeeper) updateKeeperInfo() error {
 	p.localStateMutex.Lock()
 	keeperUID := p.keeperLocalState.UID
@@ -1804,40 +1852,33 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 				return
 			}
 
-			tryPgrewind := true
-			if !initialized {
-				tryPgrewind = false
-			}
-			if systemID != followedDB.Status.SystemID {
-				tryPgrewind = false
-			}
-
 			masterDB, ok := cd.DBs[cd.Cluster.Status.Master]
-			if tryPgrewind && !ok {
-				p.baseLog().Warn().Msg("pg_rewind disabled because no master database is available")
-				tryPgrewind = false
+			masterOlderWal := ""
+			if ok {
+				masterOlderWal = masterDB.Status.OlderWalFile
 			}
-
-			if tryPgrewind {
-				walAvailable, walErr := pg.IsRequiredWalAvailable(
-					db.Status.XLogPos,
-					masterDB.Status.OlderWalFile,
-					pg.WalSegSize,
-				)
-				if walErr != nil {
-					p.baseLog().Warn().
-						Err(walErr).
-						Str("older_master_wal", masterDB.Status.OlderWalFile).
-						Msg("cannot verify required WAL availability for pg_rewind path")
-				} else if !walAvailable {
-					requiredWal := pg.XlogPosToWalFileNameNoTimeline(db.Status.XLogPos, pg.WalSegSize)
-					olderWal, _ := pg.WalFileNameNoTimeLine(masterDB.Status.OlderWalFile)
-					p.baseLog().Info().
-						Str("required_wal", requiredWal).
-						Str("older_master_wal", olderWal).
-						Msg("pg_rewind disabled because required WAL is no longer available on master")
-					tryPgrewind = false
-				}
+			decision := evaluatePgrewindDecision(
+				initialized,
+				systemID,
+				followedDB.Status.SystemID,
+				ok,
+				db.Status.XLogPos,
+				masterOlderWal,
+			)
+			tryPgrewind := decision.try
+			if initialized && systemID == followedDB.Status.SystemID && !ok {
+				p.baseLog().Warn().Msg("pg_rewind disabled because no master database is available")
+			}
+			if decision.walCheckErr != nil {
+				p.baseLog().Warn().
+					Err(decision.walCheckErr).
+					Str("older_master_wal", masterOlderWal).
+					Msg("cannot verify required WAL availability for pg_rewind path")
+			} else if !tryPgrewind && decision.requiredWal != "" {
+				p.baseLog().Info().
+					Str("required_wal", decision.requiredWal).
+					Str("older_master_wal", decision.olderWal).
+					Msg("pg_rewind disabled because required WAL is no longer available on master")
 			}
 
 			// pg_rewind can leave a node on a diverged branch in edge cases.

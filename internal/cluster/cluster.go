@@ -518,6 +518,15 @@ func (c *ClusterSpec) Validate() error {
 	if s.ProxyCheckInterval.Duration >= s.ProxyTimeout.Duration {
 		return errors.New("proxyCheckInterval should be less than proxyTimeout")
 	}
+	if c.SleepInterval != nil || c.RequestTimeout != nil || c.FailInterval != nil {
+		if err := validateHATiming(
+			s.SleepInterval.Duration,
+			s.RequestTimeout.Duration,
+			s.FailInterval.Duration,
+		); err != nil {
+			return err
+		}
+	}
 	if *s.MaxStandbys < 1 {
 		return errors.New("maxStandbys must be at least 1")
 	}
@@ -590,6 +599,21 @@ func (c *ClusterSpec) Validate() error {
 		}
 	default:
 		return fmt.Errorf("unknown role: %q", *s.InitMode)
+	}
+	return nil
+}
+
+func validateHATiming(
+	sleepInterval time.Duration,
+	requestTimeout time.Duration,
+	failInterval time.Duration,
+) error {
+	// Keep sentinel loop and request retries bounded by fail interval to reduce
+	// self-inflicted false unhealthy/failover conditions.
+	if sleepInterval+2*requestTimeout > failInterval {
+		return errors.New(
+			"invalid HA timing: sleepInterval + 2*requestTimeout must be less than or equal to failInterval",
+		)
 	}
 	return nil
 }

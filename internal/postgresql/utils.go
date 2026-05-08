@@ -291,6 +291,81 @@ func dropReplicationSlot(ctx context.Context, connParams ConnParams, name string
 	return err
 }
 
+func getLogicalReplicationSlots(
+	ctx context.Context,
+	connParams ConnParams,
+) ([]LogicalReplicationSlot, error) {
+	db, err := openDB(connParams)
+	if err != nil {
+		return nil, err
+	}
+	defer ignoreClose(db)
+
+	rows, err := query(
+		ctx,
+		db,
+		"select slot_name, database, plugin, active "+
+			"from pg_replication_slots "+
+			"where temporary is false and slot_type = 'logical' "+
+			"order by slot_name",
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	slots := []LogicalReplicationSlot{}
+	for rows.Next() {
+		var slot LogicalReplicationSlot
+		if err := rows.Scan(&slot.Name, &slot.Database, &slot.Plugin, &slot.Active); err != nil {
+			return nil, err
+		}
+		slots = append(slots, slot)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return slots, nil
+}
+
+func createLogicalReplicationSlot(
+	ctx context.Context,
+	connParams ConnParams,
+	name, database, plugin string,
+) error {
+	cp := connParams.Copy()
+	cp.Set("dbname", database)
+
+	db, err := openDB(cp)
+	if err != nil {
+		return err
+	}
+	defer ignoreClose(db)
+
+	_, err = dbExec(
+		ctx,
+		db,
+		fmt.Sprintf(
+			"select * from pg_create_logical_replication_slot(%s, %s)",
+			quoteLiteral(name),
+			quoteLiteral(plugin),
+		),
+	)
+	return err
+}
+
+func dropLogicalReplicationSlot(ctx context.Context, connParams ConnParams, name string) error {
+	db, err := openDB(connParams)
+	if err != nil {
+		return err
+	}
+	defer ignoreClose(db)
+
+	_, err = dbExec(ctx, db, fmt.Sprintf("select pg_drop_replication_slot(%s)", quoteLiteral(name)))
+	return err
+}
+
 func getSyncStandbys(ctx context.Context, connParams ConnParams) ([]string, error) {
 	db, err := openDB(connParams)
 	if err != nil {

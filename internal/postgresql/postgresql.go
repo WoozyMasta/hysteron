@@ -124,6 +124,14 @@ type PhysicalReplicationSlot struct {
 	HasXmin bool
 }
 
+// LogicalReplicationSlot describes one logical replication slot status.
+type LogicalReplicationSlot struct {
+	Name     string
+	Database string
+	Plugin   string
+	Active   bool
+}
+
 // RecoveryMode defines PostgreSQL startup recovery mode.
 type RecoveryMode int
 
@@ -712,6 +720,27 @@ func (p *Manager) DropReplicationSlot(name string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeoutValue())
 	defer cancel()
 	return dropReplicationSlot(ctx, p.localConnParams, name)
+}
+
+// GetLogicalReplicationSlots returns non-temporary logical replication slots.
+func (p *Manager) GetLogicalReplicationSlots() ([]LogicalReplicationSlot, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeoutValue())
+	defer cancel()
+	return getLogicalReplicationSlots(ctx, p.localConnParams)
+}
+
+// CreateLogicalReplicationSlot creates a logical replication slot.
+func (p *Manager) CreateLogicalReplicationSlot(name, database, plugin string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeoutValue())
+	defer cancel()
+	return createLogicalReplicationSlot(ctx, p.localConnParams, name, database, plugin)
+}
+
+// DropLogicalReplicationSlot removes a logical replication slot.
+func (p *Manager) DropLogicalReplicationSlot(name string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeoutValue())
+	defer cancel()
+	return dropLogicalReplicationSlot(ctx, p.localConnParams, name)
 }
 
 // BinaryVersion returns the PostgreSQL binary major and minor version.

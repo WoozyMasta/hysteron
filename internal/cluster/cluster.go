@@ -268,6 +268,17 @@ type StandbySettings struct {
 	RecoveryMinApplyDelay string `json:"recoveryMinApplyDelay,omitempty"`
 }
 
+// ManagedLogicalReplicationSlot defines one managed logical slot desired in
+// cluster spec.
+type ManagedLogicalReplicationSlot struct {
+	// Name is the logical replication slot name.
+	Name string `json:"name,omitempty"`
+	// Database is the database where the logical slot is created.
+	Database string `json:"database,omitempty"`
+	// Plugin is the logical decoding output plugin.
+	Plugin string `json:"plugin,omitempty"`
+}
+
 // SUReplAccessMode identifies default superuser replication access scope.
 type SUReplAccessMode string
 
@@ -370,6 +381,9 @@ type ClusterSpec struct { //nolint:revive
 	// may remain before cleanup is considered. Zero or nil disables TTL-based
 	// cleanup.
 	MemberReplicationSlotTTL *Duration `json:"memberReplicationSlotTTL,omitempty"`
+	// ManagedLogicalReplicationSlots defines desired logical slots managed by
+	// hysteron on the current primary instance.
+	ManagedLogicalReplicationSlots []ManagedLogicalReplicationSlot `json:"managedLogicalReplicationSlots,omitempty"`
 	// Additional pg_hba.conf entries
 	// we don't set omitempty since we want to distinguish between null or empty slice
 	PGHBA []string `json:"pgHBA"`
@@ -561,6 +575,22 @@ func (c *ClusterSpec) Validate() error {
 	}
 	if s.MemberReplicationSlotTTL != nil && s.MemberReplicationSlotTTL.Duration < 0 {
 		return errors.New("memberReplicationSlotTTL must be positive")
+	}
+	logicalSlotsSeen := map[string]struct{}{}
+	for _, slot := range s.ManagedLogicalReplicationSlots {
+		if err := validateReplicationSlotName(slot.Name); err != nil {
+			return err
+		}
+		if _, ok := logicalSlotsSeen[slot.Name]; ok {
+			return fmt.Errorf("duplicated managedLogicalReplicationSlots name: %q", slot.Name)
+		}
+		logicalSlotsSeen[slot.Name] = struct{}{}
+		if strings.TrimSpace(slot.Database) == "" {
+			return fmt.Errorf("managedLogicalReplicationSlots database undefined for slot %q", slot.Name)
+		}
+		if strings.TrimSpace(slot.Plugin) == "" {
+			return fmt.Errorf("managedLogicalReplicationSlots plugin undefined for slot %q", slot.Name)
+		}
 	}
 
 	// The unique validation we're doing on pgHBA entries is that they don't contain a newline character

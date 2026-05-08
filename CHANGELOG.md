@@ -154,6 +154,11 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Add integration coverage for new slot policies and rewind behavior,
   including `TestAdditionalReplicationSlots`, `TestMemberReplicationSlotTTLGuardsXmin`,
   and `TestTimelineForkPgrewind`.
+* Start `managed logical slots` MVP with a new cluster-spec contract
+  `managedLogicalReplicationSlots` and strict validation for slot names,
+  duplicates, and required `database`/`plugin` fields.
+* Add PostgreSQL helper API for managed logical slots lifecycle:
+  list logical slots and create/drop logical replication slots.
 
 ## v0.17.0
 

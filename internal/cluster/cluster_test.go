@@ -227,6 +227,46 @@ func TestClusterSpecValidate(t *testing.T) {
 			wantErr: "memberReplicationSlotTTL must be positive",
 		},
 		{
+			name: "managed logical slot validates required fields",
+			spec: &ClusterSpec{
+				InitMode: &newMode,
+				ManagedLogicalReplicationSlots: []ManagedLogicalReplicationSlot{
+					{Name: "goodslot", Plugin: "pgoutput"},
+				},
+			},
+			wantErr: `managedLogicalReplicationSlots database undefined for slot "goodslot"`,
+		},
+		{
+			name: "managed logical slot rejects duplicate names",
+			spec: &ClusterSpec{
+				InitMode: &newMode,
+				ManagedLogicalReplicationSlots: []ManagedLogicalReplicationSlot{
+					{Name: "dup_slot", Database: "postgres", Plugin: "pgoutput"},
+					{Name: "dup_slot", Database: "postgres", Plugin: "wal2json"},
+				},
+			},
+			wantErr: `duplicated managedLogicalReplicationSlots name: "dup_slot"`,
+		},
+		{
+			name: "managed logical slot validates slot name",
+			spec: &ClusterSpec{
+				InitMode: &newMode,
+				ManagedLogicalReplicationSlots: []ManagedLogicalReplicationSlot{
+					{Name: "bad-slot", Database: "postgres", Plugin: "pgoutput"},
+				},
+			},
+			wantErr: `wrong replication slot name: "bad-slot"`,
+		},
+		{
+			name: "managed logical slot accepts valid config",
+			spec: &ClusterSpec{
+				InitMode: &newMode,
+				ManagedLogicalReplicationSlots: []ManagedLogicalReplicationSlot{
+					{Name: "slot_ok", Database: "postgres", Plugin: "pgoutput"},
+				},
+			},
+		},
+		{
 			name:    "pg hba entries cannot contain newline characters",
 			spec:    &ClusterSpec{InitMode: &newMode, PGHBA: []string{"host all all 127.0.0.1/32 trust\n"}},
 			wantErr: "pgHBA entries cannot contain newline characters",

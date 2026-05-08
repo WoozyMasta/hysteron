@@ -607,6 +607,43 @@ func TestAdditionalReplicationSlots(t *testing.T) {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
+	// Manually create a hysteron_* slot and mark it ignored; keeper must not drop it.
+	if _, err := master.Exec("select pg_create_physical_replication_slot('hysteron_manualkeep')"); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	err = HysteronCluster(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		"update",
+		"--patch",
+		`{ "ignoreMasterReplicationSlots" : [ "hysteron_manualkeep" ] }`,
+	)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := waitHysteronReplicationSlots(master, []string{standbyDBUID, "replslot01", "replslot02", "manualkeep"}, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	// Once ignore policy is removed, unmanaged hysteron_* slot must be dropped again.
+	err = HysteronCluster(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		"update",
+		"--patch",
+		`{ "ignoreMasterReplicationSlots" : null }`,
+	)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := waitHysteronReplicationSlots(master, []string{standbyDBUID, "replslot01", "replslot02"}, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
 	// Stop the keeper process on master, should also stop the database
 	t.Logf("Stopping current master keeper: %s", master.uid)
 	master.Stop()

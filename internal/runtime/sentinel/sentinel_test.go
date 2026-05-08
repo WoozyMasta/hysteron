@@ -6139,6 +6139,55 @@ func TestUpdateCluster(t *testing.T) {
 	}
 }
 
+func TestSetDBSpecFromClusterSpecBeforeStopCommand(t *testing.T) {
+	s := &Sentinel{}
+	cs := &cluster.ClusterSpec{
+		InitMode:             cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
+		Role:                 cluster.ClusterRoleP(cluster.ClusterRoleMaster),
+		RequestTimeout:       &cluster.Duration{Duration: time.Second},
+		MaxStandbys:          cluster.Uint16P(2),
+		UsePgrewind:          cluster.BoolP(true),
+		AdditionalWalSenders: cluster.Uint16P(1),
+		BeforeStopCommand:    "echo pre-stop",
+	}
+	cd := &cluster.ClusterData{
+		Cluster: &cluster.Cluster{
+			Spec: cs,
+			Status: cluster.ClusterStatus{
+				Master: "db1",
+			},
+		},
+		DBs: cluster.DBs{
+			"db1": {
+				UID: "db1",
+				Spec: &cluster.DBSpec{
+					Role:      common.RoleMaster,
+					Followers: []string{"db2"},
+				},
+			},
+			"db2": {
+				UID: "db2",
+				Spec: &cluster.DBSpec{
+					Role: common.RoleStandby,
+					FollowConfig: &cluster.FollowConfig{
+						Type:  cluster.FollowTypeInternal,
+						DBUID: "db1",
+					},
+				},
+			},
+		},
+	}
+
+	s.setDBSpecFromClusterSpec(cd)
+
+	if got := cd.DBs["db1"].Spec.BeforeStopCommand; got != "echo pre-stop" {
+		t.Fatalf("primary beforeStopCommand mismatch: got %q want %q", got, "echo pre-stop")
+	}
+	if got := cd.DBs["db2"].Spec.BeforeStopCommand; got != "echo pre-stop" {
+		t.Fatalf("standby beforeStopCommand mismatch: got %q want %q", got, "echo pre-stop")
+	}
+}
+
 func TestActiveProxiesInfos(t *testing.T) {
 	proxyInfo1 := cluster.ProxyInfo{UID: "proxy1", InfoUID: "infoUID1", ProxyTimeout: cluster.DefaultProxyTimeout}
 	proxyInfo2 := cluster.ProxyInfo{UID: "proxy2", InfoUID: "infoUID2", ProxyTimeout: cluster.DefaultProxyTimeout}

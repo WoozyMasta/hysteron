@@ -384,6 +384,9 @@ type ClusterSpec struct { //nolint:revive
 	// ManagedLogicalReplicationSlots defines desired logical slots managed by
 	// hysteron on the current primary instance.
 	ManagedLogicalReplicationSlots []ManagedLogicalReplicationSlot `json:"managedLogicalReplicationSlots,omitempty"`
+	// BeforeStopCommand defines a best-effort command executed by keeper before
+	// stopping PostgreSQL. Command failures are logged and do not block stop.
+	BeforeStopCommand string `json:"beforeStopCommand,omitempty"`
 	// Additional pg_hba.conf entries
 	// we don't set omitempty since we want to distinguish between null or empty slice
 	PGHBA []string `json:"pgHBA"`
@@ -834,6 +837,9 @@ type DBSpec struct {
 	// ManagedLogicalReplicationSlots defines logical slots managed by hysteron
 	// on this database instance.
 	ManagedLogicalReplicationSlots []ManagedLogicalReplicationSlot `json:"managedLogicalReplicationSlots,omitempty"`
+	// BeforeStopCommand defines a best-effort command executed by keeper before
+	// stopping PostgreSQL for this DB assignment.
+	BeforeStopCommand string `json:"beforeStopCommand,omitempty"`
 	// Additional pg_hba.conf entries
 	// We don't set omitempty since we want to distinguish between null or empty slice
 	PGHBA []string `json:"pgHBA"`

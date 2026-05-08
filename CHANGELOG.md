@@ -187,6 +187,9 @@ The format is based on [Keep a Changelog][], and this project adheres to
   keeper now detects paused standby replay and safely attempts
   `pg_wal_replay_resume()`, with warning-level observability for check/resume
   failures.
+* Add optional `beforeStopCommand` cluster setting propagated to DB spec and
+  executed by keeper as a best-effort pre-stop hook before managed PostgreSQL
+  stop operations.
 
 ## v0.17.0
 

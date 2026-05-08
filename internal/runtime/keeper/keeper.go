@@ -24,9 +24,11 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"slices"
 	"sort"
 	"strconv"
@@ -1828,7 +1830,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 			Info().
 			Str(slog.FieldKeeperUID, k.UID).
 			Msg("no database is assigned to this keeper yet; stopping PostgreSQL if it is running")
-		if err = pgm.StopIfStarted(true); err != nil {
+		if err = p.stopPostgresIfStarted(pgm, db); err != nil {
 			p.baseLog().
 				Error().
 				Err(err).
@@ -1842,7 +1844,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 			Str("local_boot_uuid", p.bootUUID).
 			Str("cluster_boot_uuid", k.Status.BootUUID).
 			Msg("boot UID from local process differs from cluster data; stopping PostgreSQL until sentinel updates cluster state")
-		if err = pgm.StopIfStarted(true); err != nil {
+		if err = p.stopPostgresIfStarted(pgm, db); err != nil {
 			p.baseLog().
 				Error().
 				Err(err).
@@ -1870,7 +1872,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 		// resync has failed so we have to clean up stale data
 		p.baseLog().Error().Msg("db failed to initialize or resync")
 
-		if err = pgm.StopIfStarted(true); err != nil {
+		if err = p.stopPostgresIfStarted(pgm, db); err != nil {
 			p.baseLog().
 				Error().
 				Err(err).
@@ -1949,7 +1951,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 				initConfig.DataChecksums = db.Spec.NewConfig.DataChecksums
 			}
 
-			if err = pgm.StopIfStarted(true); err != nil {
+			if err = p.stopPostgresIfStarted(pgm, db); err != nil {
 				p.baseLog().
 					Error().
 					Err(err).
@@ -2015,7 +2017,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 				return
 			}
 
-			if err = pgm.StopIfStarted(true); err != nil {
+			if err = p.stopPostgresIfStarted(pgm, db); err != nil {
 				p.baseLog().
 					Error().
 					Err(err).
@@ -2045,7 +2047,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 			// update pgm postgres parameters
 			pgm.SetParameters(pgParameters)
 
-			if err = pgm.StopIfStarted(true); err != nil {
+			if err = p.stopPostgresIfStarted(pgm, db); err != nil {
 				p.baseLog().
 					Error().
 					Err(err).
@@ -2141,7 +2143,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 				}
 			}
 
-			if err = pgm.StopIfStarted(true); err != nil {
+			if err = p.stopPostgresIfStarted(pgm, db); err != nil {
 				p.baseLog().
 					Error().
 					Err(err).
@@ -2166,7 +2168,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 				return
 			}
 
-			if err = pgm.StopIfStarted(true); err != nil {
+			if err = p.stopPostgresIfStarted(pgm, db); err != nil {
 				p.baseLog().
 					Error().
 					Err(err).
@@ -2279,7 +2281,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 				}
 
 				if fullResync {
-					if err = pgm.StopIfStarted(true); err != nil {
+					if err = p.stopPostgresIfStarted(pgm, db); err != nil {
 						p.baseLog().
 							Error().
 							Err(err).
@@ -2317,7 +2319,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 			// update pgm postgres parameters
 			pgm.SetParameters(pgParameters)
 
-			if err = pgm.StopIfStarted(true); err != nil {
+			if err = p.stopPostgresIfStarted(pgm, db); err != nil {
 				p.baseLog().
 					Error().
 					Err(err).
@@ -2356,7 +2358,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 					return
 				}
 			}
-			if err = pgm.StopIfStarted(true); err != nil {
+			if err = p.stopPostgresIfStarted(pgm, db); err != nil {
 				p.baseLog().
 					Error().
 					Err(err).
@@ -2829,6 +2831,51 @@ func (p *PostgresKeeper) ensureStandbyWALReplayRunning(replay standbyReplayContr
 		Info().
 		Str(slog.FieldDBUID, dbUID).
 		Msg("resumed paused WAL replay on standby")
+}
+
+func (p *PostgresKeeper) stopPostgresIfStarted(pgm *pg.Manager, db *cluster.DB) error {
+	p.runBeforeStopHook(db)
+	return pgm.StopIfStarted(true)
+}
+
+func (p *PostgresKeeper) runBeforeStopHook(db *cluster.DB) {
+	if db == nil || db.Spec == nil {
+		return
+	}
+	command := strings.TrimSpace(db.Spec.BeforeStopCommand)
+	if command == "" {
+		return
+	}
+
+	p.baseLog().
+		Info().
+		Str(slog.FieldDBUID, db.UID).
+		Str("before_stop_command", command).
+		Msg("executing before-stop command")
+
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "windows":
+		cmd = exec.Command("cmd", "/C", command)
+	default:
+		cmd = exec.Command("/bin/sh", "-c", command)
+	}
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		p.baseLog().
+			Warn().
+			Err(err).
+			Str(slog.FieldDBUID, db.UID).
+			Str("before_stop_command", command).
+			Msg("before-stop command failed; continuing with PostgreSQL stop")
+		return
+	}
+
+	p.baseLog().
+		Info().
+		Str(slog.FieldDBUID, db.UID).
+		Msg("before-stop command completed")
 }
 
 func (p *PostgresKeeper) keeperLocalStateFilePath() string {

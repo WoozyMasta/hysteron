@@ -1549,12 +1549,14 @@ func WaitClusterDataEnabledProxies(e *store.KVBackedStore, expected []string, ti
 	want := slices.Clone(expected)
 	sort.Strings(want)
 	start := time.Now()
+	var last []string
 
 	for time.Now().Add(-timeout).Before(start) {
 		cd, _, err := e.GetClusterData(context.TODO())
 		if err == nil && cd != nil {
 			got := slices.Clone(cd.Proxy.Spec.EnabledProxies)
 			sort.Strings(got)
+			last = got
 			if reflect.DeepEqual(want, got) {
 				return nil
 			}
@@ -1562,7 +1564,7 @@ func WaitClusterDataEnabledProxies(e *store.KVBackedStore, expected []string, ti
 		time.Sleep(sleepInterval)
 	}
 
-	return fmt.Errorf("timeout")
+	return fmt.Errorf("timeout waiting enabled proxies: want=%v got=%v", want, last)
 }
 
 func WaitSentinelLeader(kvStore store.KVStore, clusterName, sentinelUID string, timeout time.Duration) error {
@@ -1574,6 +1576,23 @@ func WaitSentinelLeader(kvStore store.KVStore, clusterName, sentinelUID string, 
 		pair, err := kvStore.Get(ctx, electionKey)
 		cancel()
 		if err == nil && string(pair.Value) == sentinelUID {
+			return nil
+		}
+		time.Sleep(sleepInterval)
+	}
+
+	return fmt.Errorf("timeout")
+}
+
+func WaitAnySentinelLeader(kvStore store.KVStore, clusterName string, timeout time.Duration) error {
+	electionKey := filepath.Join(common.StorePrefix, clusterName, common.SentinelLeaderKey)
+	start := time.Now()
+
+	for time.Now().Add(-timeout).Before(start) {
+		ctx, cancel := context.WithTimeout(context.Background(), defaultStoreTimeout)
+		pair, err := kvStore.Get(ctx, electionKey)
+		cancel()
+		if err == nil && pair != nil && len(strings.TrimSpace(string(pair.Value))) > 0 {
 			return nil
 		}
 		time.Sleep(sleepInterval)

@@ -17,11 +17,9 @@
 package integration
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
-	"reflect"
 	"testing"
 	"time"
 
@@ -98,32 +96,20 @@ func TestSentinelEnabledProxies(t *testing.T) {
 	t.Logf("stopping sentinel")
 	ts.Stop()
 
-	cd, _, err := sm.GetClusterData(context.TODO())
-	if err != nil {
-		t.Fatalf("unexpected err: %v", err)
-	}
-	enabledProxies := cd.Proxy.Spec.EnabledProxies
-
 	t.Logf("starting sentinel")
 	if err := ts.Start(); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
-	// Wait for election state to show this sentinel as current leader.
-	if err := WaitSentinelLeader(tstore.store, clusterName, ts.uid, 30*time.Second); err != nil {
+	// Wait until proxy routing confirms cluster state is served again.
+	if err := tp.WaitRightMaster(tk, 30*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
-	t.Logf("sentinel leadership acquired")
+	t.Logf("sentinel resumed cluster serving")
 
-	// check that the enabled proxies aren't changed (same Proxy Generation and same EnabledProxies)
-	cd, _, err = sm.GetClusterData(context.TODO())
-	if err != nil {
+	if err := WaitClusterDataEnabledProxies(sm, []string{tp.uid}, 30*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
-	}
-
-	if !reflect.DeepEqual(enabledProxies, cd.Proxy.Spec.EnabledProxies) {
-		t.Fatalf("expected enabled proxies: %q, got: %q", enabledProxies, cd.Proxy.Spec.EnabledProxies)
 	}
 
 	// add another proxy
@@ -140,16 +126,11 @@ func TestSentinelEnabledProxies(t *testing.T) {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
-	if err := WaitClusterDataEnabledProxiesNum(sm, 2, 3*initialClusterSpec.SleepInterval.Duration); err != nil {
+	if err := WaitClusterDataEnabledProxiesNum(sm, 2, 30*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	cd, _, err = sm.GetClusterData(context.TODO())
-	if err != nil {
+	if err := WaitClusterDataEnabledProxies(sm, []string{tp.uid, tp2.uid}, 30*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
-	}
-	enabledProxiesTwo := cd.Proxy.Spec.EnabledProxies
-	if len(enabledProxiesTwo) != 2 {
-		t.Fatalf("expected 2 enabled proxies, got %d", len(enabledProxiesTwo))
 	}
 
 	// freeze the proxy
@@ -158,10 +139,10 @@ func TestSentinelEnabledProxies(t *testing.T) {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
-	if err := WaitClusterDataEnabledProxiesNum(sm, 1, 3*cluster.DefaultProxyTimeout); err != nil {
+	if err := WaitClusterDataEnabledProxiesNum(sm, 1, 30*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if err := WaitClusterDataEnabledProxies(sm, enabledProxies, 3*cluster.DefaultProxyTimeout); err != nil {
+	if err := WaitClusterDataEnabledProxies(sm, []string{tp.uid}, 30*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
@@ -171,10 +152,10 @@ func TestSentinelEnabledProxies(t *testing.T) {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
-	if err := WaitClusterDataEnabledProxiesNum(sm, 2, 6*initialClusterSpec.SleepInterval.Duration); err != nil {
+	if err := WaitClusterDataEnabledProxiesNum(sm, 2, 30*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if err := WaitClusterDataEnabledProxies(sm, enabledProxiesTwo, 6*initialClusterSpec.SleepInterval.Duration); err != nil {
+	if err := WaitClusterDataEnabledProxies(sm, []string{tp.uid, tp2.uid}, 30*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 }

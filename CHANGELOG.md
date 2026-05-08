@@ -169,6 +169,9 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Add managed logical slot mismatch safety coverage:
   when desired plugin/database mismatches an existing slot, keeper logs a
   warning and does not perform destructive drop/recreate.
+* Validate managed logical slots configuration up front:
+  `managedLogicalReplicationSlots` now requires
+  `pgParameters.wal_level="logical"` to avoid repeated runtime creation errors.
 
 ## v0.17.0
 

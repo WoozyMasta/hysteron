@@ -261,10 +261,36 @@ func TestClusterSpecValidate(t *testing.T) {
 			name: "managed logical slot accepts valid config",
 			spec: &ClusterSpec{
 				InitMode: &newMode,
+				PGParameters: PGParameters{
+					"wal_level": "logical",
+				},
 				ManagedLogicalReplicationSlots: []ManagedLogicalReplicationSlot{
 					{Name: "slot_ok", Database: "postgres", Plugin: "pgoutput"},
 				},
 			},
+		},
+		{
+			name: "managed logical slot requires wal_level logical",
+			spec: &ClusterSpec{
+				InitMode: &newMode,
+				ManagedLogicalReplicationSlots: []ManagedLogicalReplicationSlot{
+					{Name: "slot_ok", Database: "postgres", Plugin: "pgoutput"},
+				},
+			},
+			wantErr: `managedLogicalReplicationSlots requires pgParameters.wal_level to be set to "logical"`,
+		},
+		{
+			name: "managed logical slot rejects non logical wal_level",
+			spec: &ClusterSpec{
+				InitMode: &newMode,
+				PGParameters: PGParameters{
+					"wal_level": "replica",
+				},
+				ManagedLogicalReplicationSlots: []ManagedLogicalReplicationSlot{
+					{Name: "slot_ok", Database: "postgres", Plugin: "pgoutput"},
+				},
+			},
+			wantErr: `managedLogicalReplicationSlots requires pgParameters.wal_level to be set to "logical"`,
 		},
 		{
 			name:    "pg hba entries cannot contain newline characters",

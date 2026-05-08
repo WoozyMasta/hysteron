@@ -592,6 +592,14 @@ func (c *ClusterSpec) Validate() error {
 			return fmt.Errorf("managedLogicalReplicationSlots plugin undefined for slot %q", slot.Name)
 		}
 	}
+	if len(s.ManagedLogicalReplicationSlots) > 0 {
+		walLevel := strings.ToLower(strings.TrimSpace(s.PGParameters["wal_level"]))
+		if walLevel != "logical" {
+			return errors.New(
+				`managedLogicalReplicationSlots requires pgParameters.wal_level to be set to "logical"`,
+			)
+		}
+	}
 
 	// The unique validation we're doing on pgHBA entries is that they don't contain a newline character
 	for _, e := range s.PGHBA {

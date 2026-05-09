@@ -1552,6 +1552,11 @@ type managedLogicalSlotsDecision struct {
 	active   []string
 }
 
+type managedLogicalSlotReadiness struct {
+	missing  []string
+	mismatch []string
+}
+
 func shouldReconcileManagedLogicalSlots(
 	desired []cluster.ManagedLogicalReplicationSlot,
 	currentPGParameters cluster.PGParameters,
@@ -1617,6 +1622,36 @@ func evaluateManagedLogicalSlotsDecision(
 	slices.Sort(decision.drop)
 	slices.Sort(decision.active)
 	return decision
+}
+
+func evaluateManagedLogicalSlotReadiness(
+	desired []cluster.ManagedLogicalReplicationSlot,
+	current []pg.LogicalReplicationSlot,
+) managedLogicalSlotReadiness {
+	readiness := managedLogicalSlotReadiness{
+		missing:  make([]string, 0),
+		mismatch: make([]string, 0),
+	}
+
+	currentByName := make(map[string]pg.LogicalReplicationSlot, len(current))
+	for _, slot := range current {
+		currentByName[slot.Name] = slot
+	}
+
+	for _, desiredSlot := range desired {
+		currentSlot, ok := currentByName[desiredSlot.Name]
+		if !ok {
+			readiness.missing = append(readiness.missing, desiredSlot.Name)
+			continue
+		}
+		if currentSlot.Database != desiredSlot.Database || currentSlot.Plugin != desiredSlot.Plugin {
+			readiness.mismatch = append(readiness.mismatch, desiredSlot.Name)
+		}
+	}
+
+	slices.Sort(readiness.missing)
+	slices.Sort(readiness.mismatch)
+	return readiness
 }
 
 func (p *PostgresKeeper) refreshReplicationSlots(
@@ -1707,6 +1742,28 @@ func (p *PostgresKeeper) refreshReplicationSlots(
 			Debug().
 			Err(err).
 			Msg("failed to inspect logical replication slots")
+		return nil
+	}
+
+	if db.Spec.Role != common.RoleMaster {
+		if db.Spec.EnableLogicalSlotFailover {
+			readiness := evaluateManagedLogicalSlotReadiness(
+				db.Spec.ManagedLogicalReplicationSlots,
+				currentLogicalSlots,
+			)
+			for _, slot := range readiness.missing {
+				p.baseLog().
+					Warn().
+					Str("slot", slot).
+					Msg("logical slot failover gate enabled: standby readiness missing managed logical slot")
+			}
+			for _, slot := range readiness.mismatch {
+				p.baseLog().
+					Warn().
+					Str("slot", slot).
+					Msg("logical slot failover gate enabled: standby logical slot mismatch")
+			}
+		}
 		return nil
 	}
 

@@ -479,7 +479,11 @@ func (s *Sentinel) setDBSpecFromClusterSpec(cd *cluster.ClusterData) {
 		case dbTypeReplicaLine:
 			db.Spec.AdditionalReplicationSlots = nil
 			db.Spec.IgnoreReplicationSlots = nil
-			db.Spec.ManagedLogicalReplicationSlots = nil
+			if clusterSpec.EnableLogicalSlotFailover {
+				db.Spec.ManagedLogicalReplicationSlots = clusterSpec.ManagedLogicalReplicationSlots
+			} else {
+				db.Spec.ManagedLogicalReplicationSlots = nil
+			}
 			// Standby additional slot policy is currently master-only.
 			// See plan.md: "TODO: Replication Slots On Failover".
 		}

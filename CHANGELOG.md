@@ -203,6 +203,10 @@ The format is based on [Keep a Changelog][], and this project adheres to
   specs and validated to require `managedLogicalReplicationSlots`; current
   runtime behavior is unchanged while the gate is reserved for staged rollout
   of future standby-side failover semantics.
+* Extend logical-slot-failover gate with standby readiness observability:
+  when `enableLogicalSlotFailover` is enabled, standby DB specs receive managed
+  logical-slot definitions and keeper reports readiness gaps (`missing` or
+  `mismatch`) without creating or dropping logical slots on standby.
 
 ## v0.17.0
 

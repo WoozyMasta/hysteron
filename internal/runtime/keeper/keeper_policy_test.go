@@ -358,3 +358,23 @@ func TestShouldReconcileManagedLogicalSlots(t *testing.T) {
 		}
 	})
 }
+
+func TestEvaluateManagedLogicalSlotReadiness(t *testing.T) {
+	t.Run("reports missing and mismatch slots", func(t *testing.T) {
+		readiness := evaluateManagedLogicalSlotReadiness(
+			[]cluster.ManagedLogicalReplicationSlot{
+				{Name: "hysteron_slot1", Database: "postgres", Plugin: "pgoutput"},
+				{Name: "hysteron_slot2", Database: "postgres", Plugin: "pgoutput"},
+			},
+			[]pg.LogicalReplicationSlot{
+				{Name: "hysteron_slot1", Database: "postgres", Plugin: "wal2json"},
+			},
+		)
+		if !reflect.DeepEqual(readiness.missing, []string{"hysteron_slot2"}) {
+			t.Fatalf("unexpected missing readiness: %+v", readiness.missing)
+		}
+		if !reflect.DeepEqual(readiness.mismatch, []string{"hysteron_slot1"}) {
+			t.Fatalf("unexpected mismatch readiness: %+v", readiness.mismatch)
+		}
+	})
+}

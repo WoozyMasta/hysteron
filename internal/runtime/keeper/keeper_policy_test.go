@@ -378,3 +378,23 @@ func TestEvaluateManagedLogicalSlotReadiness(t *testing.T) {
 		}
 	})
 }
+
+func TestManagedLogicalSlotReadinessSignature(t *testing.T) {
+	t.Run("returns stable sorted signature", func(t *testing.T) {
+		sig := managedLogicalSlotReadinessSignature(managedLogicalSlotReadiness{
+			missing:  []string{"b", "a"},
+			mismatch: []string{"d", "c"},
+		})
+		want := "mismatch:c|mismatch:d|missing:a|missing:b"
+		if sig != want {
+			t.Fatalf("unexpected signature: got %q want %q", sig, want)
+		}
+	})
+
+	t.Run("returns empty for ready state", func(t *testing.T) {
+		sig := managedLogicalSlotReadinessSignature(managedLogicalSlotReadiness{})
+		if sig != "" {
+			t.Fatalf("expected empty signature, got %q", sig)
+		}
+	})
+}

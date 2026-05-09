@@ -649,6 +649,8 @@ type PostgresKeeper struct {
 
 	// Enables waiting for synchronous standbys before promotion flow completion.
 	waitSyncStandbysSynced bool
+	// Last emitted standby logical-slot readiness signature for warning dedup.
+	logicalSlotReadinessLast string
 }
 
 type standbyReplayController interface {
@@ -1557,6 +1559,23 @@ type managedLogicalSlotReadiness struct {
 	mismatch []string
 }
 
+func managedLogicalSlotReadinessSignature(
+	readiness managedLogicalSlotReadiness,
+) string {
+	parts := make([]string, 0, len(readiness.missing)+len(readiness.mismatch))
+	for _, slot := range readiness.missing {
+		parts = append(parts, "missing:"+slot)
+	}
+	for _, slot := range readiness.mismatch {
+		parts = append(parts, "mismatch:"+slot)
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	slices.Sort(parts)
+	return strings.Join(parts, "|")
+}
+
 func shouldReconcileManagedLogicalSlots(
 	desired []cluster.ManagedLogicalReplicationSlot,
 	currentPGParameters cluster.PGParameters,
@@ -1751,21 +1770,28 @@ func (p *PostgresKeeper) refreshReplicationSlots(
 				db.Spec.ManagedLogicalReplicationSlots,
 				currentLogicalSlots,
 			)
-			for _, slot := range readiness.missing {
-				p.baseLog().
-					Warn().
-					Str("slot", slot).
-					Msg("logical slot failover gate enabled: standby readiness missing managed logical slot")
+			currentSignature := managedLogicalSlotReadinessSignature(readiness)
+			if currentSignature != p.logicalSlotReadinessLast {
+				p.logicalSlotReadinessLast = currentSignature
+				for _, slot := range readiness.missing {
+					p.baseLog().
+						Warn().
+						Str("slot", slot).
+						Msg("logical slot failover gate enabled: standby readiness missing managed logical slot")
+				}
+				for _, slot := range readiness.mismatch {
+					p.baseLog().
+						Warn().
+						Str("slot", slot).
+						Msg("logical slot failover gate enabled: standby logical slot mismatch")
+				}
 			}
-			for _, slot := range readiness.mismatch {
-				p.baseLog().
-					Warn().
-					Str("slot", slot).
-					Msg("logical slot failover gate enabled: standby logical slot mismatch")
-			}
+		} else {
+			p.logicalSlotReadinessLast = ""
 		}
 		return nil
 	}
+	p.logicalSlotReadinessLast = ""
 
 	logicalDecision := evaluateManagedLogicalSlotsDecision(
 		db.Spec.ManagedLogicalReplicationSlots,

@@ -1097,6 +1097,33 @@ func TestManagedLogicalReplicationSlotsMismatchNoDestructiveAction(t *testing.T)
 	}
 }
 
+func assertClusterUpdateFailsWith(
+	t *testing.T,
+	clusterName string,
+	storeBackend store.Backend,
+	storeEndpoints string,
+	patch string,
+	expectedErr string,
+) {
+	t.Helper()
+
+	output, err := HysteronClusterOutput(
+		t,
+		clusterName,
+		storeBackend,
+		storeEndpoints,
+		"update",
+		"--patch",
+		patch,
+	)
+	if err == nil {
+		t.Fatalf("expected cluster update to fail, got success; output=%q", output)
+	}
+	if !strings.Contains(output, expectedErr) {
+		t.Fatalf("expected output containing %q, got: %q", expectedErr, output)
+	}
+}
+
 func TestManagedLogicalReplicationSlotsRequiresLogicalWalLevel(t *testing.T) {
 	t.Parallel()
 
@@ -1115,22 +1142,14 @@ func TestManagedLogicalReplicationSlotsRequiresLogicalWalLevel(t *testing.T) {
 	sm := store.NewKVBackedStore(tstore.store, storePath)
 	_, _ = waitMasterStandbysReady(t, sm, tks)
 
-	output, err := HysteronClusterOutput(
+	assertClusterUpdateFailsWith(
 		t,
 		clusterName,
 		tstore.storeBackend,
 		storeEndpoints,
-		"update",
-		"--patch",
 		`{ "managedLogicalReplicationSlots" : [ { "name" : "hysteron_logic03", "database" : "postgres", "plugin" : "pgoutput" } ] }`,
+		`managedLogicalReplicationSlots requires pgParameters.wal_level to be set to "logical"`,
 	)
-	if err == nil {
-		t.Fatalf("expected cluster update to fail when wal_level is not logical")
-	}
-	expectedErr := `managedLogicalReplicationSlots requires pgParameters.wal_level to be set to "logical"`
-	if !strings.Contains(output, expectedErr) {
-		t.Fatalf("expected output containing %q, got: %q", expectedErr, output)
-	}
 }
 
 func TestLogicalSlotFailoverGateRequiresManagedSlots(t *testing.T) {
@@ -1151,22 +1170,14 @@ func TestLogicalSlotFailoverGateRequiresManagedSlots(t *testing.T) {
 	sm := store.NewKVBackedStore(tstore.store, storePath)
 	_, _ = waitMasterStandbysReady(t, sm, tks)
 
-	output, err := HysteronClusterOutput(
+	assertClusterUpdateFailsWith(
 		t,
 		clusterName,
 		tstore.storeBackend,
 		storeEndpoints,
-		"update",
-		"--patch",
 		`{ "enableLogicalSlotFailover": true }`,
+		`enableLogicalSlotFailover requires managedLogicalReplicationSlots to be configured`,
 	)
-	if err == nil {
-		t.Fatalf("expected cluster update to fail when enableLogicalSlotFailover is set without managedLogicalReplicationSlots")
-	}
-	expectedErr := `enableLogicalSlotFailover requires managedLogicalReplicationSlots to be configured`
-	if !strings.Contains(output, expectedErr) {
-		t.Fatalf("expected output containing %q, got: %q", expectedErr, output)
-	}
 }
 
 func TestLogicalSlotFailoverGateStandbyReadinessNoAction(t *testing.T) {

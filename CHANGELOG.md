@@ -218,6 +218,10 @@ The format is based on [Keep a Changelog][], and this project adheres to
   cluster updates now have explicit test coverage that
   `enableLogicalSlotFailover` is rejected unless
   `managedLogicalReplicationSlots` are configured.
+* Strengthen logical-slot guardrail integration assertions:
+  tests now verify the exact validation reason in command output for
+  `wal_level=logical` requirement and for the
+  `enableLogicalSlotFailover` + `managedLogicalReplicationSlots` coupling.
 * Deduplicate standby logical-slot readiness warnings:
   keeper now logs gate readiness warnings only when `missing/mismatch` state
   changes, reducing noisy repeated warnings during steady-state reconcile

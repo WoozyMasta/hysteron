@@ -1115,7 +1115,7 @@ func TestManagedLogicalReplicationSlotsRequiresLogicalWalLevel(t *testing.T) {
 	sm := store.NewKVBackedStore(tstore.store, storePath)
 	_, _ = waitMasterStandbysReady(t, sm, tks)
 
-	err = HysteronCluster(
+	output, err := HysteronClusterOutput(
 		t,
 		clusterName,
 		tstore.storeBackend,
@@ -1126,6 +1126,10 @@ func TestManagedLogicalReplicationSlotsRequiresLogicalWalLevel(t *testing.T) {
 	)
 	if err == nil {
 		t.Fatalf("expected cluster update to fail when wal_level is not logical")
+	}
+	expectedErr := `managedLogicalReplicationSlots requires pgParameters.wal_level to be set to "logical"`
+	if !strings.Contains(output, expectedErr) {
+		t.Fatalf("expected output containing %q, got: %q", expectedErr, output)
 	}
 }
 
@@ -1147,7 +1151,7 @@ func TestLogicalSlotFailoverGateRequiresManagedSlots(t *testing.T) {
 	sm := store.NewKVBackedStore(tstore.store, storePath)
 	_, _ = waitMasterStandbysReady(t, sm, tks)
 
-	err = HysteronCluster(
+	output, err := HysteronClusterOutput(
 		t,
 		clusterName,
 		tstore.storeBackend,
@@ -1158,6 +1162,10 @@ func TestLogicalSlotFailoverGateRequiresManagedSlots(t *testing.T) {
 	)
 	if err == nil {
 		t.Fatalf("expected cluster update to fail when enableLogicalSlotFailover is set without managedLogicalReplicationSlots")
+	}
+	expectedErr := `enableLogicalSlotFailover requires managedLogicalReplicationSlots to be configured`
+	if !strings.Contains(output, expectedErr) {
+		t.Fatalf("expected output containing %q, got: %q", expectedErr, output)
 	}
 }
 

@@ -473,3 +473,135 @@ func TestPromoteStandbyClusterArchiveRecovery(t *testing.T) {
 		t.Fatalf("unexpected err: %v", err)
 	}
 }
+
+func TestPromoteStandbyClusterPrePromoteHookFailure(t *testing.T) {
+	t.Parallel()
+
+	dir, err := os.MkdirTemp("", "hysteron")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	// Setup a remote hysteron cluster (with just one keeper and one sentinel)
+	primaryClusterName := uuid.NewString()
+
+	ptstore := setupStore(t, dir)
+	defer ptstore.Stop()
+
+	primaryStoreEndpoints := fmt.Sprintf("%s:%s", ptstore.listenAddress, ptstore.port)
+	pStorePath := filepath.Join(common.StorePrefix, primaryClusterName)
+	psm := store.NewKVBackedStore(ptstore.store, pStorePath)
+
+	initialClusterSpec := &cluster.ClusterSpec{
+		InitMode:           cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
+		SleepInterval:      &cluster.Duration{Duration: 2 * time.Second},
+		RequestTimeout:     &cluster.Duration{Duration: 1 * time.Second},
+		FailInterval:       &cluster.Duration{Duration: 5 * time.Second},
+		ConvergenceTimeout: &cluster.Duration{Duration: 30 * time.Second},
+		PGParameters:       defaultPGParameters,
+	}
+	initialClusterSpecFile, err := writeClusterSpec(dir, initialClusterSpec)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	pts, err := NewTestSentinel(t, dir, primaryClusterName, ptstore.storeBackend, primaryStoreEndpoints, fmt.Sprintf("--initial-cluster-spec=%s", initialClusterSpecFile))
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := pts.Start(); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer pts.Stop()
+	ptk, err := NewTestKeeper(t, dir, primaryClusterName, pgSUUsername, pgSUPassword, pgReplUsername, pgReplPassword, ptstore.storeBackend, primaryStoreEndpoints)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := ptk.Start(); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer ptk.Stop()
+
+	waitKeeperReady(t, psm, ptk)
+	if err := populate(t, ptk); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := write(t, ptk, 1, 1); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	// Setup standby cluster whose promotion must be blocked by prePromote hook.
+	clusterName := uuid.NewString()
+
+	tstore := setupStore(t, dir)
+	defer tstore.Stop()
+
+	storeEndpoints := fmt.Sprintf("%s:%s", tstore.listenAddress, tstore.port)
+	storePath := filepath.Join(common.StorePrefix, clusterName)
+	sm := store.NewKVBackedStore(tstore.store, storePath)
+
+	pgpass, err := os.CreateTemp(dir, "pgpass")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if _, err := pgpass.WriteString(fmt.Sprintf("%s:%s:*:%s:%s\n", ptk.pgListenAddress, ptk.pgPort, ptk.pgReplUsername, ptk.pgReplPassword)); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	pgpass.Close()
+
+	initialClusterSpec = &cluster.ClusterSpec{
+		InitMode:           cluster.ClusterInitModeP(cluster.ClusterInitModePITR),
+		Role:               cluster.ClusterRoleP(cluster.ClusterRoleStandby),
+		SleepInterval:      &cluster.Duration{Duration: 2 * time.Second},
+		RequestTimeout:     &cluster.Duration{Duration: 1 * time.Second},
+		FailInterval:       &cluster.Duration{Duration: 5 * time.Second},
+		ConvergenceTimeout: &cluster.Duration{Duration: 30 * time.Second},
+		MaxStandbyLag:      cluster.Uint32P(50 * 1024),
+		PGParameters:       defaultPGParameters,
+		PrePromoteCommand:  "false",
+		PITRConfig: &cluster.PITRConfig{
+			DataRestoreCommand: fmt.Sprintf("PGPASSFILE=%s pg_basebackup -D %%d -h %s -p %s -U %s", pgpass.Name(), ptk.pgListenAddress, ptk.pgPort, ptk.pgReplUsername),
+		},
+		StandbyConfig: &cluster.StandbyConfig{
+			StandbySettings: &cluster.StandbySettings{
+				PrimaryConninfo: fmt.Sprintf("sslmode=disable host=%s port=%s user=%s password=%s", ptk.pgListenAddress, ptk.pgPort, ptk.pgReplUsername, ptk.pgReplPassword),
+			},
+		},
+	}
+	initialClusterSpecFile, err = writeClusterSpec(dir, initialClusterSpec)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	ts, err := NewTestSentinel(t, dir, clusterName, tstore.storeBackend, storeEndpoints, fmt.Sprintf("--initial-cluster-spec=%s", initialClusterSpecFile))
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := ts.Start(); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer ts.Stop()
+	tk, err := NewTestKeeper(t, dir, clusterName, pgSUUsername, pgSUPassword, pgReplUsername, pgReplPassword, tstore.storeBackend, storeEndpoints)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := tk.Start(); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer tk.Stop()
+
+	waitKeeperReady(t, sm, tk)
+	if err := waitLines(t, tk, 1, 10*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	err = HysteronCluster(t, clusterName, tstore.storeBackend, storeEndpoints, "promote", "-y")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	if err := tk.WaitDBRole(common.RoleMaster, nil, 10*time.Second); err == nil {
+		t.Fatalf("expected standby promotion to be blocked by prePromote hook")
+	}
+}

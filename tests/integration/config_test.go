@@ -1493,6 +1493,103 @@ func TestLogicalSlotFailoverGateEnableTransition(t *testing.T) {
 	}
 }
 
+func TestBeforeStopCommandHook(t *testing.T) {
+	t.Parallel()
+
+	dir, err := os.MkdirTemp("", "hysteron")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	hookMarkerPath := filepath.Join(dir, "before-stop-hook-ran")
+	clusterName := uuid.NewString()
+	automaticPgRestart := true
+	tks, tss, tp, tstore := setupServers(
+		t,
+		clusterName,
+		dir,
+		1,
+		1,
+		false,
+		false,
+		nil,
+		func(spec *cluster.ClusterSpec) {
+			spec.AutomaticPgRestart = &automaticPgRestart
+			spec.PGParameters = cluster.PGParameters{
+				"max_connections": "100",
+			}
+			spec.BeforeStopCommand = fmt.Sprintf(
+				"date +%%s%%N > %s",
+				hookMarkerPath,
+			)
+		},
+	)
+	defer shutdown(tks, tss, tp, tstore)
+
+	storePath := filepath.Join(common.StorePrefix, clusterName)
+	sm := store.NewKVBackedStore(tstore.store, storePath)
+	if err := WaitClusterPhase(sm, cluster.ClusterPhaseNormal, 60*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	tk, _ := waitMasterStandbysReady(t, sm, tks)
+	if err := tk.WaitDBUp(60 * time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	var markerBefore string
+	start := time.Now()
+	for {
+		content, readErr := os.ReadFile(hookMarkerPath)
+		if readErr == nil {
+			markerBefore = strings.TrimSpace(string(content))
+			if markerBefore != "" {
+				break
+			}
+		}
+		if time.Since(start) > 10*time.Second {
+			t.Fatalf("beforeStopCommand marker wasn't written before stop: %v", readErr)
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+
+	storeEndpoints := fmt.Sprintf("%s:%s", tstore.listenAddress, tstore.port)
+	if err := HysteronCluster(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		"update",
+		"--patch",
+		`{ "pgParameters" : { "max_connections": "150" } }`,
+	); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	start = time.Now()
+	for {
+		content, readErr := os.ReadFile(hookMarkerPath)
+		if readErr == nil {
+			markerAfter := strings.TrimSpace(string(content))
+			if markerAfter == "" {
+				t.Fatalf("beforeStopCommand marker is empty after stop")
+			}
+			if markerAfter != markerBefore {
+				break
+			}
+		}
+		if time.Since(start) > 40*time.Second {
+			t.Fatalf(
+				"beforeStopCommand marker did not change after restart-trigger update: before=%q err=%v",
+				markerBefore,
+				readErr,
+			)
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+}
+
 func TestAdvertise(t *testing.T) {
 	t.Parallel()
 

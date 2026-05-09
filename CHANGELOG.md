@@ -242,6 +242,15 @@ The format is based on [Keep a Changelog][], and this project adheres to
   validation, gate-disabled and gate-enabled runtime behavior, and both
   gate-transition directions are now exercised together in one integration
   pass to catch cross-scenario regressions.
+* Add advanced integration compatibility coverage for recently introduced HA
+  controls by running pre-promote fencing failure handling, pg_rewind timeline
+  fork recovery, and logical-slot failover-gate scenarios together in one
+  targeted regression pass.
+* Align `beforeStopCommand` semantics with keeper-managed restarts:
+  keeper now runs the before-stop hook before all internal
+  `pgm.Restart(true)` paths (recovery-parameter restarts and automatic
+  pending-restart restarts), with new integration coverage in
+  `TestBeforeStopCommandHook`.
 * Deduplicate standby logical-slot readiness warnings:
   keeper now logs gate readiness warnings only when `missing/mismatch` state
   changes, reducing noisy repeated warnings during steady-state reconcile

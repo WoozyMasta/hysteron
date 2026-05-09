@@ -2721,6 +2721,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 						Interface("recovery_new", pg.LogSummaryRecoveryParameters(newRecoveryOptions.RecoveryParameters)).
 						Msg("recovery parameters changed; restarting PostgreSQL")
 					pgm.SetRecoveryOptions(newRecoveryOptions)
+					p.runBeforeStopHook(db)
 
 					if err = pgm.Restart(true); err != nil {
 						p.baseLog().
@@ -2756,6 +2757,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 						Interface("recovery_new", pg.LogSummaryRecoveryParameters(newRecoveryOptions.RecoveryParameters)).
 						Msg("recovery parameters changed; restarting PostgreSQL")
 					pgm.SetRecoveryOptions(newRecoveryOptions)
+					p.runBeforeStopHook(db)
 
 					if err = pgm.Restart(true); err != nil {
 						p.baseLog().
@@ -2881,6 +2883,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 				Msg("PostgreSQL reports pending restart parameters")
 			if automaticPgRestartEnabled {
 				p.baseLog().Info().Msg("automatic PostgreSQL restart scheduled")
+				p.runBeforeStopHook(db)
 				if err := pgm.Restart(true); err != nil {
 					p.baseLog().
 						Error().

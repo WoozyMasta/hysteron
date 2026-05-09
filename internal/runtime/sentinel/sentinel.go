@@ -484,8 +484,9 @@ func (s *Sentinel) setDBSpecFromClusterSpec(cd *cluster.ClusterData) {
 			} else {
 				db.Spec.ManagedLogicalReplicationSlots = nil
 			}
-			// Standby additional slot policy is currently master-only.
-			// See plan.md: "TODO: Replication Slots On Failover".
+			// Additional physical slot policy is primary-line only.
+			// Logical slot failover behavior is staged behind
+			// enableLogicalSlotFailover and currently standby readiness-only.
 		}
 	}
 }

@@ -214,6 +214,10 @@ The format is based on [Keep a Changelog][], and this project adheres to
   keeper now logs gate readiness warnings only when `missing/mismatch` state
   changes, reducing noisy repeated warnings during steady-state reconcile
   loops.
+* Add explicit logical-slot-failover gate warning:
+  keeper now emits a one-time warning when `enableLogicalSlotFailover` is
+  enabled, clarifying that the mode is experimental and standby behavior is
+  currently readiness-only.
 
 ## v0.17.0
 

@@ -154,8 +154,10 @@ func TestProxyListening(t *testing.T) {
 			UID:        "01",
 			Generation: 1,
 			Spec: &cluster.ClusterSpec{
-				InitMode:     cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
-				FailInterval: &cluster.Duration{Duration: 10 * time.Second},
+				InitMode:       cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
+				SleepInterval:  &cluster.Duration{Duration: 2 * time.Second},
+				RequestTimeout: &cluster.Duration{Duration: 1 * time.Second},
+				FailInterval:   &cluster.Duration{Duration: 10 * time.Second},
 			},
 			Status: cluster.ClusterStatus{
 				CurrentGeneration: 1,

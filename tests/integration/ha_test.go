@@ -78,6 +78,8 @@ func TestInitWithMultipleKeepers(t *testing.T) {
 
 	initialClusterSpec := &cluster.ClusterSpec{
 		InitMode:           cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
+		SleepInterval:      &cluster.Duration{Duration: 2 * time.Second},
+		RequestTimeout:     &cluster.Duration{Duration: 1 * time.Second},
 		FailInterval:       &cluster.Duration{Duration: 10 * time.Second},
 		ConvergenceTimeout: &cluster.Duration{Duration: 30 * time.Second},
 	}
@@ -1966,6 +1968,7 @@ func testForceFail(t *testing.T, syncRepl bool, standbyCluster bool) {
 	}
 
 	// mark master as failed
+	oldMasterUID := master.uid
 	err = HysteronFailover(
 		t,
 		clusterName,
@@ -1979,15 +1982,35 @@ func testForceFail(t *testing.T, syncRepl bool, standbyCluster bool) {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
-	// Wait for cluster data containing standby as master
-	if err := WaitClusterDataMaster(standby.uid, sm, 30*time.Second); err != nil {
-		t.Fatalf("expected master %q in cluster view", standby.uid)
+	// Wait for cluster data containing a new master from previous standbys.
+	standbySet := make(map[string]struct{}, len(standbys))
+	for _, s := range standbys {
+		standbySet[s.uid] = struct{}{}
 	}
-	if err := standby.WaitDBRole(common.RoleMaster, ptk, 30*time.Second); err != nil {
+	promotedUID := ""
+	start := time.Now()
+	for time.Now().Add(-30 * time.Second).Before(start) {
+		cd, _, getErr := sm.GetClusterData(context.TODO())
+		if getErr == nil && cd != nil && cd.Cluster.Status.Phase == cluster.ClusterPhaseNormal && cd.Cluster.Status.Master != "" {
+			newMasterUID := cd.DBs[cd.Cluster.Status.Master].Spec.KeeperUID
+			if newMasterUID != oldMasterUID {
+				if _, ok := standbySet[newMasterUID]; ok {
+					promotedUID = newMasterUID
+					break
+				}
+			}
+		}
+		time.Sleep(sleepInterval)
+	}
+	if promotedUID == "" {
+		t.Fatalf("expected master switch from %q to one of standbys", oldMasterUID)
+	}
+	promoted := tks[promotedUID]
+	if err := promoted.WaitDBRole(common.RoleMaster, ptk, 30*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
-	c, err := getLines(t, standby)
+	c, err := getLines(t, promoted)
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -1996,7 +2019,7 @@ func testForceFail(t *testing.T, syncRepl bool, standbyCluster bool) {
 	}
 
 	// the proxy should connect to the right master
-	if err := tp.WaitRightMaster(standby, 3*cluster.DefaultProxyCheckInterval); err != nil {
+	if err := tp.WaitRightMaster(promoted, 3*cluster.DefaultProxyCheckInterval); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 }

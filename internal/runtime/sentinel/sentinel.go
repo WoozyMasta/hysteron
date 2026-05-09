@@ -289,10 +289,12 @@ func (s *Sentinel) updateKeepersStatus(
 	}
 
 	// Update keepers' healthy states
+	forceFailedKeeperUIDs := make(map[string]struct{})
 	for _, k := range cd.Keepers {
 		healthy := s.isKeeperHealthy(cd, k)
 		if k.Status.ForceFail {
 			healthy = false
+			forceFailedKeeperUIDs[k.UID] = struct{}{}
 			// reset ForceFail
 			k.Status.ForceFail = false
 		}
@@ -306,6 +308,7 @@ func (s *Sentinel) updateKeepersStatus(
 		}
 		k.Status.Healthy = healthy
 	}
+	s.forceFailedKeeperUIDs = forceFailedKeeperUIDs
 
 	// Update dbs' states
 	for _, db := range cd.DBs {
@@ -1276,11 +1279,15 @@ func (s *Sentinel) updateCluster(
 				delete(s.leaderRaceBackoffTimers, curMasterDBUID)
 				s.log.Error().Msg("no eligible masters")
 			} else {
-				delayLeaderRace := s.shouldDelayLeaderRace(
-					curMasterDB,
-					bestNewMasters,
-					clusterSpec.FailInterval.Duration,
-				)
+				_, forceFailRequested := s.forceFailedKeeperUIDs[curMasterDB.Spec.KeeperUID]
+				delayLeaderRace := false
+				if !forceFailRequested {
+					delayLeaderRace = s.shouldDelayLeaderRace(
+						curMasterDB,
+						bestNewMasters,
+						clusterSpec.FailInterval.Duration,
+					)
+				}
 				if delayLeaderRace {
 					s.log.Warn().
 						Str(slog.FieldDBUID, curMasterDB.UID).
@@ -2265,6 +2272,7 @@ func (s *Sentinel) runLeadershipSanitySweep(cd *cluster.ClusterData) {
 	s.keeperInfoHistories = make(KeeperInfoHistories)
 	s.dbConvergenceInfos = make(map[string]*DBConvergenceInfo)
 	s.leaderRaceBackoffTimers = make(map[string]int64)
+	s.forceFailedKeeperUIDs = make(map[string]struct{})
 	s.proxyInfoHistories = make(ProxyInfoHistories)
 
 	// Rebuild convergence tracking from current cluster data so post-pause
@@ -2457,6 +2465,8 @@ type Sentinel struct {
 	dbConvergenceInfos map[string]*DBConvergenceInfo
 	// Backoff timers for delayed leader race keyed by failed master DB UID.
 	leaderRaceBackoffTimers map[string]int64
+	// Keepers force-failed in the current reconciliation cycle.
+	forceFailedKeeperUIDs map[string]struct{}
 
 	// History of keeper heartbeats and state transitions.
 	keeperInfoHistories KeeperInfoHistories

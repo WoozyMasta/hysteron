@@ -298,6 +298,27 @@ func TestClusterSpecValidate(t *testing.T) {
 			},
 		},
 		{
+			name: "logical slot failover gate requires managed logical slots",
+			spec: &ClusterSpec{
+				InitMode:                  &newMode,
+				EnableLogicalSlotFailover: true,
+			},
+			wantErr: `enableLogicalSlotFailover requires managedLogicalReplicationSlots to be configured`,
+		},
+		{
+			name: "logical slot failover gate accepts managed logical slots",
+			spec: &ClusterSpec{
+				InitMode:                  &newMode,
+				EnableLogicalSlotFailover: true,
+				PGParameters: PGParameters{
+					"wal_level": "logical",
+				},
+				ManagedLogicalReplicationSlots: []ManagedLogicalReplicationSlot{
+					{Name: "slot_ok", Database: "postgres", Plugin: "pgoutput"},
+				},
+			},
+		},
+		{
 			name: "managed logical slot requires wal_level logical",
 			spec: &ClusterSpec{
 				InitMode: &newMode,

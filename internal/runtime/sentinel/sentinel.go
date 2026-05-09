@@ -456,6 +456,7 @@ func (s *Sentinel) setDBSpecFromClusterSpec(cd *cluster.ClusterData) {
 		db.Spec.PGHBA = clusterSpec.PGHBA
 		db.Spec.BeforeStopCommand = clusterSpec.BeforeStopCommand
 		db.Spec.PrePromoteCommand = clusterSpec.PrePromoteCommand
+		db.Spec.EnableLogicalSlotFailover = clusterSpec.EnableLogicalSlotFailover
 		if db.Spec.FollowConfig != nil &&
 			db.Spec.FollowConfig.Type == cluster.FollowTypeExternal {
 			db.Spec.FollowConfig.StandbySettings = clusterSpec.StandbyConfig.StandbySettings

@@ -988,7 +988,7 @@ func TestManagedLogicalReplicationSlots(t *testing.T) {
 		storeEndpoints,
 		"update",
 		"--patch",
-		`{ "managedLogicalReplicationSlots" : [ { "name" : "hysteron_logic01", "database" : "postgres", "plugin" : "pgoutput" } ] }`,
+		`{ "enableLogicalSlotFailover": true, "managedLogicalReplicationSlots" : [ { "name" : "hysteron_logic01", "database" : "postgres", "plugin" : "pgoutput" } ] }`,
 	)
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
@@ -1005,7 +1005,7 @@ func TestManagedLogicalReplicationSlots(t *testing.T) {
 		storeEndpoints,
 		"update",
 		"--patch",
-		`{ "managedLogicalReplicationSlots" : null }`,
+		`{ "enableLogicalSlotFailover": false, "managedLogicalReplicationSlots" : null }`,
 	)
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)

@@ -384,6 +384,10 @@ type ClusterSpec struct { //nolint:revive
 	// ManagedLogicalReplicationSlots defines desired logical slots managed by
 	// hysteron on the current primary instance.
 	ManagedLogicalReplicationSlots []ManagedLogicalReplicationSlot `json:"managedLogicalReplicationSlots,omitempty"`
+	// EnableLogicalSlotFailover enables experimental logical slot failover
+	// semantics. Disabled by default and currently reserved for controlled
+	// rollouts.
+	EnableLogicalSlotFailover bool `json:"enableLogicalSlotFailover,omitempty"`
 	// BeforeStopCommand defines a best-effort command executed by keeper before
 	// stopping PostgreSQL. Command failures are logged and do not block stop.
 	BeforeStopCommand string `json:"beforeStopCommand,omitempty"`
@@ -603,6 +607,11 @@ func (c *ClusterSpec) Validate() error {
 				`managedLogicalReplicationSlots requires pgParameters.wal_level to be set to "logical"`,
 			)
 		}
+	}
+	if s.EnableLogicalSlotFailover && len(s.ManagedLogicalReplicationSlots) == 0 {
+		return errors.New(
+			`enableLogicalSlotFailover requires managedLogicalReplicationSlots to be configured`,
+		)
 	}
 
 	// The unique validation we're doing on pgHBA entries is that they don't contain a newline character
@@ -840,6 +849,9 @@ type DBSpec struct {
 	// ManagedLogicalReplicationSlots defines logical slots managed by hysteron
 	// on this database instance.
 	ManagedLogicalReplicationSlots []ManagedLogicalReplicationSlot `json:"managedLogicalReplicationSlots,omitempty"`
+	// EnableLogicalSlotFailover enables experimental logical slot failover
+	// semantics for this database assignment.
+	EnableLogicalSlotFailover bool `json:"enableLogicalSlotFailover,omitempty"`
 	// BeforeStopCommand defines a best-effort command executed by keeper before
 	// stopping PostgreSQL for this DB assignment.
 	BeforeStopCommand string `json:"beforeStopCommand,omitempty"`

@@ -6142,14 +6142,15 @@ func TestUpdateCluster(t *testing.T) {
 func TestSetDBSpecFromClusterSpecHookCommands(t *testing.T) {
 	s := &Sentinel{}
 	cs := &cluster.ClusterSpec{
-		InitMode:             cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
-		Role:                 cluster.ClusterRoleP(cluster.ClusterRoleMaster),
-		RequestTimeout:       &cluster.Duration{Duration: time.Second},
-		MaxStandbys:          cluster.Uint16P(2),
-		UsePgrewind:          cluster.BoolP(true),
-		AdditionalWalSenders: cluster.Uint16P(1),
-		BeforeStopCommand:    "echo pre-stop",
-		PrePromoteCommand:    "echo pre-promote",
+		InitMode:                  cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
+		Role:                      cluster.ClusterRoleP(cluster.ClusterRoleMaster),
+		RequestTimeout:            &cluster.Duration{Duration: time.Second},
+		MaxStandbys:               cluster.Uint16P(2),
+		UsePgrewind:               cluster.BoolP(true),
+		AdditionalWalSenders:      cluster.Uint16P(1),
+		BeforeStopCommand:         "echo pre-stop",
+		PrePromoteCommand:         "echo pre-promote",
+		EnableLogicalSlotFailover: true,
 	}
 	cd := &cluster.ClusterData{
 		Cluster: &cluster.Cluster{
@@ -6192,6 +6193,12 @@ func TestSetDBSpecFromClusterSpecHookCommands(t *testing.T) {
 	}
 	if got := cd.DBs["db2"].Spec.PrePromoteCommand; got != "echo pre-promote" {
 		t.Fatalf("standby prePromoteCommand mismatch: got %q want %q", got, "echo pre-promote")
+	}
+	if got := cd.DBs["db1"].Spec.EnableLogicalSlotFailover; !got {
+		t.Fatalf("primary enableLogicalSlotFailover mismatch: got %t want true", got)
+	}
+	if got := cd.DBs["db2"].Spec.EnableLogicalSlotFailover; !got {
+		t.Fatalf("standby enableLogicalSlotFailover mismatch: got %t want true", got)
 	}
 }
 

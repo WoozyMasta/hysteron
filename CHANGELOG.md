@@ -195,6 +195,14 @@ The format is based on [Keep a Changelog][], and this project adheres to
   when a failed-master path still has candidate standbys with recently
   observed WAL progress, reducing false elections during transient visibility
   races.
+* Add integration coverage for pre-promote fencing semantics:
+  standby-cluster `promote` is blocked when `prePromoteCommand` exits non-zero,
+  and keeper keeps refusing promotion attempts until hook succeeds.
+* Add a default-off logical-slot-failover feature gate scaffold:
+  new cluster contract flag `enableLogicalSlotFailover` is propagated to DB
+  specs and validated to require `managedLogicalReplicationSlots`; current
+  runtime behavior is unchanged while the gate is reserved for staged rollout
+  of future standby-side failover semantics.
 
 ## v0.17.0
 

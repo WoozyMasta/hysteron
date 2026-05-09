@@ -232,6 +232,16 @@ The format is based on [Keep a Changelog][], and this project adheres to
   switching `enableLogicalSlotFailover` from `true` to `false` while keeping
   managed logical slots preserves primary lifecycle behavior and keeps
   failover successful with slot creation on the promoted primary.
+* Extend logical-slot-failover gate transition coverage:
+  switching `enableLogicalSlotFailover` from `false` to `true` while keeping
+  managed logical slots now has explicit integration coverage, confirming
+  readiness-only standby behavior before promotion and slot creation on the
+  promoted node after failover.
+* Add a full logical-slot integration regression batch:
+  managed-slot lifecycle, mismatch safety, wal_level guardrail, gate
+  validation, gate-disabled and gate-enabled runtime behavior, and both
+  gate-transition directions are now exercised together in one integration
+  pass to catch cross-scenario regressions.
 * Deduplicate standby logical-slot readiness warnings:
   keeper now logs gate readiness warnings only when `missing/mismatch` state
   changes, reducing noisy repeated warnings during steady-state reconcile

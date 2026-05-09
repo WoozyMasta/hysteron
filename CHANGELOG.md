@@ -207,6 +207,9 @@ The format is based on [Keep a Changelog][], and this project adheres to
   when `enableLogicalSlotFailover` is enabled, standby DB specs receive managed
   logical-slot definitions and keeper reports readiness gaps (`missing` or
   `mismatch`) without creating or dropping logical slots on standby.
+* Add integration coverage for logical-slot-failover standby readiness mode:
+  under the gate, managed logical slots stay master-only before promotion,
+  standby emits readiness warnings, and failover remains successful.
 
 ## v0.17.0
 

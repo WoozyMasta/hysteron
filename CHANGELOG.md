@@ -222,6 +222,12 @@ The format is based on [Keep a Changelog][], and this project adheres to
   tests now verify the exact validation reason in command output for
   `wal_level=logical` requirement and for the
   `enableLogicalSlotFailover` + `managedLogicalReplicationSlots` coupling.
+* Add a consolidated logical-slot integration regression sweep that runs
+  guardrail, gate-disabled, and gate-enabled readiness scenarios together to
+  validate cross-scenario stability.
+* Improve integration command diagnostics:
+  `Hysteron`, `HysteronCluster`, and `HysteronFailover` error returns now
+  include command output context to speed up failure analysis.
 * Deduplicate standby logical-slot readiness warnings:
   keeper now logs gate readiness warnings only when `missing/mismatch` state
   changes, reducing noisy repeated warnings during steady-state reconcile

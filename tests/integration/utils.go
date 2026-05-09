@@ -1017,8 +1017,11 @@ func (tp *TestProxy) WaitRightMaster(tk *TestKeeper, timeout time.Duration) erro
 }
 
 func Hysteron(t *testing.T, a ...string) error {
-	_, err := HysteronOutput(t, a...)
-	return err
+	output, err := HysteronOutput(t, a...)
+	if err != nil {
+		return fmt.Errorf("hysteron command failed: %w; output: %s", err, strings.TrimSpace(output))
+	}
+	return nil
 }
 
 func HysteronCluster(
@@ -1028,14 +1031,21 @@ func HysteronCluster(
 	storeEndpoints string,
 	a ...string,
 ) error {
-	_, err := HysteronClusterOutput(
+	output, err := HysteronClusterOutput(
 		t,
 		clusterName,
 		storeBackend,
 		storeEndpoints,
 		a...,
 	)
-	return err
+	if err != nil {
+		return fmt.Errorf(
+			"hysteron cluster command failed: %w; output: %s",
+			err,
+			strings.TrimSpace(output),
+		)
+	}
+	return nil
 }
 
 func HysteronFailover(
@@ -1045,14 +1055,21 @@ func HysteronFailover(
 	storeEndpoints string,
 	a ...string,
 ) error {
-	_, err := HysteronFailoverOutput(
+	output, err := HysteronFailoverOutput(
 		t,
 		clusterName,
 		storeBackend,
 		storeEndpoints,
 		a...,
 	)
-	return err
+	if err != nil {
+		return fmt.Errorf(
+			"hysteron failover command failed: %w; output: %s",
+			err,
+			strings.TrimSpace(output),
+		)
+	}
+	return nil
 }
 
 func HysteronOutput(t *testing.T, a ...string) (string, error) {

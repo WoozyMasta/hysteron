@@ -214,6 +214,10 @@ The format is based on [Keep a Changelog][], and this project adheres to
   with `managedLogicalReplicationSlots` configured and
   `enableLogicalSlotFailover` disabled, slots remain master-only before
   promotion and are created on the promoted node after failover.
+* Add integration coverage for logical-slot-failover gate validation:
+  cluster updates now have explicit test coverage that
+  `enableLogicalSlotFailover` is rejected unless
+  `managedLogicalReplicationSlots` are configured.
 * Deduplicate standby logical-slot readiness warnings:
   keeper now logs gate readiness warnings only when `missing/mismatch` state
   changes, reducing noisy repeated warnings during steady-state reconcile

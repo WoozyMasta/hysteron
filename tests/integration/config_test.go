@@ -1129,6 +1129,38 @@ func TestManagedLogicalReplicationSlotsRequiresLogicalWalLevel(t *testing.T) {
 	}
 }
 
+func TestLogicalSlotFailoverGateRequiresManagedSlots(t *testing.T) {
+	t.Parallel()
+
+	dir, err := os.MkdirTemp("", "hysteron")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	clusterName := uuid.NewString()
+	tks, tss, tp, tstore := setupServers(t, clusterName, dir, 1, 1, false, false, nil)
+	defer shutdown(tks, tss, tp, tstore)
+
+	storeEndpoints := fmt.Sprintf("%s:%s", tstore.listenAddress, tstore.port)
+	storePath := filepath.Join(common.StorePrefix, clusterName)
+	sm := store.NewKVBackedStore(tstore.store, storePath)
+	_, _ = waitMasterStandbysReady(t, sm, tks)
+
+	err = HysteronCluster(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		"update",
+		"--patch",
+		`{ "enableLogicalSlotFailover": true }`,
+	)
+	if err == nil {
+		t.Fatalf("expected cluster update to fail when enableLogicalSlotFailover is set without managedLogicalReplicationSlots")
+	}
+}
+
 func TestLogicalSlotFailoverGateStandbyReadinessNoAction(t *testing.T) {
 	t.Parallel()
 

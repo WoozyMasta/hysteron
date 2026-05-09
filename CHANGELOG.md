@@ -228,6 +228,10 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Improve integration command diagnostics:
   `Hysteron`, `HysteronCluster`, and `HysteronFailover` error returns now
   include command output context to speed up failure analysis.
+* Add integration coverage for logical-slot-failover gate transition:
+  switching `enableLogicalSlotFailover` from `true` to `false` while keeping
+  managed logical slots preserves primary lifecycle behavior and keeps
+  failover successful with slot creation on the promoted primary.
 * Deduplicate standby logical-slot readiness warnings:
   keeper now logs gate readiness warnings only when `missing/mismatch` state
   changes, reducing noisy repeated warnings during steady-state reconcile

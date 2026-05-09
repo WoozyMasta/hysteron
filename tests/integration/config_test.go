@@ -1314,6 +1314,95 @@ func TestManagedLogicalSlotsMasterOnlyWhenGateDisabled(t *testing.T) {
 	}
 }
 
+func TestLogicalSlotFailoverGateDisableTransition(t *testing.T) {
+	t.Parallel()
+
+	dir, err := os.MkdirTemp("", "hysteron")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	clusterName := uuid.NewString()
+	tks, tss, tp, tstore := setupServers(
+		t,
+		clusterName,
+		dir,
+		2,
+		1,
+		false,
+		false,
+		nil,
+		func(spec *cluster.ClusterSpec) {
+			spec.PGParameters = cluster.PGParameters{
+				"wal_level": "logical",
+			}
+		},
+	)
+	defer shutdown(tks, tss, tp, tstore)
+
+	storeEndpoints := fmt.Sprintf("%s:%s", tstore.listenAddress, tstore.port)
+	storePath := filepath.Join(common.StorePrefix, clusterName)
+	sm := store.NewKVBackedStore(tstore.store, storePath)
+
+	master, standbys := waitMasterStandbysReady(t, sm, tks)
+	if len(standbys) == 0 {
+		t.Fatalf("expected at least one standby keeper")
+	}
+	standby := standbys[0]
+
+	slotName := "hysteron_logic_gate02"
+	err = HysteronCluster(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		"update",
+		"--patch",
+		`{ "enableLogicalSlotFailover": true, "managedLogicalReplicationSlots" : [ { "name" : "hysteron_logic_gate02", "database" : "postgres", "plugin" : "pgoutput" } ] }`,
+	)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	if err := waitLogicalReplicationSlotPresent(master, slotName, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := waitLogicalReplicationSlotAbsent(standby, slotName, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	// Disable failover gate, but keep managed slots configured.
+	err = HysteronCluster(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		"update",
+		"--patch",
+		`{ "enableLogicalSlotFailover": false, "managedLogicalReplicationSlots" : [ { "name" : "hysteron_logic_gate02", "database" : "postgres", "plugin" : "pgoutput" } ] }`,
+	)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	if err := waitLogicalReplicationSlotPresent(master, slotName, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := waitLogicalReplicationSlotAbsent(standby, slotName, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	t.Logf("stopping current master keeper: %s", master.uid)
+	master.Stop()
+	if err := standby.WaitDBRole(common.RoleMaster, nil, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := waitLogicalReplicationSlotPresent(standby, slotName, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+}
+
 func TestAdvertise(t *testing.T) {
 	t.Parallel()
 

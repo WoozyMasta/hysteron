@@ -651,6 +651,8 @@ type PostgresKeeper struct {
 	waitSyncStandbysSynced bool
 	// Last emitted standby logical-slot readiness signature for warning dedup.
 	logicalSlotReadinessLast string
+	// Emits one-time warning when experimental logical slot failover gate is enabled.
+	logicalSlotGateNoticeEmitted bool
 }
 
 type standbyReplayController interface {
@@ -1559,6 +1561,10 @@ type managedLogicalSlotReadiness struct {
 	mismatch []string
 }
 
+func shouldEmitLogicalSlotGateNotice(enabled, alreadyEmitted bool) bool {
+	return enabled && !alreadyEmitted
+}
+
 func managedLogicalSlotReadinessSignature(
 	readiness managedLogicalSlotReadiness,
 ) string {
@@ -1745,6 +1751,18 @@ func (p *PostgresKeeper) refreshReplicationSlots(
 		db.Spec.ManagedLogicalReplicationSlots,
 		db.Status.PGParameters,
 	)
+	if shouldEmitLogicalSlotGateNotice(
+		db.Spec.EnableLogicalSlotFailover,
+		p.logicalSlotGateNoticeEmitted,
+	) {
+		p.baseLog().
+			Warn().
+			Msg("enableLogicalSlotFailover is experimental: standby path is readiness-only; no standby logical slot create/drop before promotion")
+		p.logicalSlotGateNoticeEmitted = true
+	}
+	if !db.Spec.EnableLogicalSlotFailover {
+		p.logicalSlotGateNoticeEmitted = false
+	}
 	if !reconcileLogicalSlots {
 		if reason == "wal_level_not_logical" {
 			p.baseLog().

@@ -635,6 +635,9 @@ type PostgresKeeper struct {
 	// Superuser password.
 	pgSUPassword string
 
+	// Last emitted standby logical-slot readiness signature for warning dedup.
+	logicalSlotReadinessLast string
+
 	// Main reconciliation loop sleep interval.
 	sleepInterval time.Duration
 	// Timeout for store and PostgreSQL requests.
@@ -649,8 +652,6 @@ type PostgresKeeper struct {
 
 	// Enables waiting for synchronous standbys before promotion flow completion.
 	waitSyncStandbysSynced bool
-	// Last emitted standby logical-slot readiness signature for warning dedup.
-	logicalSlotReadinessLast string
 	// Emits one-time warning when experimental logical slot failover gate is enabled.
 	logicalSlotGateNoticeEmitted bool
 }

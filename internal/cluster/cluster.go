@@ -369,6 +369,16 @@ type ClusterSpec struct { //nolint:revive
 	PGParameters PGParameters `json:"pgParameters,omitempty"`
 	// Enable automatic pg restart when pg parameters that requires restart changes
 	AutomaticPgRestart *bool `json:"automaticPgRestart"`
+	// MemberReplicationSlotTTL defines how long orphaned member replication slots
+	// may remain before cleanup is considered. Zero or nil disables TTL-based
+	// cleanup.
+	MemberReplicationSlotTTL *Duration `json:"memberReplicationSlotTTL,omitempty"`
+	// BeforeStopCommand defines a best-effort command executed by keeper before
+	// stopping PostgreSQL. Command failures are logged and do not block stop.
+	BeforeStopCommand string `json:"beforeStopCommand,omitempty"`
+	// PrePromoteCommand defines a fencing command executed by keeper before
+	// promoting standby to primary. Command failures block promotion.
+	PrePromoteCommand string `json:"prePromoteCommand,omitempty"`
 	// AdditionalMasterReplicationSlots defines additional replication slots to
 	// be created on the master postgres instance. Replication slots not defined
 	// here will be dropped from the master instance (i.e. manually created
@@ -377,26 +387,16 @@ type ClusterSpec struct { //nolint:revive
 	// IgnoreMasterReplicationSlots defines replication slots that hysteron
 	// should not create, alter, or drop on the current master instance.
 	IgnoreMasterReplicationSlots []string `json:"ignoreMasterReplicationSlots"`
-	// MemberReplicationSlotTTL defines how long orphaned member replication slots
-	// may remain before cleanup is considered. Zero or nil disables TTL-based
-	// cleanup.
-	MemberReplicationSlotTTL *Duration `json:"memberReplicationSlotTTL,omitempty"`
 	// ManagedLogicalReplicationSlots defines desired logical slots managed by
 	// hysteron on the current primary instance.
 	ManagedLogicalReplicationSlots []ManagedLogicalReplicationSlot `json:"managedLogicalReplicationSlots,omitempty"`
+	// Additional pg_hba.conf entries
+	// we don't set omitempty since we want to distinguish between null or empty slice
+	PGHBA []string `json:"pgHBA"`
 	// EnableLogicalSlotFailover enables experimental logical slot failover
 	// semantics. Disabled by default and currently reserved for controlled
 	// rollouts.
 	EnableLogicalSlotFailover bool `json:"enableLogicalSlotFailover,omitempty"`
-	// BeforeStopCommand defines a best-effort command executed by keeper before
-	// stopping PostgreSQL. Command failures are logged and do not block stop.
-	BeforeStopCommand string `json:"beforeStopCommand,omitempty"`
-	// PrePromoteCommand defines a fencing command executed by keeper before
-	// promoting standby to primary. Command failures block promotion.
-	PrePromoteCommand string `json:"prePromoteCommand,omitempty"`
-	// Additional pg_hba.conf entries
-	// we don't set omitempty since we want to distinguish between null or empty slice
-	PGHBA []string `json:"pgHBA"`
 }
 
 // ClusterStatus is the observed cluster status.
@@ -839,6 +839,12 @@ type DBSpec struct {
 	InitMode DBInitMode `json:"initMode,omitempty"`
 	// DB Role (master or standby)
 	Role common.Role `json:"role,omitempty"`
+	// BeforeStopCommand defines a best-effort command executed by keeper before
+	// stopping PostgreSQL for this DB assignment.
+	BeforeStopCommand string `json:"beforeStopCommand,omitempty"`
+	// PrePromoteCommand defines a fencing command executed by keeper before
+	// promoting this standby to primary.
+	PrePromoteCommand string `json:"prePromoteCommand,omitempty"`
 	// AdditionalReplicationSlots is a list of additional replication slots.
 	// Replication slots not defined here will be dropped from the instance
 	// (i.e. manually created replication slots will be removed).
@@ -849,15 +855,6 @@ type DBSpec struct {
 	// ManagedLogicalReplicationSlots defines logical slots managed by hysteron
 	// on this database instance.
 	ManagedLogicalReplicationSlots []ManagedLogicalReplicationSlot `json:"managedLogicalReplicationSlots,omitempty"`
-	// EnableLogicalSlotFailover enables experimental logical slot failover
-	// semantics for this database assignment.
-	EnableLogicalSlotFailover bool `json:"enableLogicalSlotFailover,omitempty"`
-	// BeforeStopCommand defines a best-effort command executed by keeper before
-	// stopping PostgreSQL for this DB assignment.
-	BeforeStopCommand string `json:"beforeStopCommand,omitempty"`
-	// PrePromoteCommand defines a fencing command executed by keeper before
-	// promoting this standby to primary.
-	PrePromoteCommand string `json:"prePromoteCommand,omitempty"`
 	// Additional pg_hba.conf entries
 	// We don't set omitempty since we want to distinguish between null or empty slice
 	PGHBA []string `json:"pgHBA"`
@@ -874,6 +871,9 @@ type DBSpec struct {
 	// AdditionalWalSenders defines the number of additional wal_senders in
 	// addition to the ones internally defined by hysteron
 	AdditionalWalSenders uint16 `json:"additionalWalSenders"`
+	// EnableLogicalSlotFailover enables experimental logical slot failover
+	// semantics for this database assignment.
+	EnableLogicalSlotFailover bool `json:"enableLogicalSlotFailover,omitempty"`
 	// Use Synchronous replication between master and its standbys
 	SynchronousReplication bool `json:"synchronousReplication,omitempty"`
 	// Whether to use pg_rewind
@@ -928,10 +928,10 @@ type DBStatus struct {
 
 // DB is a database object in cluster data.
 type DB struct {
-	Status     DBStatus  `json:"status,omitzero"`
 	ChangeTime time.Time `json:"changeTime,omitzero"`
 	Spec       *DBSpec   `json:"spec,omitempty"`
 	UID        string    `json:"uid,omitempty"`
+	Status     DBStatus  `json:"status,omitzero"`
 	Generation int64     `json:"generation,omitempty"`
 }
 

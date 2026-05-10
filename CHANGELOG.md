@@ -138,6 +138,10 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Harden HA timing validation using effective values with explicit guardrail
   `sleepInterval + 2*requestTimeout <= failInterval`, and add regression
   tests for partial timing overrides.
+* Fix standby-cluster manual failover behavior so keeper-level forced failover
+  is not deferred by leader-race backoff in the same reconcile cycle.
+* Align integration fixtures with the HA timing guardrail where partial timing
+  overrides depended on now-invalid default combinations.
 * Add sentinel post-leadership sanity sweep on leader regain to reset
   transient convergence caches before the next decision loop.
 * Harden keeper rewind policy with explicit decision reasons

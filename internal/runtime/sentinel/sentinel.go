@@ -1091,6 +1091,7 @@ func (s *Sentinel) updateCluster(
 					"waiting for db",
 				)
 			}
+
 		case cluster.ClusterInitModeExisting:
 			if cd.Cluster.Status.Master == "" {
 				wantedKeeper := clusterSpec.ExistingConfig.KeeperUID
@@ -1149,6 +1150,7 @@ func (s *Sentinel) updateCluster(
 					newcd.Cluster.Status.Phase = cluster.ClusterPhaseNormal
 				}
 			}
+
 		case cluster.ClusterInitModePITR:
 			// Is there already a keeper choosed to be the new master?
 			if cd.Cluster.Status.Master == "" {
@@ -1206,6 +1208,7 @@ func (s *Sentinel) updateCluster(
 					"waiting for db to converge",
 				)
 			}
+
 		default:
 			return nil, fmt.Errorf(
 				"unknown init mode %s",
@@ -1274,87 +1277,20 @@ func (s *Sentinel) updateCluster(
 		if !masterOK {
 			s.log.Info().
 				Msg("trying to find a new master to replace failed master")
-			bestNewMasters := s.findBestNewMasters(newcd, curMasterDB)
-			if len(bestNewMasters) == 0 {
+			bestNewMasterDB, clearBackoff := s.chooseBestNewMaster(
+				newcd,
+				curMasterDB,
+				clusterSpec.FailInterval.Duration,
+			)
+			if clearBackoff {
 				delete(s.leaderRaceBackoffTimers, curMasterDBUID)
-				s.log.Error().Msg("no eligible masters")
-			} else {
-				_, forceFailRequested := s.forceFailedKeeperUIDs[curMasterDB.Spec.KeeperUID]
-				delayLeaderRace := false
-				if !forceFailRequested {
-					delayLeaderRace = s.shouldDelayLeaderRace(
-						curMasterDB,
-						bestNewMasters,
-						clusterSpec.FailInterval.Duration,
-					)
-				}
-				if delayLeaderRace {
-					s.log.Warn().
-						Str(slog.FieldDBUID, curMasterDB.UID).
-						Dur("leader_race_backoff_window", clusterSpec.FailInterval.Duration).
-						Msg("deferring leader race because standby WAL position is still advancing")
-				} else {
-					// if synchronous replication is enabled, only choose new master in the synchronous replication standbys.
-					var bestNewMasterDB *cluster.DB
-					if curMasterDB.Spec.SynchronousReplication {
-						commonSyncStandbys := slicesutil.CommonElements(curMasterDB.Status.SynchronousStandbys, curMasterDB.Spec.SynchronousStandbys)
-						if len(commonSyncStandbys) == 0 {
-							s.log.Warn().
-								Strs(
-									"reported_sync_standbys",
-									curMasterDB.Status.SynchronousStandbys,
-								).
-								Strs(
-									"spec_sync_standbys",
-									curMasterDB.Spec.SynchronousStandbys,
-								).
-								Msg(
-									"cannot choose synchronous standby since there are no " +
-										"common elements between the latest master reported " +
-										"synchronous standbys and the db spec ones",
-								)
-						} else {
-							for _, nm := range bestNewMasters {
-								if slices.Contains(commonSyncStandbys, nm.UID) {
-									bestNewMasterDB = nm
-									break
-								}
-							}
-							if bestNewMasterDB == nil {
-								s.log.Warn().
-									Strs(
-										"reported_sync_standbys",
-										curMasterDB.Status.SynchronousStandbys,
-									).
-									Strs(
-										"spec_sync_standbys",
-										curMasterDB.Spec.SynchronousStandbys,
-									).
-									Strs("common_sync_standbys", commonSyncStandbys).
-									Interface(
-										"possible_masters",
-										cluster.LogSummaryDBList(bestNewMasters),
-									).
-									Msg(
-										"cannot choose synchronous standby: no match between " +
-											"possible masters and usable synchronous standbys",
-									)
-							}
-						}
-					} else {
-						bestNewMasterDB = bestNewMasters[0]
-					}
-					if bestNewMasterDB != nil {
-						s.log.Info().
-							Str(slog.FieldDBUID, bestNewMasterDB.UID).
-							Str(slog.FieldKeeperUID, bestNewMasterDB.Spec.KeeperUID).
-							Msg("electing db as the new master")
-						wantedMasterDBUID = bestNewMasterDB.UID
-						delete(s.leaderRaceBackoffTimers, curMasterDBUID)
-					} else {
-						s.log.Error().Msg("no eligible masters")
-					}
-				}
+			}
+			if bestNewMasterDB != nil {
+				s.log.Info().
+					Str(slog.FieldDBUID, bestNewMasterDB.UID).
+					Str(slog.FieldKeeperUID, bestNewMasterDB.Spec.KeeperUID).
+					Msg("electing db as the new master")
+				wantedMasterDBUID = bestNewMasterDB.UID
 			}
 		} else {
 			delete(s.leaderRaceBackoffTimers, curMasterDBUID)
@@ -2326,6 +2262,67 @@ func (s *Sentinel) shouldDelayLeaderRace(
 
 	delete(s.leaderRaceBackoffTimers, failedMaster.UID)
 	return false
+}
+
+func (s *Sentinel) chooseBestNewMaster(
+	newcd *cluster.ClusterData,
+	curMasterDB *cluster.DB,
+	failInterval time.Duration,
+) (*cluster.DB, bool) {
+	bestNewMasters := s.findBestNewMasters(newcd, curMasterDB)
+	if len(bestNewMasters) == 0 {
+		s.log.Error().Msg("no eligible masters")
+		return nil, true
+	}
+
+	_, forceFailRequested := s.forceFailedKeeperUIDs[curMasterDB.Spec.KeeperUID]
+	if !forceFailRequested &&
+		s.shouldDelayLeaderRace(curMasterDB, bestNewMasters, failInterval) {
+		s.log.Warn().
+			Str(slog.FieldDBUID, curMasterDB.UID).
+			Dur("leader_race_backoff_window", failInterval).
+			Msg("deferring leader race because standby WAL position is still advancing")
+		return nil, false
+	}
+
+	if !curMasterDB.Spec.SynchronousReplication {
+		return bestNewMasters[0], true
+	}
+
+	commonSyncStandbys := slicesutil.CommonElements(
+		curMasterDB.Status.SynchronousStandbys,
+		curMasterDB.Spec.SynchronousStandbys,
+	)
+	if len(commonSyncStandbys) == 0 {
+		s.log.Warn().
+			Strs("reported_sync_standbys", curMasterDB.Status.SynchronousStandbys).
+			Strs("spec_sync_standbys", curMasterDB.Spec.SynchronousStandbys).
+			Msg(
+				"cannot choose synchronous standby since there are no " +
+					"common elements between the latest master reported " +
+					"synchronous standbys and the db spec ones",
+			)
+		s.log.Error().Msg("no eligible masters")
+		return nil, false
+	}
+
+	for _, nm := range bestNewMasters {
+		if slices.Contains(commonSyncStandbys, nm.UID) {
+			return nm, true
+		}
+	}
+
+	s.log.Warn().
+		Strs("reported_sync_standbys", curMasterDB.Status.SynchronousStandbys).
+		Strs("spec_sync_standbys", curMasterDB.Spec.SynchronousStandbys).
+		Strs("common_sync_standbys", commonSyncStandbys).
+		Interface("possible_masters", cluster.LogSummaryDBList(bestNewMasters)).
+		Msg(
+			"cannot choose synchronous standby: no match between " +
+				"possible masters and usable synchronous standbys",
+		)
+	s.log.Error().Msg("no eligible masters")
+	return nil, false
 }
 
 func (s *Sentinel) dbConvergenceState(

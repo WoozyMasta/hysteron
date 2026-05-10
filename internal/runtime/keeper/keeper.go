@@ -658,6 +658,10 @@ type PostgresKeeper struct {
 	waitSyncStandbysSynced bool
 	// Emits one-time warning when experimental logical slot failover gate is enabled.
 	logicalSlotGateNoticeEmitted bool
+	// Emits one-time warning when gate is enabled on PG versions without native logical failover slots.
+	logicalSlotLegacyModeNoticeEmitted bool
+	// Emits one-time info when native PG17+ logical failover slot mode is active.
+	logicalSlotNativeModeNoticeEmitted bool
 }
 
 type standbyReplayController interface {
@@ -1844,12 +1848,27 @@ func (p *PostgresKeeper) refreshReplicationSlots(
 				Msg("failed to detect PostgreSQL binary version; creating logical slots without native failover flag")
 		} else if shouldUseNativeLogicalSlotFailover(db.Spec.EnableLogicalSlotFailover, pgMajor) {
 			createFailoverSlot = true
+			if !p.logicalSlotNativeModeNoticeEmitted {
+				p.baseLog().
+					Info().
+					Int("pg_major", pgMajor).
+					Msg("logical slot failover gate enabled: using PostgreSQL native logical failover slots")
+				p.logicalSlotNativeModeNoticeEmitted = true
+			}
+			p.logicalSlotLegacyModeNoticeEmitted = false
 		} else {
-			p.baseLog().
-				Warn().
-				Int("pg_major", pgMajor).
-				Msg("enableLogicalSlotFailover is enabled on PostgreSQL < 17; native logical slot failover is unavailable")
+			if !p.logicalSlotLegacyModeNoticeEmitted {
+				p.baseLog().
+					Warn().
+					Int("pg_major", pgMajor).
+					Msg("enableLogicalSlotFailover is enabled on PostgreSQL < 17; native logical slot failover is unavailable and behavior is experimental")
+				p.logicalSlotLegacyModeNoticeEmitted = true
+			}
+			p.logicalSlotNativeModeNoticeEmitted = false
 		}
+	} else {
+		p.logicalSlotLegacyModeNoticeEmitted = false
+		p.logicalSlotNativeModeNoticeEmitted = false
 	}
 	for _, slot := range logicalDecision.mismatch {
 		p.baseLog().

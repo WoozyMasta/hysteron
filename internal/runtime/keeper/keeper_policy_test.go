@@ -518,6 +518,38 @@ func TestMasterManagedLogicalSlotLSN(t *testing.T) {
 	}
 }
 
+func TestEvaluateManagedLogicalSlotAdvanceOperations(t *testing.T) {
+	desired := []cluster.ManagedLogicalReplicationSlot{
+		{Name: "slot1", Database: "postgres", Plugin: "pgoutput"},
+		{Name: "slot2", Database: "postgres", Plugin: "pgoutput"},
+	}
+	current := []pg.LogicalReplicationSlot{
+		{Name: "slot1", Database: "postgres", Plugin: "pgoutput", ConfirmedFlushLSN: 100},
+		{Name: "slot2", Database: "postgres", Plugin: "test_decoding", ConfirmedFlushLSN: 100},
+	}
+	masterLSN := map[string]uint64{
+		"slot1": 200,
+		"slot2": 200,
+	}
+
+	t.Run("computes safe target and filters mismatch", func(t *testing.T) {
+		ops := evaluateManagedLogicalSlotAdvanceOperations(desired, current, masterLSN, 150)
+		want := []logicalSlotAdvanceOperation{
+			{Name: "slot1", Database: "postgres", TargetLSN: 150},
+		}
+		if !reflect.DeepEqual(ops, want) {
+			t.Fatalf("unexpected ops: got=%v want=%v", ops, want)
+		}
+	})
+
+	t.Run("no ops when replay lsn is zero", func(t *testing.T) {
+		ops := evaluateManagedLogicalSlotAdvanceOperations(desired, current, masterLSN, 0)
+		if len(ops) != 0 {
+			t.Fatalf("expected no ops, got=%v", ops)
+		}
+	})
+}
+
 func TestShouldEmitLogicalSlotGateNotice(t *testing.T) {
 	tests := []struct {
 		name           string

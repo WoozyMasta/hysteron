@@ -1581,6 +1581,12 @@ type managedLogicalSlotReadiness struct {
 	mismatch []string
 }
 
+type logicalSlotAdvanceOperation struct {
+	Name      string
+	Database  string
+	TargetLSN uint64
+}
+
 func shouldEmitLogicalSlotGateNotice(enabled, alreadyEmitted bool) bool {
 	return enabled && !alreadyEmitted
 }
@@ -1667,6 +1673,49 @@ func logicalSlotLSNMap(
 		return nil
 	}
 	return out
+}
+
+func evaluateManagedLogicalSlotAdvanceOperations(
+	desired []cluster.ManagedLogicalReplicationSlot,
+	current []pg.LogicalReplicationSlot,
+	masterLSN map[string]uint64,
+	replayLSN uint64,
+) []logicalSlotAdvanceOperation {
+	if len(desired) == 0 || len(current) == 0 || len(masterLSN) == 0 || replayLSN == 0 {
+		return nil
+	}
+	currentByName := make(map[string]pg.LogicalReplicationSlot, len(current))
+	for _, slot := range current {
+		currentByName[slot.Name] = slot
+	}
+	ops := make([]logicalSlotAdvanceOperation, 0, len(desired))
+	for _, desiredSlot := range desired {
+		desiredLSN, ok := masterLSN[desiredSlot.Name]
+		if !ok {
+			continue
+		}
+		currentSlot, ok := currentByName[desiredSlot.Name]
+		if !ok {
+			continue
+		}
+		if currentSlot.Database != desiredSlot.Database || currentSlot.Plugin != desiredSlot.Plugin {
+			continue
+		}
+		target, shouldAdvance := computeLogicalSlotAdvanceTarget(
+			desiredLSN,
+			replayLSN,
+			currentSlot.ConfirmedFlushLSN,
+		)
+		if !shouldAdvance {
+			continue
+		}
+		ops = append(ops, logicalSlotAdvanceOperation{
+			Name:      desiredSlot.Name,
+			Database:  desiredSlot.Database,
+			TargetLSN: target,
+		})
+	}
+	return ops
 }
 
 func enforceHotStandbyFeedbackForLogicalSlotFailover(
@@ -1868,45 +1917,25 @@ func (p *PostgresKeeper) refreshReplicationSlots(
 	if db.Spec.Role != common.RoleMaster {
 		if db.Spec.EnableLogicalSlotFailover {
 			masterLSN := masterManagedLogicalSlotLSN(dbs)
-			currentByName := make(map[string]pg.LogicalReplicationSlot, len(currentLogicalSlots))
-			for _, slot := range currentLogicalSlots {
-				currentByName[slot.Name] = slot
-			}
-			for _, desiredSlot := range db.Spec.ManagedLogicalReplicationSlots {
-				if masterLSN == nil {
-					break
-				}
-				desiredLSN, ok := masterLSN[desiredSlot.Name]
-				if !ok {
-					continue
-				}
-				currentSlot, ok := currentByName[desiredSlot.Name]
-				if !ok {
-					continue
-				}
-				if currentSlot.Database != desiredSlot.Database || currentSlot.Plugin != desiredSlot.Plugin {
-					continue
-				}
-				target, shouldAdvance := computeLogicalSlotAdvanceTarget(
-					desiredLSN,
-					db.Status.XLogPos,
-					currentSlot.ConfirmedFlushLSN,
-				)
-				if !shouldAdvance {
-					continue
-				}
+			ops := evaluateManagedLogicalSlotAdvanceOperations(
+				db.Spec.ManagedLogicalReplicationSlots,
+				currentLogicalSlots,
+				masterLSN,
+				db.Status.XLogPos,
+			)
+			for _, op := range ops {
 				if err := p.pgm.AdvanceLogicalReplicationSlot(
-					desiredSlot.Name,
-					desiredSlot.Database,
-					target,
+					op.Name,
+					op.Database,
+					op.TargetLSN,
 				); err != nil {
 					p.baseLog().
 						Warn().
 						Err(err).
-						Str("slot", desiredSlot.Name).
-						Uint64("desired_lsn", desiredLSN).
+						Str("slot", op.Name).
+						Uint64("desired_lsn", masterLSN[op.Name]).
 						Uint64("replay_lsn", db.Status.XLogPos).
-						Uint64("current_confirmed_flush_lsn", currentSlot.ConfirmedFlushLSN).
+						Uint64("target_lsn", op.TargetLSN).
 						Msg("failed to advance managed logical replication slot on standby")
 				}
 			}

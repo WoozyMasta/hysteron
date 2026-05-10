@@ -224,6 +224,10 @@ The format is based on [Keep a Changelog][], and this project adheres to
   master publishes logical-slot `confirmed_flush_lsn` into cluster state,
   and standby-side safe target computation/advance foundations are added
   (`target = min(desired_lsn, replay_lsn)`, forward-only).
+* Add standby managed logical-slot advance decision flow:
+  standby now evaluates per-slot advance operations from master-published
+  logical-slot LSN state and applies safe `pg_replication_slot_advance`
+  calls with mismatch filtering and replay-bound targets.
 * Add integration coverage for logical-slot-failover gate validation:
   cluster updates now have explicit test coverage that
   `enableLogicalSlotFailover` is rejected unless

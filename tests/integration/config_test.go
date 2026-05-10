@@ -76,6 +76,26 @@ func getLogicalSlotPluginAndDatabase(
 	return database, plugin, nil
 }
 
+func getLogicalSlotFailoverFlag(q Querier, slotName string) (bool, error) {
+	rows, err := q.Query(
+		"select failover from pg_replication_slots where slot_name = $1 and slot_type = 'logical'",
+		slotName,
+	)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		return false, fmt.Errorf("slot %q not found", slotName)
+	}
+	var failover bool
+	if err := rows.Scan(&failover); err != nil {
+		return false, err
+	}
+	return failover, nil
+}
+
 func waitLogicalReplicationSlotPresent(
 	q Querier,
 	slotName string,
@@ -1243,6 +1263,69 @@ func TestLogicalSlotFailoverGateStandbyReadinessNoAction(t *testing.T) {
 	master.Stop()
 	if err := standby.WaitDBRole(common.RoleMaster, nil, 30*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
+	}
+}
+
+func TestLogicalSlotFailoverGateCreatesNativeFailoverSlotWhenAvailable(t *testing.T) {
+	t.Parallel()
+
+	dir, err := os.MkdirTemp("", "hysteron")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	clusterName := uuid.NewString()
+	tks, tss, tp, tstore := setupServers(
+		t,
+		clusterName,
+		dir,
+		2,
+		1,
+		false,
+		false,
+		nil,
+		func(spec *cluster.ClusterSpec) {
+			spec.PGParameters = cluster.PGParameters{
+				"wal_level": "logical",
+			}
+		},
+	)
+	defer shutdown(tks, tss, tp, tstore)
+
+	storeEndpoints := fmt.Sprintf("%s:%s", tstore.listenAddress, tstore.port)
+	storePath := filepath.Join(common.StorePrefix, clusterName)
+	sm := store.NewKVBackedStore(tstore.store, storePath)
+
+	master, _ := waitMasterStandbysReady(t, sm, tks)
+
+	slotName := "hysteron_logic_native01"
+	err = HysteronCluster(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		"update",
+		"--patch",
+		`{ "enableLogicalSlotFailover": true, "managedLogicalReplicationSlots" : [ { "name" : "hysteron_logic_native01", "database" : "postgres", "plugin" : "pgoutput" } ] }`,
+	)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	if err := waitLogicalReplicationSlotPresent(master, slotName, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	failoverEnabled, err := getLogicalSlotFailoverFlag(master, slotName)
+	if err != nil {
+		if strings.Contains(err.Error(), `column "failover" does not exist`) {
+			t.Skipf("postgres does not expose pg_replication_slots.failover: %v", err)
+		}
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if !failoverEnabled {
+		t.Fatalf("expected logical slot %q failover=true when gate is enabled", slotName)
 	}
 }
 

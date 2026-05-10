@@ -88,6 +88,12 @@ var (
 			Help: "Total failed logical slot standby advance operations",
 		},
 	)
+	logicalSlotStandbyAdvanceSkippedBackoffTotal = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "hysteron_keeper_logical_slot_standby_advance_skipped_backoff_total",
+			Help: "Total logical slot standby advance operations skipped due to retry backoff",
+		},
+	)
 )
 
 // setRole is a helper that controls the targetRole metric by setting only one of the
@@ -116,4 +122,5 @@ func init() {
 	prometheus.MustRegister(logicalSlotStandbyAdvanceAttemptsTotal)
 	prometheus.MustRegister(logicalSlotStandbyAdvanceSuccessTotal)
 	prometheus.MustRegister(logicalSlotStandbyAdvanceFailuresTotal)
+	prometheus.MustRegister(logicalSlotStandbyAdvanceSkippedBackoffTotal)
 }

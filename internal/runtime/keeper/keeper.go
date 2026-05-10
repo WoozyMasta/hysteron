@@ -2004,6 +2004,7 @@ func (p *PostgresKeeper) refreshReplicationSlots(
 						retryKey,
 						now,
 					) {
+						logicalSlotStandbyAdvanceSkippedBackoffTotal.Inc()
 						continue
 					}
 					logicalSlotStandbyAdvanceAttemptsTotal.Inc()

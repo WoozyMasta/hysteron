@@ -228,6 +228,10 @@ The format is based on [Keep a Changelog][], and this project adheres to
   standby now evaluates per-slot advance operations from master-published
   logical-slot LSN state and applies safe `pg_replication_slot_advance`
   calls with mismatch filtering and replay-bound targets.
+* Add integration negative coverage for logical-slot failover gate parameter
+  policy: updates are rejected when
+  `enableLogicalSlotFailover=true` and
+  `pgParameters.hot_standby_feedback` is explicitly disabled.
 * Add integration coverage for logical-slot-failover gate validation:
   cluster updates now have explicit test coverage that
   `enableLogicalSlotFailover` is rejected unless

@@ -1217,6 +1217,34 @@ func TestLogicalSlotFailoverGateRequiresManagedSlots(t *testing.T) {
 	)
 }
 
+func TestLogicalSlotFailoverGateRequiresHotStandbyFeedbackEnabled(t *testing.T) {
+	t.Parallel()
+
+	dir, err := os.MkdirTemp("", "hysteron")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	clusterName := uuid.NewString()
+	tks, tss, tp, tstore := setupServers(t, clusterName, dir, 1, 1, false, false, nil)
+	defer shutdown(tks, tss, tp, tstore)
+
+	storeEndpoints := fmt.Sprintf("%s:%s", tstore.listenAddress, tstore.port)
+	storePath := filepath.Join(common.StorePrefix, clusterName)
+	sm := store.NewKVBackedStore(tstore.store, storePath)
+	_, _ = waitMasterStandbysReady(t, sm, tks)
+
+	assertClusterUpdateFailsWith(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		`{ "enableLogicalSlotFailover": true, "pgParameters": { "wal_level": "logical", "hot_standby_feedback": "off" }, "managedLogicalReplicationSlots" : [ { "name" : "hysteron_logic_hsf01", "database" : "postgres", "plugin" : "pgoutput" } ] }`,
+		`enableLogicalSlotFailover requires pgParameters.hot_standby_feedback to be enabled (on/true/1)`,
+	)
+}
+
 func TestLogicalSlotFailoverGateStandbyReadinessNoAction(t *testing.T) {
 	t.Parallel()
 

@@ -238,6 +238,9 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Guard standby logical-slot advance path by PostgreSQL major capability:
   advance operations are now attempted only on PostgreSQL 16+ when
   logical-slot failover gate is enabled.
+* Add integration coverage for standby logical-slot advance pipeline under
+  failover gate when a managed logical slot exists on standby
+  (PG16+ capability path).
 * Add integration coverage for logical-slot-failover gate validation:
   cluster updates now have explicit test coverage that
   `enableLogicalSlotFailover` is rejected unless

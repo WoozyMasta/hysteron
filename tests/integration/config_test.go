@@ -96,6 +96,54 @@ func getLogicalSlotFailoverFlag(q Querier, slotName string) (bool, error) {
 	return failover, nil
 }
 
+func getLogicalSlotConfirmedFlushLSN(q Querier, slotName string) (uint64, error) {
+	rows, err := q.Query(
+		"select coalesce(pg_wal_lsn_diff(confirmed_flush_lsn, '0/0')::bigint, 0) "+
+			"from pg_replication_slots where slot_name = $1 and slot_type = 'logical'",
+		slotName,
+	)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		return 0, fmt.Errorf("slot %q not found", slotName)
+	}
+	var lsn int64
+	if err := rows.Scan(&lsn); err != nil {
+		return 0, err
+	}
+	if lsn < 0 {
+		return 0, fmt.Errorf("slot %q returned negative lsn %d", slotName, lsn)
+	}
+	return uint64(lsn), nil
+}
+
+func waitLogicalSlotConfirmedFlushLSNGreaterThan(
+	q Querier,
+	slotName string,
+	base uint64,
+	timeout time.Duration,
+) (uint64, error) {
+	start := time.Now()
+	var last uint64
+	var lastErr error
+	for time.Since(start) < timeout {
+		last, lastErr = getLogicalSlotConfirmedFlushLSN(q, slotName)
+		if lastErr == nil && last > base {
+			return last, nil
+		}
+		time.Sleep(2 * time.Second)
+	}
+	return 0, fmt.Errorf(
+		"timeout waiting logical slot %q confirmed_flush_lsn > %d, got %d, last err: %v",
+		slotName,
+		base,
+		last,
+		lastErr,
+	)
+}
+
 func getServerVersionNum(q Querier) (int, error) {
 	rows, err := q.Query("select current_setting('server_version_num')::int")
 	if err != nil {
@@ -1456,6 +1504,101 @@ func TestLogicalSlotFailoverGateCreatesNativeFailoverSlotWhenAvailable(t *testin
 	}
 	if !failoverEnabled {
 		t.Fatalf("expected logical slot %q failover=true when gate is enabled", slotName)
+	}
+}
+
+func TestLogicalSlotFailoverGateStandbyAdvanceWhenSlotExistsOnStandby(t *testing.T) {
+	t.Parallel()
+
+	dir, err := os.MkdirTemp("", "hysteron")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	clusterName := uuid.NewString()
+	tks, tss, tp, tstore := setupServers(
+		t,
+		clusterName,
+		dir,
+		2,
+		1,
+		false,
+		false,
+		nil,
+		func(spec *cluster.ClusterSpec) {
+			spec.PGParameters = cluster.PGParameters{
+				"wal_level": "logical",
+			}
+		},
+	)
+	defer shutdown(tks, tss, tp, tstore)
+
+	storeEndpoints := fmt.Sprintf("%s:%s", tstore.listenAddress, tstore.port)
+	storePath := filepath.Join(common.StorePrefix, clusterName)
+	sm := store.NewKVBackedStore(tstore.store, storePath)
+
+	master, standbys := waitMasterStandbysReady(t, sm, tks)
+	if len(standbys) == 0 {
+		t.Fatalf("expected at least one standby keeper")
+	}
+	standby := standbys[0]
+
+	versionNum, err := getServerVersionNum(standby)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if versionNum < 160000 {
+		t.Skipf("requires PostgreSQL 16+ for logical slot on standby, got %d", versionNum)
+	}
+
+	slotName := "hysteron_logic_adv01"
+	err = HysteronCluster(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		"update",
+		"--patch",
+		`{ "enableLogicalSlotFailover": true, "managedLogicalReplicationSlots" : [ { "name" : "hysteron_logic_adv01", "database" : "postgres", "plugin" : "pgoutput" } ] }`,
+	)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	if err := waitLogicalReplicationSlotPresent(master, slotName, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if _, err := standby.Exec(
+		"select * from pg_create_logical_replication_slot($1, $2)",
+		slotName,
+		"pgoutput",
+	); err != nil {
+		t.Fatalf("failed to create standby logical slot: %v", err)
+	}
+
+	standbyBefore, err := getLogicalSlotConfirmedFlushLSN(standby, slotName)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	if err := populate(t, master); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := write(t, master, 1, 1); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if _, err := master.Exec("select count(*) from pg_logical_slot_get_changes($1, NULL, NULL)", slotName); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	if _, err := waitLogicalSlotConfirmedFlushLSNGreaterThan(
+		standby,
+		slotName,
+		standbyBefore,
+		60*time.Second,
+	); err != nil {
+		t.Fatalf("unexpected err: %v", err)
 	}
 }
 

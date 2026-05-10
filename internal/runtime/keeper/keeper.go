@@ -1626,6 +1626,10 @@ func shouldUseNativeLogicalSlotFailover(enableLogicalSlotFailover bool, pgMajor 
 	return enableLogicalSlotFailover && pgMajor >= 17
 }
 
+func shouldUseStandbyLogicalSlotAdvance(enableLogicalSlotFailover bool, pgMajor int) bool {
+	return enableLogicalSlotFailover && pgMajor >= 16
+}
+
 func computeLogicalSlotAdvanceTarget(
 	desiredLSN uint64,
 	replayLSN uint64,
@@ -1916,27 +1920,39 @@ func (p *PostgresKeeper) refreshReplicationSlots(
 
 	if db.Spec.Role != common.RoleMaster {
 		if db.Spec.EnableLogicalSlotFailover {
-			masterLSN := masterManagedLogicalSlotLSN(dbs)
-			ops := evaluateManagedLogicalSlotAdvanceOperations(
-				db.Spec.ManagedLogicalReplicationSlots,
-				currentLogicalSlots,
-				masterLSN,
-				db.Status.XLogPos,
-			)
-			for _, op := range ops {
-				if err := p.pgm.AdvanceLogicalReplicationSlot(
-					op.Name,
-					op.Database,
-					op.TargetLSN,
-				); err != nil {
-					p.baseLog().
-						Warn().
-						Err(err).
-						Str("slot", op.Name).
-						Uint64("desired_lsn", masterLSN[op.Name]).
-						Uint64("replay_lsn", db.Status.XLogPos).
-						Uint64("target_lsn", op.TargetLSN).
-						Msg("failed to advance managed logical replication slot on standby")
+			pgMajor, _, versionErr := p.pgm.BinaryVersion()
+			if versionErr != nil {
+				p.baseLog().
+					Debug().
+					Err(versionErr).
+					Msg("failed to detect PostgreSQL binary version for standby logical-slot advance")
+			}
+			if versionErr == nil && shouldUseStandbyLogicalSlotAdvance(
+				db.Spec.EnableLogicalSlotFailover,
+				pgMajor,
+			) {
+				masterLSN := masterManagedLogicalSlotLSN(dbs)
+				ops := evaluateManagedLogicalSlotAdvanceOperations(
+					db.Spec.ManagedLogicalReplicationSlots,
+					currentLogicalSlots,
+					masterLSN,
+					db.Status.XLogPos,
+				)
+				for _, op := range ops {
+					if err := p.pgm.AdvanceLogicalReplicationSlot(
+						op.Name,
+						op.Database,
+						op.TargetLSN,
+					); err != nil {
+						p.baseLog().
+							Warn().
+							Err(err).
+							Str("slot", op.Name).
+							Uint64("desired_lsn", masterLSN[op.Name]).
+							Uint64("replay_lsn", db.Status.XLogPos).
+							Uint64("target_lsn", op.TargetLSN).
+							Msg("failed to advance managed logical replication slot on standby")
+					}
 				}
 			}
 

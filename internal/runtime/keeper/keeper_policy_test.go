@@ -419,6 +419,26 @@ func TestShouldUseNativeLogicalSlotFailover(t *testing.T) {
 	})
 }
 
+func TestShouldUseStandbyLogicalSlotAdvance(t *testing.T) {
+	t.Run("disabled gate", func(t *testing.T) {
+		if shouldUseStandbyLogicalSlotAdvance(false, 18) {
+			t.Fatalf("expected false when gate is disabled")
+		}
+	})
+
+	t.Run("enabled but pg15", func(t *testing.T) {
+		if shouldUseStandbyLogicalSlotAdvance(true, 15) {
+			t.Fatalf("expected false for pg15")
+		}
+	})
+
+	t.Run("enabled on pg16", func(t *testing.T) {
+		if !shouldUseStandbyLogicalSlotAdvance(true, 16) {
+			t.Fatalf("expected true for pg16")
+		}
+	})
+}
+
 func TestEnforceHotStandbyFeedbackForLogicalSlotFailover(t *testing.T) {
 	t.Run("disabled gate keeps existing value", func(t *testing.T) {
 		params := common.Parameters{"hot_standby_feedback": "off"}

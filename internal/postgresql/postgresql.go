@@ -744,6 +744,13 @@ func (p *Manager) DropLogicalReplicationSlot(name string) error {
 	return dropLogicalReplicationSlot(ctx, p.localConnParams, name)
 }
 
+// AdvanceLogicalReplicationSlot advances a logical slot to target LSN.
+func (p *Manager) AdvanceLogicalReplicationSlot(name, database string, targetLSN uint64) error {
+	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeoutValue())
+	defer cancel()
+	return advanceLogicalReplicationSlot(ctx, p.localConnParams, name, database, targetLSN)
+}
+
 // IsWALReplayPaused reports whether WAL replay is currently paused.
 func (p *Manager) IsWALReplayPaused() (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeoutValue())

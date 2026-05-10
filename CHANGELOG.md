@@ -218,6 +218,12 @@ The format is based on [Keep a Changelog][], and this project adheres to
   with `managedLogicalReplicationSlots` configured and
   `enableLogicalSlotFailover` disabled, slots remain master-only before
   promotion and are created on the promoted node after failover.
+* Evolve logical-slot-failover implementation toward version-aware semantics:
+  PG17+ create path now requests native failover logical slots,
+  `enableLogicalSlotFailover` enforces `hot_standby_feedback=on`,
+  master publishes logical-slot `confirmed_flush_lsn` into cluster state,
+  and standby-side safe target computation/advance foundations are added
+  (`target = min(desired_lsn, replay_lsn)`, forward-only).
 * Add integration coverage for logical-slot-failover gate validation:
   cluster updates now have explicit test coverage that
   `enableLogicalSlotFailover` is rejected unless

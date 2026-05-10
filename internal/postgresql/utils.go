@@ -398,6 +398,33 @@ func dropLogicalReplicationSlot(ctx context.Context, connParams ConnParams, name
 	return err
 }
 
+func advanceLogicalReplicationSlot(
+	ctx context.Context,
+	connParams ConnParams,
+	name, database string,
+	targetLSN uint64,
+) error {
+	cp := connParams.Copy()
+	cp.Set("dbname", database)
+
+	db, err := openDB(cp)
+	if err != nil {
+		return err
+	}
+	defer ignoreClose(db)
+
+	_, err = dbExec(
+		ctx,
+		db,
+		fmt.Sprintf(
+			"select pg_replication_slot_advance(%s, %s)",
+			quoteLiteral(name),
+			quoteLiteral(IntToPGLSN(targetLSN)),
+		),
+	)
+	return err
+}
+
 func isWALReplayPaused(ctx context.Context, connParams ConnParams) (bool, error) {
 	db, err := openDB(connParams)
 	if err != nil {
@@ -486,6 +513,11 @@ func PGLsnToInt(lsn string) (uint64, error) {
 	}
 	v := a<<32 | b
 	return v, nil
+}
+
+// IntToPGLSN converts integer LSN value into PostgreSQL LSN string.
+func IntToPGLSN(lsn uint64) string {
+	return fmt.Sprintf("%X/%X", uint32(lsn>>32), uint32(lsn))
 }
 
 // GetSystemData returns system identifier and WAL position from IDENTIFY_SYSTEM.

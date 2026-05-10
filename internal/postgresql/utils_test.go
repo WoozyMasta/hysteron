@@ -211,6 +211,23 @@ func TestParseVersion(t *testing.T) {
 	}
 }
 
+func TestIntToPGLSN(t *testing.T) {
+	tests := []struct {
+		in   uint64
+		want string
+	}{
+		{in: 0, want: "0/0"},
+		{in: 1, want: "0/1"},
+		{in: 0x0000000100000002, want: "1/2"},
+	}
+	for i, tt := range tests {
+		got := IntToPGLSN(tt.in)
+		if got != tt.want {
+			t.Fatalf("%d: got %q want %q", i, got, tt.want)
+		}
+	}
+}
+
 func TestValidateSupportedMajorVersion(t *testing.T) {
 	for _, major := range SupportedMajorVersions() {
 		if err := ValidateSupportedMajorVersion(major); err != nil {

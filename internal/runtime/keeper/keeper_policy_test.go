@@ -491,6 +491,33 @@ func TestLogicalSlotLSNMap(t *testing.T) {
 	})
 }
 
+func TestMasterManagedLogicalSlotLSN(t *testing.T) {
+	dbs := cluster.DBs{
+		"db1": {
+			UID: "db1",
+			Spec: &cluster.DBSpec{
+				Role: common.RoleStandby,
+			},
+		},
+		"db2": {
+			UID: "db2",
+			Spec: &cluster.DBSpec{
+				Role: common.RoleMaster,
+			},
+			Status: cluster.DBStatus{
+				ManagedLogicalSlots: map[string]uint64{
+					"slot1": 100,
+				},
+			},
+		},
+	}
+	got := masterManagedLogicalSlotLSN(dbs)
+	want := map[string]uint64{"slot1": 100}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("unexpected map: got=%v want=%v", got, want)
+	}
+}
+
 func TestShouldEmitLogicalSlotGateNotice(t *testing.T) {
 	tests := []struct {
 		name           string

@@ -1638,6 +1638,21 @@ func computeLogicalSlotAdvanceTarget(
 	return target, true
 }
 
+func masterManagedLogicalSlotLSN(
+	dbs cluster.DBs,
+) map[string]uint64 {
+	for _, db := range dbs {
+		if db == nil || db.Spec == nil {
+			continue
+		}
+		if db.Spec.Role != common.RoleMaster {
+			continue
+		}
+		return db.Status.ManagedLogicalSlots
+	}
+	return nil
+}
+
 func logicalSlotLSNMap(
 	current []pg.LogicalReplicationSlot,
 ) map[string]uint64 {
@@ -1852,6 +1867,50 @@ func (p *PostgresKeeper) refreshReplicationSlots(
 
 	if db.Spec.Role != common.RoleMaster {
 		if db.Spec.EnableLogicalSlotFailover {
+			masterLSN := masterManagedLogicalSlotLSN(dbs)
+			currentByName := make(map[string]pg.LogicalReplicationSlot, len(currentLogicalSlots))
+			for _, slot := range currentLogicalSlots {
+				currentByName[slot.Name] = slot
+			}
+			for _, desiredSlot := range db.Spec.ManagedLogicalReplicationSlots {
+				if masterLSN == nil {
+					break
+				}
+				desiredLSN, ok := masterLSN[desiredSlot.Name]
+				if !ok {
+					continue
+				}
+				currentSlot, ok := currentByName[desiredSlot.Name]
+				if !ok {
+					continue
+				}
+				if currentSlot.Database != desiredSlot.Database || currentSlot.Plugin != desiredSlot.Plugin {
+					continue
+				}
+				target, shouldAdvance := computeLogicalSlotAdvanceTarget(
+					desiredLSN,
+					db.Status.XLogPos,
+					currentSlot.ConfirmedFlushLSN,
+				)
+				if !shouldAdvance {
+					continue
+				}
+				if err := p.pgm.AdvanceLogicalReplicationSlot(
+					desiredSlot.Name,
+					desiredSlot.Database,
+					target,
+				); err != nil {
+					p.baseLog().
+						Warn().
+						Err(err).
+						Str("slot", desiredSlot.Name).
+						Uint64("desired_lsn", desiredLSN).
+						Uint64("replay_lsn", db.Status.XLogPos).
+						Uint64("current_confirmed_flush_lsn", currentSlot.ConfirmedFlushLSN).
+						Msg("failed to advance managed logical replication slot on standby")
+				}
+			}
+
 			readiness := evaluateManagedLogicalSlotReadiness(
 				db.Spec.ManagedLogicalReplicationSlots,
 				currentLogicalSlots,

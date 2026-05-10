@@ -662,6 +662,8 @@ type PostgresKeeper struct {
 	logicalSlotLegacyModeNoticeEmitted bool
 	// Emits one-time info when native PG17+ logical failover slot mode is active.
 	logicalSlotNativeModeNoticeEmitted bool
+	// Emits one-time warning when standby logical-slot advance path is unavailable.
+	logicalSlotStandbyAdvanceUnavailableNoticeEmitted bool
 }
 
 type standbyReplayController interface {
@@ -1931,6 +1933,7 @@ func (p *PostgresKeeper) refreshReplicationSlots(
 				db.Spec.EnableLogicalSlotFailover,
 				pgMajor,
 			) {
+				p.logicalSlotStandbyAdvanceUnavailableNoticeEmitted = false
 				masterLSN := masterManagedLogicalSlotLSN(dbs)
 				ops := evaluateManagedLogicalSlotAdvanceOperations(
 					db.Spec.ManagedLogicalReplicationSlots,
@@ -1954,6 +1957,12 @@ func (p *PostgresKeeper) refreshReplicationSlots(
 							Msg("failed to advance managed logical replication slot on standby")
 					}
 				}
+			} else if versionErr == nil && !p.logicalSlotStandbyAdvanceUnavailableNoticeEmitted {
+				p.baseLog().
+					Warn().
+					Int("pg_major", pgMajor).
+					Msg("logical slot failover gate enabled but standby logical-slot advance is unavailable on PostgreSQL < 16")
+				p.logicalSlotStandbyAdvanceUnavailableNoticeEmitted = true
 			}
 
 			readiness := evaluateManagedLogicalSlotReadiness(
@@ -1978,6 +1987,7 @@ func (p *PostgresKeeper) refreshReplicationSlots(
 			}
 		} else {
 			p.logicalSlotReadinessLast = ""
+			p.logicalSlotStandbyAdvanceUnavailableNoticeEmitted = false
 		}
 		return nil
 	}

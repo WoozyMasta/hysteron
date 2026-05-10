@@ -1941,6 +1941,13 @@ func (p *PostgresKeeper) refreshReplicationSlots(
 					masterLSN,
 					db.Status.XLogPos,
 				)
+				if len(ops) > 0 {
+					p.baseLog().
+						Debug().
+						Int("advance_ops", len(ops)).
+						Uint64("replay_lsn", db.Status.XLogPos).
+						Msg("planned managed logical slot standby advance operations")
+				}
 				for _, op := range ops {
 					logicalSlotStandbyAdvanceAttemptsTotal.Inc()
 					if err := p.pgm.AdvanceLogicalReplicationSlot(

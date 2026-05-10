@@ -664,6 +664,10 @@ type PostgresKeeper struct {
 	logicalSlotNativeModeNoticeEmitted bool
 	// Emits one-time warning when standby logical-slot advance path is unavailable.
 	logicalSlotStandbyAdvanceUnavailableNoticeEmitted bool
+	// Per-slot retry-after map for standby logical-slot advance failures.
+	logicalSlotStandbyAdvanceRetryAfter map[string]time.Time
+	// Delay before retrying failed standby logical-slot advance operations.
+	logicalSlotStandbyAdvanceRetryDelay time.Duration
 }
 
 type standbyReplayController interface {
@@ -737,6 +741,9 @@ func NewPostgresKeeper(
 
 		e:   e,
 		end: end,
+
+		logicalSlotStandbyAdvanceRetryAfter: make(map[string]time.Time),
+		logicalSlotStandbyAdvanceRetryDelay: 10 * time.Second,
 	}
 
 	err = p.loadKeeperLocalState()
@@ -1632,6 +1639,47 @@ func shouldUseStandbyLogicalSlotAdvance(enableLogicalSlotFailover bool, pgMajor 
 	return enableLogicalSlotFailover && pgMajor >= 16
 }
 
+func logicalSlotAdvanceRetryKey(slotName, database string) string {
+	return slotName + "@" + database
+}
+
+func shouldAttemptLogicalSlotAdvance(
+	retryAfter map[string]time.Time,
+	key string,
+	now time.Time,
+) bool {
+	if retryAfter == nil {
+		return true
+	}
+	next, ok := retryAfter[key]
+	if !ok {
+		return true
+	}
+	return !now.Before(next)
+}
+
+func markLogicalSlotAdvanceFailure(
+	retryAfter map[string]time.Time,
+	key string,
+	now time.Time,
+	retryDelay time.Duration,
+) {
+	if retryAfter == nil {
+		return
+	}
+	retryAfter[key] = now.Add(retryDelay)
+}
+
+func clearLogicalSlotAdvanceFailure(
+	retryAfter map[string]time.Time,
+	key string,
+) {
+	if retryAfter == nil {
+		return
+	}
+	delete(retryAfter, key)
+}
+
 func computeLogicalSlotAdvanceTarget(
 	desiredLSN uint64,
 	replayLSN uint64,
@@ -1949,12 +1997,27 @@ func (p *PostgresKeeper) refreshReplicationSlots(
 						Msg("planned managed logical slot standby advance operations")
 				}
 				for _, op := range ops {
+					now := time.Now()
+					retryKey := logicalSlotAdvanceRetryKey(op.Name, op.Database)
+					if !shouldAttemptLogicalSlotAdvance(
+						p.logicalSlotStandbyAdvanceRetryAfter,
+						retryKey,
+						now,
+					) {
+						continue
+					}
 					logicalSlotStandbyAdvanceAttemptsTotal.Inc()
 					if err := p.pgm.AdvanceLogicalReplicationSlot(
 						op.Name,
 						op.Database,
 						op.TargetLSN,
 					); err != nil {
+						markLogicalSlotAdvanceFailure(
+							p.logicalSlotStandbyAdvanceRetryAfter,
+							retryKey,
+							now,
+							p.logicalSlotStandbyAdvanceRetryDelay,
+						)
 						logicalSlotStandbyAdvanceFailuresTotal.Inc()
 						p.baseLog().
 							Warn().
@@ -1966,6 +2029,10 @@ func (p *PostgresKeeper) refreshReplicationSlots(
 							Msg("failed to advance managed logical replication slot on standby")
 						continue
 					}
+					clearLogicalSlotAdvanceFailure(
+						p.logicalSlotStandbyAdvanceRetryAfter,
+						retryKey,
+					)
 					logicalSlotStandbyAdvanceSuccessTotal.Inc()
 				}
 			} else if versionErr == nil && !p.logicalSlotStandbyAdvanceUnavailableNoticeEmitted {

@@ -570,6 +570,29 @@ func TestEvaluateManagedLogicalSlotAdvanceOperations(t *testing.T) {
 	})
 }
 
+func TestLogicalSlotAdvanceRetryBackoffHelpers(t *testing.T) {
+	now := time.Unix(1000, 0).UTC()
+	key := logicalSlotAdvanceRetryKey("slot1", "postgres")
+	retryAfter := map[string]time.Time{}
+
+	if !shouldAttemptLogicalSlotAdvance(retryAfter, key, now) {
+		t.Fatalf("expected first attempt to be allowed")
+	}
+
+	markLogicalSlotAdvanceFailure(retryAfter, key, now, 10*time.Second)
+	if shouldAttemptLogicalSlotAdvance(retryAfter, key, now.Add(5*time.Second)) {
+		t.Fatalf("expected attempt to be blocked during backoff")
+	}
+	if !shouldAttemptLogicalSlotAdvance(retryAfter, key, now.Add(11*time.Second)) {
+		t.Fatalf("expected attempt to be allowed after backoff")
+	}
+
+	clearLogicalSlotAdvanceFailure(retryAfter, key)
+	if !shouldAttemptLogicalSlotAdvance(retryAfter, key, now.Add(1*time.Second)) {
+		t.Fatalf("expected attempt to be allowed after clear")
+	}
+}
+
 func TestShouldEmitLogicalSlotGateNotice(t *testing.T) {
 	tests := []struct {
 		name           string

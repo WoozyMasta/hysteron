@@ -232,6 +232,9 @@ The format is based on [Keep a Changelog][], and this project adheres to
   policy: updates are rejected when
   `enableLogicalSlotFailover=true` and
   `pgParameters.hot_standby_feedback` is explicitly disabled.
+* Add integration coverage that logical-slot failover gate runtime enforces
+  `hot_standby_feedback=on` when this parameter is not explicitly set in
+  cluster spec.
 * Add integration coverage for logical-slot-failover gate validation:
   cluster updates now have explicit test coverage that
   `enableLogicalSlotFailover` is rejected unless

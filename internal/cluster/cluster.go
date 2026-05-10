@@ -613,6 +613,16 @@ func (c *ClusterSpec) Validate() error {
 			`enableLogicalSlotFailover requires managedLogicalReplicationSlots to be configured`,
 		)
 	}
+	if s.EnableLogicalSlotFailover {
+		if raw, ok := s.PGParameters["hot_standby_feedback"]; ok {
+			normalized := strings.ToLower(strings.TrimSpace(raw))
+			if normalized != "on" && normalized != "true" && normalized != "1" {
+				return errors.New(
+					`enableLogicalSlotFailover requires pgParameters.hot_standby_feedback to be enabled (on/true/1)`,
+				)
+			}
+		}
+	}
 
 	// The unique validation we're doing on pgHBA entries is that they don't contain a newline character
 	for _, e := range s.PGHBA {

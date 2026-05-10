@@ -333,6 +333,7 @@ func createLogicalReplicationSlot(
 	ctx context.Context,
 	connParams ConnParams,
 	name, database, plugin string,
+	failover bool,
 ) error {
 	cp := connParams.Copy()
 	cp.Set("dbname", database)
@@ -343,15 +344,35 @@ func createLogicalReplicationSlot(
 	}
 	defer ignoreClose(db)
 
-	_, err = dbExec(
-		ctx,
-		db,
-		fmt.Sprintf(
-			"select * from pg_create_logical_replication_slot(%s, %s)",
-			quoteLiteral(name),
-			quoteLiteral(plugin),
-		),
+	sqlQuery := fmt.Sprintf(
+		"select * from pg_create_logical_replication_slot(%s, %s)",
+		quoteLiteral(name),
+		quoteLiteral(plugin),
 	)
+	if failover {
+		var versionNum int
+		rows, qErr := query(ctx, db, "select current_setting('server_version_num')::int")
+		if qErr != nil {
+			return qErr
+		}
+		defer func() { _ = rows.Close() }()
+		if rows.Next() {
+			if err := rows.Scan(&versionNum); err != nil {
+				return err
+			}
+		}
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		if versionNum >= 170000 {
+			sqlQuery = fmt.Sprintf(
+				"select * from pg_create_logical_replication_slot(%s, %s, false, false, true)",
+				quoteLiteral(name),
+				quoteLiteral(plugin),
+			)
+		}
+	}
+	_, err = dbExec(ctx, db, sqlQuery)
 	return err
 }
 

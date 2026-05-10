@@ -435,6 +435,10 @@ func (p *PostgresKeeper) createPGParameters(
 
 	// Add/Replace mandatory PGParameters
 	maps.Copy(parameters, p.mandatoryPGParameters(db))
+	enforceHotStandbyFeedbackForLogicalSlotFailover(
+		parameters,
+		db.Spec.EnableLogicalSlotFailover,
+	)
 
 	parameters["listen_addresses"] = p.pgListenAddress
 
@@ -1597,6 +1601,20 @@ func shouldReconcileManagedLogicalSlots(
 	return true, "enabled"
 }
 
+func shouldUseNativeLogicalSlotFailover(enableLogicalSlotFailover bool, pgMajor int) bool {
+	return enableLogicalSlotFailover && pgMajor >= 17
+}
+
+func enforceHotStandbyFeedbackForLogicalSlotFailover(
+	parameters common.Parameters,
+	enableLogicalSlotFailover bool,
+) {
+	if !enableLogicalSlotFailover {
+		return
+	}
+	parameters["hot_standby_feedback"] = "on"
+}
+
 func evaluateManagedLogicalSlotsDecision(
 	desired []cluster.ManagedLogicalReplicationSlot,
 	current []pg.LogicalReplicationSlot,
@@ -1816,6 +1834,23 @@ func (p *PostgresKeeper) refreshReplicationSlots(
 		db.Spec.ManagedLogicalReplicationSlots,
 		currentLogicalSlots,
 	)
+	createFailoverSlot := false
+	if db.Spec.EnableLogicalSlotFailover {
+		pgMajor, _, versionErr := p.pgm.BinaryVersion()
+		if versionErr != nil {
+			p.baseLog().
+				Warn().
+				Err(versionErr).
+				Msg("failed to detect PostgreSQL binary version; creating logical slots without native failover flag")
+		} else if shouldUseNativeLogicalSlotFailover(db.Spec.EnableLogicalSlotFailover, pgMajor) {
+			createFailoverSlot = true
+		} else {
+			p.baseLog().
+				Warn().
+				Int("pg_major", pgMajor).
+				Msg("enableLogicalSlotFailover is enabled on PostgreSQL < 17; native logical slot failover is unavailable")
+		}
+	}
 	for _, slot := range logicalDecision.mismatch {
 		p.baseLog().
 			Warn().
@@ -1838,6 +1873,7 @@ func (p *PostgresKeeper) refreshReplicationSlots(
 			desiredSlot.Name,
 			desiredSlot.Database,
 			desiredSlot.Plugin,
+			createFailoverSlot,
 		); err != nil {
 			return fmt.Errorf(
 				"failed to create managed logical replication slot %q: %w",

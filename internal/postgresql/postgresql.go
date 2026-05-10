@@ -730,10 +730,10 @@ func (p *Manager) GetLogicalReplicationSlots() ([]LogicalReplicationSlot, error)
 }
 
 // CreateLogicalReplicationSlot creates a logical replication slot.
-func (p *Manager) CreateLogicalReplicationSlot(name, database, plugin string) error {
+func (p *Manager) CreateLogicalReplicationSlot(name, database, plugin string, failover bool) error {
 	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeoutValue())
 	defer cancel()
-	return createLogicalReplicationSlot(ctx, p.localConnParams, name, database, plugin)
+	return createLogicalReplicationSlot(ctx, p.localConnParams, name, database, plugin, failover)
 }
 
 // DropLogicalReplicationSlot removes a logical replication slot.

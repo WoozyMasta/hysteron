@@ -399,6 +399,44 @@ func TestManagedLogicalSlotReadinessSignature(t *testing.T) {
 	})
 }
 
+func TestShouldUseNativeLogicalSlotFailover(t *testing.T) {
+	t.Run("disabled gate", func(t *testing.T) {
+		if shouldUseNativeLogicalSlotFailover(false, 18) {
+			t.Fatalf("expected false when gate is disabled")
+		}
+	})
+
+	t.Run("enabled but pg16", func(t *testing.T) {
+		if shouldUseNativeLogicalSlotFailover(true, 16) {
+			t.Fatalf("expected false for pg16")
+		}
+	})
+
+	t.Run("enabled on pg17", func(t *testing.T) {
+		if !shouldUseNativeLogicalSlotFailover(true, 17) {
+			t.Fatalf("expected true for pg17")
+		}
+	})
+}
+
+func TestEnforceHotStandbyFeedbackForLogicalSlotFailover(t *testing.T) {
+	t.Run("disabled gate keeps existing value", func(t *testing.T) {
+		params := common.Parameters{"hot_standby_feedback": "off"}
+		enforceHotStandbyFeedbackForLogicalSlotFailover(params, false)
+		if params["hot_standby_feedback"] != "off" {
+			t.Fatalf("unexpected value: %q", params["hot_standby_feedback"])
+		}
+	})
+
+	t.Run("enabled gate forces on", func(t *testing.T) {
+		params := common.Parameters{"hot_standby_feedback": "off"}
+		enforceHotStandbyFeedbackForLogicalSlotFailover(params, true)
+		if params["hot_standby_feedback"] != "on" {
+			t.Fatalf("unexpected value: %q", params["hot_standby_feedback"])
+		}
+	})
+}
+
 func TestShouldEmitLogicalSlotGateNotice(t *testing.T) {
 	tests := []struct {
 		name           string

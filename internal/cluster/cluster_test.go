@@ -319,6 +319,21 @@ func TestClusterSpecValidate(t *testing.T) {
 			},
 		},
 		{
+			name: "logical slot failover gate rejects disabled hot_standby_feedback",
+			spec: &ClusterSpec{
+				InitMode:                  &newMode,
+				EnableLogicalSlotFailover: true,
+				PGParameters: PGParameters{
+					"wal_level":            "logical",
+					"hot_standby_feedback": "off",
+				},
+				ManagedLogicalReplicationSlots: []ManagedLogicalReplicationSlot{
+					{Name: "slot_ok", Database: "postgres", Plugin: "pgoutput"},
+				},
+			},
+			wantErr: `enableLogicalSlotFailover requires pgParameters.hot_standby_feedback to be enabled (on/true/1)`,
+		},
+		{
 			name: "managed logical slot requires wal_level logical",
 			spec: &ClusterSpec{
 				InitMode: &newMode,

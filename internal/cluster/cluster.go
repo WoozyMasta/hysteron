@@ -900,6 +900,9 @@ type DBStatus struct {
 	// OrphanMemberSlots stores first-observed timestamps for orphaned member
 	// replication slots (`hysteron_<dbuid>`) tracked on the current master.
 	OrphanMemberSlots map[string]time.Time `json:"orphanMemberSlots,omitempty"`
+	// ManagedLogicalSlots stores confirmed_flush_lsn values for managed logical
+	// replication slots observed on the current instance.
+	ManagedLogicalSlots map[string]uint64 `json:"managedLogicalSlots,omitempty"`
 
 	// ListenAddress is PostgreSQL listen address.
 	ListenAddress string `json:"listenAddress,omitempty"`

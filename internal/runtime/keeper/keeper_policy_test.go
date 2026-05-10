@@ -471,6 +471,26 @@ func TestComputeLogicalSlotAdvanceTarget(t *testing.T) {
 	})
 }
 
+func TestLogicalSlotLSNMap(t *testing.T) {
+	t.Run("empty when no current slots", func(t *testing.T) {
+		got := logicalSlotLSNMap(nil)
+		if got != nil {
+			t.Fatalf("expected nil, got %v", got)
+		}
+	})
+
+	t.Run("returns slot lsns map", func(t *testing.T) {
+		got := logicalSlotLSNMap([]pg.LogicalReplicationSlot{
+			{Name: "slot1", ConfirmedFlushLSN: 10},
+			{Name: "slot2", ConfirmedFlushLSN: 99},
+		})
+		want := map[string]uint64{"slot1": 10, "slot2": 99}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("unexpected map: got=%v want=%v", got, want)
+		}
+	})
+}
+
 func TestShouldEmitLogicalSlotGateNotice(t *testing.T) {
 	tests := []struct {
 		name           string

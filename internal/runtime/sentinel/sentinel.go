@@ -367,6 +367,7 @@ func (s *Sentinel) updateKeepersStatus(
 			db.Status.PGParameters = cluster.PGParameters(
 				dbs.PGParameters,
 			)
+			db.Status.ManagedLogicalSlots = dbs.ManagedLogicalSlots
 
 			db.Status.CurSynchronousStandbys = dbs.SynchronousStandbys
 

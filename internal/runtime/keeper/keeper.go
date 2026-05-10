@@ -1061,6 +1061,17 @@ func (p *PostgresKeeper) GetPGState(
 			pgState.OlderWalFile = ow
 		}
 		pgState.Healthy = true
+		role, roleErr := p.pgm.GetRole()
+		if roleErr != nil {
+			p.baseLog().Debug().Err(roleErr).Msg("failed to get PostgreSQL role for logical slot state publish")
+		} else if role == common.RoleMaster {
+			logicalSlots, slotsErr := p.pgm.GetLogicalReplicationSlots()
+			if slotsErr != nil {
+				p.baseLog().Debug().Err(slotsErr).Msg("failed to inspect logical replication slots for state publish")
+			} else {
+				pgState.ManagedLogicalSlots = logicalSlotLSNMap(logicalSlots)
+			}
+		}
 	}
 
 	return pgState, nil
@@ -1625,6 +1636,22 @@ func computeLogicalSlotAdvanceTarget(
 		return 0, false
 	}
 	return target, true
+}
+
+func logicalSlotLSNMap(
+	current []pg.LogicalReplicationSlot,
+) map[string]uint64 {
+	if len(current) == 0 {
+		return nil
+	}
+	out := make(map[string]uint64, len(current))
+	for _, slot := range current {
+		out[slot.Name] = slot.ConfirmedFlushLSN
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func enforceHotStandbyFeedbackForLogicalSlotFailover(

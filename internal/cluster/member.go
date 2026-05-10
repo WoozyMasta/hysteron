@@ -107,6 +107,9 @@ type PostgresState struct {
 	TimelinesHistory PostgresTimelinesHistory `json:"timelinesHistory,omitempty"`
 	// SynchronousStandbys are standbys currently configured as synchronous.
 	SynchronousStandbys []string `json:"synchronousStandbys"`
+	// ManagedLogicalSlots stores confirmed_flush_lsn values for managed logical
+	// replication slots observed on this instance.
+	ManagedLogicalSlots map[string]uint64 `json:"managedLogicalSlots,omitempty"`
 	// Generation is desired/assigned DB generation.
 	Generation int64 `json:"generation,omitempty"`
 	// TimelineID is current timeline identifier.

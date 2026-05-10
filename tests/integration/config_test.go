@@ -96,6 +96,23 @@ func getLogicalSlotFailoverFlag(q Querier, slotName string) (bool, error) {
 	return failover, nil
 }
 
+func getServerVersionNum(q Querier) (int, error) {
+	rows, err := q.Query("select current_setting('server_version_num')::int")
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		return 0, fmt.Errorf("server_version_num not returned")
+	}
+	var versionNum int
+	if err := rows.Scan(&versionNum); err != nil {
+		return 0, err
+	}
+	return versionNum, nil
+}
+
 func waitLogicalReplicationSlotPresent(
 	q Querier,
 	slotName string,
@@ -1320,7 +1337,15 @@ func TestLogicalSlotFailoverGateCreatesNativeFailoverSlotWhenAvailable(t *testin
 	failoverEnabled, err := getLogicalSlotFailoverFlag(master, slotName)
 	if err != nil {
 		if strings.Contains(err.Error(), `column "failover" does not exist`) {
-			t.Skipf("postgres does not expose pg_replication_slots.failover: %v", err)
+			versionNum, vErr := getServerVersionNum(master)
+			if vErr != nil {
+				t.Fatalf("unexpected err: %v; and failed to read server version: %v", err, vErr)
+			}
+			if versionNum >= 170000 {
+				t.Fatalf("unexpected missing failover column on pg version %d: %v", versionNum, err)
+			}
+			// Legacy path (<17): native logical failover slots are unavailable.
+			return
 		}
 		t.Fatalf("unexpected err: %v", err)
 	}

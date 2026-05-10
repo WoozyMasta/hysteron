@@ -1609,6 +1609,24 @@ func shouldUseNativeLogicalSlotFailover(enableLogicalSlotFailover bool, pgMajor 
 	return enableLogicalSlotFailover && pgMajor >= 17
 }
 
+func computeLogicalSlotAdvanceTarget(
+	desiredLSN uint64,
+	replayLSN uint64,
+	currentConfirmedFlushLSN uint64,
+) (uint64, bool) {
+	if desiredLSN == 0 || replayLSN == 0 {
+		return 0, false
+	}
+	target := desiredLSN
+	if replayLSN < target {
+		target = replayLSN
+	}
+	if target <= currentConfirmedFlushLSN {
+		return 0, false
+	}
+	return target, true
+}
+
 func enforceHotStandbyFeedbackForLogicalSlotFailover(
 	parameters common.Parameters,
 	enableLogicalSlotFailover bool,

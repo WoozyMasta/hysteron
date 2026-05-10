@@ -126,10 +126,11 @@ type PhysicalReplicationSlot struct {
 
 // LogicalReplicationSlot describes one logical replication slot status.
 type LogicalReplicationSlot struct {
-	Name     string
-	Database string
-	Plugin   string
-	Active   bool
+	Name              string
+	Database          string
+	Plugin            string
+	Active            bool
+	ConfirmedFlushLSN uint64
 }
 
 // RecoveryMode defines PostgreSQL startup recovery mode.

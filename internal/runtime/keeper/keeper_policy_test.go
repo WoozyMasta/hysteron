@@ -437,6 +437,40 @@ func TestEnforceHotStandbyFeedbackForLogicalSlotFailover(t *testing.T) {
 	})
 }
 
+func TestComputeLogicalSlotAdvanceTarget(t *testing.T) {
+	t.Run("no desired lsn", func(t *testing.T) {
+		if target, ok := computeLogicalSlotAdvanceTarget(0, 100, 10); ok || target != 0 {
+			t.Fatalf("unexpected target=%d ok=%v", target, ok)
+		}
+	})
+
+	t.Run("no replay lsn", func(t *testing.T) {
+		if target, ok := computeLogicalSlotAdvanceTarget(100, 0, 10); ok || target != 0 {
+			t.Fatalf("unexpected target=%d ok=%v", target, ok)
+		}
+	})
+
+	t.Run("caps target by replay lsn", func(t *testing.T) {
+		target, ok := computeLogicalSlotAdvanceTarget(200, 150, 100)
+		if !ok || target != 150 {
+			t.Fatalf("unexpected target=%d ok=%v", target, ok)
+		}
+	})
+
+	t.Run("no advance when target not ahead", func(t *testing.T) {
+		if target, ok := computeLogicalSlotAdvanceTarget(200, 150, 150); ok || target != 0 {
+			t.Fatalf("unexpected target=%d ok=%v", target, ok)
+		}
+	})
+
+	t.Run("advance to desired when replay is ahead", func(t *testing.T) {
+		target, ok := computeLogicalSlotAdvanceTarget(200, 300, 150)
+		if !ok || target != 200 {
+			t.Fatalf("unexpected target=%d ok=%v", target, ok)
+		}
+	})
+}
+
 func TestShouldEmitLogicalSlotGateNotice(t *testing.T) {
 	tests := []struct {
 		name           string

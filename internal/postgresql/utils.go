@@ -304,7 +304,8 @@ func getLogicalReplicationSlots(
 	rows, err := query(
 		ctx,
 		db,
-		"select slot_name, database, plugin, active "+
+		"select slot_name, database, plugin, active, "+
+			"coalesce(pg_wal_lsn_diff(confirmed_flush_lsn, '0/0')::bigint, 0) "+
 			"from pg_replication_slots "+
 			"where temporary is false and slot_type = 'logical' "+
 			"order by slot_name",
@@ -317,8 +318,18 @@ func getLogicalReplicationSlots(
 	slots := []LogicalReplicationSlot{}
 	for rows.Next() {
 		var slot LogicalReplicationSlot
-		if err := rows.Scan(&slot.Name, &slot.Database, &slot.Plugin, &slot.Active); err != nil {
+		var confirmedFlushLSN int64
+		if err := rows.Scan(
+			&slot.Name,
+			&slot.Database,
+			&slot.Plugin,
+			&slot.Active,
+			&confirmedFlushLSN,
+		); err != nil {
 			return nil, err
+		}
+		if confirmedFlushLSN > 0 {
+			slot.ConfirmedFlushLSN = uint64(confirmedFlushLSN)
 		}
 		slots = append(slots, slot)
 	}

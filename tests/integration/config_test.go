@@ -144,6 +144,31 @@ func waitLogicalSlotConfirmedFlushLSNGreaterThan(
 	)
 }
 
+func waitLogicalSlotConfirmedFlushLSNStable(
+	q Querier,
+	slotName string,
+	base uint64,
+	duration time.Duration,
+) error {
+	start := time.Now()
+	for time.Since(start) < duration {
+		current, err := getLogicalSlotConfirmedFlushLSN(q, slotName)
+		if err != nil {
+			return err
+		}
+		if current != base {
+			return fmt.Errorf(
+				"logical slot %q confirmed_flush_lsn changed unexpectedly: base=%d current=%d",
+				slotName,
+				base,
+				current,
+			)
+		}
+		time.Sleep(2 * time.Second)
+	}
+	return nil
+}
+
 func getServerVersionNum(q Querier) (int, error) {
 	rows, err := q.Query("select current_setting('server_version_num')::int")
 	if err != nil {
@@ -1597,6 +1622,101 @@ func TestLogicalSlotFailoverGateStandbyAdvanceWhenSlotExistsOnStandby(t *testing
 		slotName,
 		standbyBefore,
 		60*time.Second,
+	); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+}
+
+func TestLogicalSlotFailoverGateStandbyAdvanceUnavailableOnLegacyPG(t *testing.T) {
+	t.Parallel()
+
+	dir, err := os.MkdirTemp("", "hysteron")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	clusterName := uuid.NewString()
+	tks, tss, tp, tstore := setupServers(
+		t,
+		clusterName,
+		dir,
+		2,
+		1,
+		false,
+		false,
+		nil,
+		func(spec *cluster.ClusterSpec) {
+			spec.PGParameters = cluster.PGParameters{
+				"wal_level": "logical",
+			}
+		},
+	)
+	defer shutdown(tks, tss, tp, tstore)
+
+	storeEndpoints := fmt.Sprintf("%s:%s", tstore.listenAddress, tstore.port)
+	storePath := filepath.Join(common.StorePrefix, clusterName)
+	sm := store.NewKVBackedStore(tstore.store, storePath)
+
+	master, standbys := waitMasterStandbysReady(t, sm, tks)
+	if len(standbys) == 0 {
+		t.Fatalf("expected at least one standby keeper")
+	}
+	standby := standbys[0]
+
+	versionNum, err := getServerVersionNum(standby)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if versionNum >= 160000 {
+		t.Skipf("legacy-only test (PG<16), got %d", versionNum)
+	}
+
+	slotName := "hysteron_logic_adv_legacy01"
+	err = HysteronCluster(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		"update",
+		"--patch",
+		`{ "enableLogicalSlotFailover": true, "managedLogicalReplicationSlots" : [ { "name" : "hysteron_logic_adv_legacy01", "database" : "postgres", "plugin" : "pgoutput" } ] }`,
+	)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	if err := waitLogicalReplicationSlotPresent(master, slotName, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if _, err := standby.Exec(
+		"select * from pg_create_logical_replication_slot($1, $2)",
+		slotName,
+		"pgoutput",
+	); err != nil {
+		t.Fatalf("failed to create standby logical slot: %v", err)
+	}
+
+	standbyBefore, err := getLogicalSlotConfirmedFlushLSN(standby, slotName)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	if err := populate(t, master); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := write(t, master, 1, 1); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if _, err := master.Exec("select count(*) from pg_logical_slot_get_changes($1, NULL, NULL)", slotName); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	if err := waitLogicalSlotConfirmedFlushLSNStable(
+		standby,
+		slotName,
+		standbyBefore,
+		20*time.Second,
 	); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}

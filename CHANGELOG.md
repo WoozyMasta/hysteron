@@ -244,6 +244,9 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Add explicit runtime warning when logical-slot failover gate is enabled on
   PostgreSQL versions where standby logical-slot advance is unavailable
   (PG<16).
+* Add complementary legacy integration coverage for PG<16:
+  with failover gate enabled and a standby logical slot present,
+  standby slot `confirmed_flush_lsn` remains stable (no advance attempts).
 * Add integration coverage for logical-slot-failover gate validation:
   cluster updates now have explicit test coverage that
   `enableLogicalSlotFailover` is rejected unless

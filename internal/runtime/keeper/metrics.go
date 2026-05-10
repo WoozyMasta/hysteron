@@ -94,6 +94,12 @@ var (
 			Help: "Total logical slot standby advance operations skipped due to retry backoff",
 		},
 	)
+	logicalSlotStandbyAdvanceRetrySlots = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "hysteron_keeper_logical_slot_standby_advance_retry_slots",
+			Help: "Current number of logical slot standby advance operations waiting for retry backoff",
+		},
+	)
 )
 
 // setRole is a helper that controls the targetRole metric by setting only one of the
@@ -123,4 +129,5 @@ func init() {
 	prometheus.MustRegister(logicalSlotStandbyAdvanceSuccessTotal)
 	prometheus.MustRegister(logicalSlotStandbyAdvanceFailuresTotal)
 	prometheus.MustRegister(logicalSlotStandbyAdvanceSkippedBackoffTotal)
+	prometheus.MustRegister(logicalSlotStandbyAdvanceRetrySlots)
 }

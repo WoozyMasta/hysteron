@@ -2019,6 +2019,9 @@ func (p *PostgresKeeper) refreshReplicationSlots(
 							now,
 							p.logicalSlotStandbyAdvanceRetryDelay,
 						)
+						logicalSlotStandbyAdvanceRetrySlots.Set(
+							float64(len(p.logicalSlotStandbyAdvanceRetryAfter)),
+						)
 						logicalSlotStandbyAdvanceFailuresTotal.Inc()
 						p.baseLog().
 							Warn().
@@ -2034,8 +2037,14 @@ func (p *PostgresKeeper) refreshReplicationSlots(
 						p.logicalSlotStandbyAdvanceRetryAfter,
 						retryKey,
 					)
+					logicalSlotStandbyAdvanceRetrySlots.Set(
+						float64(len(p.logicalSlotStandbyAdvanceRetryAfter)),
+					)
 					logicalSlotStandbyAdvanceSuccessTotal.Inc()
 				}
+				logicalSlotStandbyAdvanceRetrySlots.Set(
+					float64(len(p.logicalSlotStandbyAdvanceRetryAfter)),
+				)
 			} else if versionErr == nil && !p.logicalSlotStandbyAdvanceUnavailableNoticeEmitted {
 				p.baseLog().
 					Warn().

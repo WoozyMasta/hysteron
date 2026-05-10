@@ -70,6 +70,24 @@ var (
 			Help: "Shutdown time (received termination signal) since unix epoch in seconds",
 		},
 	)
+	logicalSlotStandbyAdvanceAttemptsTotal = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "hysteron_keeper_logical_slot_standby_advance_attempts_total",
+			Help: "Total logical slot standby advance attempts",
+		},
+	)
+	logicalSlotStandbyAdvanceSuccessTotal = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "hysteron_keeper_logical_slot_standby_advance_success_total",
+			Help: "Total successful logical slot standby advance operations",
+		},
+	)
+	logicalSlotStandbyAdvanceFailuresTotal = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "hysteron_keeper_logical_slot_standby_advance_failures_total",
+			Help: "Total failed logical slot standby advance operations",
+		},
+	)
 )
 
 // setRole is a helper that controls the targetRole metric by setting only one of the
@@ -95,4 +113,7 @@ func init() {
 	prometheus.MustRegister(lastSyncSuccessSeconds)
 	prometheus.MustRegister(sleepInterval)
 	prometheus.MustRegister(shutdownSeconds)
+	prometheus.MustRegister(logicalSlotStandbyAdvanceAttemptsTotal)
+	prometheus.MustRegister(logicalSlotStandbyAdvanceSuccessTotal)
+	prometheus.MustRegister(logicalSlotStandbyAdvanceFailuresTotal)
 }

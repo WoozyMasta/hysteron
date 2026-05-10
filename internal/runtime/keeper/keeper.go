@@ -1942,11 +1942,13 @@ func (p *PostgresKeeper) refreshReplicationSlots(
 					db.Status.XLogPos,
 				)
 				for _, op := range ops {
+					logicalSlotStandbyAdvanceAttemptsTotal.Inc()
 					if err := p.pgm.AdvanceLogicalReplicationSlot(
 						op.Name,
 						op.Database,
 						op.TargetLSN,
 					); err != nil {
+						logicalSlotStandbyAdvanceFailuresTotal.Inc()
 						p.baseLog().
 							Warn().
 							Err(err).
@@ -1955,7 +1957,9 @@ func (p *PostgresKeeper) refreshReplicationSlots(
 							Uint64("replay_lsn", db.Status.XLogPos).
 							Uint64("target_lsn", op.TargetLSN).
 							Msg("failed to advance managed logical replication slot on standby")
+						continue
 					}
+					logicalSlotStandbyAdvanceSuccessTotal.Inc()
 				}
 			} else if versionErr == nil && !p.logicalSlotStandbyAdvanceUnavailableNoticeEmitted {
 				p.baseLog().

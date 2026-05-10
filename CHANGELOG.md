@@ -247,6 +247,8 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Add complementary legacy integration coverage for PG<16:
   with failover gate enabled and a standby logical slot present,
   standby slot `confirmed_flush_lsn` remains stable (no advance attempts).
+* Add keeper Prometheus counters for standby logical-slot advance pipeline:
+  attempts, successes, and failures.
 * Add integration coverage for logical-slot-failover gate validation:
   cluster updates now have explicit test coverage that
   `enableLogicalSlotFailover` is rejected unless

@@ -1533,6 +1533,70 @@ func TestLogicalSlotFailoverGateForcesHotStandbyFeedbackOnWhenUnset(t *testing.T
 	}
 }
 
+func TestFailsafeModeValidationAndUpdate(t *testing.T) {
+	t.Parallel()
+
+	dir, err := os.MkdirTemp("", "hysteron")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	clusterName := uuid.NewString()
+	tks, tss, tp, tstore := setupServers(t, clusterName, dir, 1, 1, false, false, nil)
+	defer shutdown(tks, tss, tp, tstore)
+
+	storeEndpoints := fmt.Sprintf("%s:%s", tstore.listenAddress, tstore.port)
+	storePath := filepath.Join(common.StorePrefix, clusterName)
+	sm := store.NewKVBackedStore(tstore.store, storePath)
+	_, _ = waitMasterStandbysReady(t, sm, tks)
+
+	assertClusterUpdateFailsWith(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		`{
+			"enableFailsafeMode": true,
+			"failsafeProbeInterval": "1s",
+			"failsafeProbeTimeout": "2s"
+		}`,
+		`failsafeProbeTimeout should be less than or equal to failsafeProbeInterval`,
+	)
+
+	assertClusterUpdateFailsWith(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		`{
+			"enableFailsafeMode": true,
+			"failsafeProbeInterval": "3s",
+			"failsafeTTL": "2s"
+		}`,
+		`failsafeTTL should be greater than or equal to failsafeProbeInterval`,
+	)
+
+	err = HysteronCluster(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		"update",
+		"--patch",
+		`{
+			"enableFailsafeMode": true,
+			"failsafeProbeInterval": "3s",
+			"failsafeProbeTimeout": "1s",
+			"failsafeMaxMissingPeers": 1,
+			"failsafeTTL": "15s"
+		}`,
+	)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+}
+
 func TestLogicalSlotFailoverGateStandbyReadinessNoAction(t *testing.T) {
 	t.Parallel()
 

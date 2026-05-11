@@ -334,6 +334,9 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Add DCS degraded/recovered coordination hooks in keeper and sentinel for
   failsafe observability state transitions (active/expired/inactive), without
   changing failover or leadership decision semantics.
+* Add integration validation for failsafe spec guardrails and update path:
+  invalid probe timeout/interval and ttl/interval combinations are rejected,
+  while a valid failsafe configuration patch is accepted.
 
 ## v0.17.0
 

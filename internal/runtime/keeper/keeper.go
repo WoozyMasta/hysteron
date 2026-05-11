@@ -1680,6 +1680,23 @@ func clearLogicalSlotAdvanceFailure(
 	delete(retryAfter, key)
 }
 
+func pruneLogicalSlotAdvanceRetryAfter(
+	retryAfter map[string]time.Time,
+	now time.Time,
+) int {
+	if retryAfter == nil {
+		return 0
+	}
+	removed := 0
+	for key, next := range retryAfter {
+		if !now.Before(next) {
+			delete(retryAfter, key)
+			removed++
+		}
+	}
+	return removed
+}
+
 func computeLogicalSlotAdvanceTarget(
 	desiredLSN uint64,
 	replayLSN uint64,
@@ -1981,6 +1998,13 @@ func (p *PostgresKeeper) refreshReplicationSlots(
 				db.Spec.EnableLogicalSlotFailover,
 				pgMajor,
 			) {
+				pruneLogicalSlotAdvanceRetryAfter(
+					p.logicalSlotStandbyAdvanceRetryAfter,
+					time.Now(),
+				)
+				logicalSlotStandbyAdvanceRetrySlots.Set(
+					float64(len(p.logicalSlotStandbyAdvanceRetryAfter)),
+				)
 				p.logicalSlotStandbyAdvanceUnavailableNoticeEmitted = false
 				masterLSN := masterManagedLogicalSlotLSN(dbs)
 				ops := evaluateManagedLogicalSlotAdvanceOperations(

@@ -593,6 +593,26 @@ func TestLogicalSlotAdvanceRetryBackoffHelpers(t *testing.T) {
 	}
 }
 
+func TestPruneLogicalSlotAdvanceRetryAfter(t *testing.T) {
+	now := time.Unix(1000, 0).UTC()
+	retryAfter := map[string]time.Time{
+		"slot1@postgres": now.Add(-1 * time.Second),
+		"slot2@postgres": now.Add(10 * time.Second),
+		"slot3@postgres": now,
+	}
+
+	removed := pruneLogicalSlotAdvanceRetryAfter(retryAfter, now)
+	if removed != 2 {
+		t.Fatalf("unexpected removed count: got=%d want=2", removed)
+	}
+	if len(retryAfter) != 1 {
+		t.Fatalf("unexpected map size after prune: got=%d want=1", len(retryAfter))
+	}
+	if _, ok := retryAfter["slot2@postgres"]; !ok {
+		t.Fatalf("expected future key to remain")
+	}
+}
+
 func TestShouldEmitLogicalSlotGateNotice(t *testing.T) {
 	tests := []struct {
 		name           string

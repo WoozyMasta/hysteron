@@ -782,3 +782,6 @@ Thanks to all the contributors!
 <!--links-->
 [Keep a Changelog]: https://keepachangelog.com/en/1.1.0/
 [Semantic Versioning]: https://semver.org/spec/v2.0.0.html
+
+* Automatically prune expired standby logical-slot advance retry-backoff entries so retry backlog metrics reflect active waits.
+

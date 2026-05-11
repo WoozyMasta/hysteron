@@ -804,6 +804,52 @@ func TestResetLogicalSlotAdvanceState(t *testing.T) {
 	}
 }
 
+func TestApplyFailsafeRuntimeConfig(t *testing.T) {
+	p := &PostgresKeeper{
+		failsafeEnabled:         false,
+		failsafeProbeInterval:   cluster.DefaultFailsafeProbeInterval,
+		failsafeProbeTimeout:    cluster.DefaultFailsafeProbeTimeout,
+		failsafeMaxMissingPeers: cluster.DefaultFailsafeMaxMissingPeers,
+		failsafeTTL:             cluster.DefaultFailsafeTTL,
+		failsafeState:           failsafeStateDisabled,
+		cfg:                     &config{},
+	}
+	spec := (&cluster.ClusterSpec{
+		EnableFailsafeMode:      cluster.BoolP(true),
+		FailsafeProbeInterval:   &cluster.Duration{Duration: 3 * time.Second},
+		FailsafeProbeTimeout:    &cluster.Duration{Duration: time.Second},
+		FailsafeMaxMissingPeers: cluster.Uint16P(2),
+		FailsafeTTL:             &cluster.Duration{Duration: 20 * time.Second},
+	}).WithDefaults()
+
+	p.applyFailsafeRuntimeConfig(spec)
+
+	if !p.failsafeEnabled {
+		t.Fatalf("expected failsafe enabled")
+	}
+	if p.failsafeProbeInterval != 3*time.Second {
+		t.Fatalf("unexpected probe interval: %v", p.failsafeProbeInterval)
+	}
+	if p.failsafeProbeTimeout != time.Second {
+		t.Fatalf("unexpected probe timeout: %v", p.failsafeProbeTimeout)
+	}
+	if p.failsafeMaxMissingPeers != 2 {
+		t.Fatalf("unexpected max missing peers: %d", p.failsafeMaxMissingPeers)
+	}
+	if p.failsafeTTL != 20*time.Second {
+		t.Fatalf("unexpected failsafe ttl: %v", p.failsafeTTL)
+	}
+	if p.failsafeState != failsafeStateInactive {
+		t.Fatalf("expected inactive state when enabled, got %q", p.failsafeState)
+	}
+
+	spec.EnableFailsafeMode = cluster.BoolP(false)
+	p.applyFailsafeRuntimeConfig(spec)
+	if p.failsafeState != failsafeStateDisabled {
+		t.Fatalf("expected disabled state when gate off, got %q", p.failsafeState)
+	}
+}
+
 func TestShouldEmitLogicalSlotGateNotice(t *testing.T) {
 	tests := []struct {
 		name           string

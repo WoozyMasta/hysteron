@@ -328,6 +328,9 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Add cluster-spec failsafe contract scaffolding and validation guardrails
   (`enableFailsafeMode`, probe interval/timeout, max missing peers, TTL) with
   safe defaults and unit test coverage.
+* Add keeper-side failsafe runtime scaffold and Prometheus metrics for
+  failsafe enabled/state/enter/exit tracking, wired to cluster-spec runtime
+  config application while keeping behavior default-off.
 
 ## v0.17.0
 

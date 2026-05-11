@@ -675,12 +675,34 @@ type PostgresKeeper struct {
 	logicalSlotAdvancePending map[string]queuedLogicalSlotAdvanceOperation
 	// Wake-up channel for async standby logical-slot advance worker.
 	logicalSlotAdvanceNotify chan struct{}
+
+	// Runtime-configured failsafe mode flag from cluster spec.
+	failsafeEnabled bool
+	// Runtime-configured probe interval for failsafe mode.
+	failsafeProbeInterval time.Duration
+	// Runtime-configured probe timeout for failsafe mode.
+	failsafeProbeTimeout time.Duration
+	// Runtime-configured allowed missing peer probes in failsafe mode.
+	failsafeMaxMissingPeers uint16
+	// Runtime-configured maximum failsafe active window.
+	failsafeTTL time.Duration
+	// Current keeper-local failsafe state (scaffold only, no behavior change).
+	failsafeState failsafeState
 }
 
 type standbyReplayController interface {
 	IsWALReplayPaused() (bool, error)
 	ResumeWALReplay() error
 }
+
+type failsafeState string
+
+const (
+	failsafeStateDisabled failsafeState = "disabled"
+	failsafeStateInactive failsafeState = "inactive"
+	failsafeStateActive   failsafeState = "active"
+	failsafeStateExpired  failsafeState = "expired"
+)
 
 // baseLog is the structured logger with stable keeper identity (use for all
 // PostgresKeeper events).
@@ -753,6 +775,12 @@ func NewPostgresKeeper(
 		logicalSlotStandbyAdvanceRetryDelay: 10 * time.Second,
 		logicalSlotAdvancePending:           make(map[string]queuedLogicalSlotAdvanceOperation),
 		logicalSlotAdvanceNotify:            make(chan struct{}, 1),
+		failsafeEnabled:                     cluster.DefaultEnableFailsafeMode,
+		failsafeProbeInterval:               cluster.DefaultFailsafeProbeInterval,
+		failsafeProbeTimeout:                cluster.DefaultFailsafeProbeTimeout,
+		failsafeMaxMissingPeers:             cluster.DefaultFailsafeMaxMissingPeers,
+		failsafeTTL:                         cluster.DefaultFailsafeTTL,
+		failsafeState:                       failsafeStateDisabled,
 	}
 
 	err = p.loadKeeperLocalState()
@@ -1156,6 +1184,80 @@ func (p *PostgresKeeper) currentPGParameterInt(name string) (int, bool) {
 	return n, true
 }
 
+func boolToFloat64(v bool) float64 {
+	if v {
+		return 1
+	}
+	return 0
+}
+
+func (p *PostgresKeeper) setFailsafeState(state failsafeState) {
+	if p.failsafeState == state {
+		return
+	}
+	prev := p.failsafeState
+	p.failsafeState = state
+	failsafeStateGauge.WithLabelValues(string(state)).Set(1)
+	failsafeStateGauge.WithLabelValues(string(prev)).Set(0)
+	if state == failsafeStateActive {
+		failsafeEntersTotal.Inc()
+	}
+	if prev == failsafeStateActive && state != failsafeStateActive {
+		failsafeExitsTotal.Inc()
+	}
+}
+
+func (p *PostgresKeeper) applyFailsafeRuntimeConfig(spec *cluster.ClusterSpec) {
+	newEnabled := *spec.EnableFailsafeMode
+	newProbeInterval := spec.FailsafeProbeInterval.Duration
+	newProbeTimeout := spec.FailsafeProbeTimeout.Duration
+	newMaxMissingPeers := *spec.FailsafeMaxMissingPeers
+	newTTL := spec.FailsafeTTL.Duration
+
+	if p.failsafeEnabled != newEnabled {
+		p.baseLog().Info().
+			Bool("failsafe_enabled_old", p.failsafeEnabled).
+			Bool("failsafe_enabled_new", newEnabled).
+			Msg("updating failsafe mode from cluster spec")
+		p.failsafeEnabled = newEnabled
+	}
+	if p.failsafeProbeInterval != newProbeInterval {
+		p.baseLog().Info().
+			Dur("failsafe_probe_interval_old", p.failsafeProbeInterval).
+			Dur("failsafe_probe_interval_new", newProbeInterval).
+			Msg("updating failsafe probe interval from cluster spec")
+		p.failsafeProbeInterval = newProbeInterval
+	}
+	if p.failsafeProbeTimeout != newProbeTimeout {
+		p.baseLog().Info().
+			Dur("failsafe_probe_timeout_old", p.failsafeProbeTimeout).
+			Dur("failsafe_probe_timeout_new", newProbeTimeout).
+			Msg("updating failsafe probe timeout from cluster spec")
+		p.failsafeProbeTimeout = newProbeTimeout
+	}
+	if p.failsafeMaxMissingPeers != newMaxMissingPeers {
+		p.baseLog().Info().
+			Uint16("failsafe_max_missing_peers_old", p.failsafeMaxMissingPeers).
+			Uint16("failsafe_max_missing_peers_new", newMaxMissingPeers).
+			Msg("updating failsafe max missing peers from cluster spec")
+		p.failsafeMaxMissingPeers = newMaxMissingPeers
+	}
+	if p.failsafeTTL != newTTL {
+		p.baseLog().Info().
+			Dur("failsafe_ttl_old", p.failsafeTTL).
+			Dur("failsafe_ttl_new", newTTL).
+			Msg("updating failsafe ttl from cluster spec")
+		p.failsafeTTL = newTTL
+	}
+
+	if p.failsafeEnabled {
+		p.setFailsafeState(failsafeStateInactive)
+	} else {
+		p.setFailsafeState(failsafeStateDisabled)
+	}
+	failsafeEnabledGauge.Set(boolToFloat64(p.failsafeEnabled))
+}
+
 func (p *PostgresKeeper) applyRuntimeConfigFromClusterData(cd *cluster.ClusterData) {
 	if cd == nil || cd.Cluster == nil {
 		return
@@ -1180,6 +1282,7 @@ func (p *PostgresKeeper) applyRuntimeConfigFromClusterData(cd *cluster.ClusterDa
 			p.pgm.SetRequestTimeout(newRequestTimeout)
 		}
 	}
+	p.applyFailsafeRuntimeConfig(spec)
 }
 
 // Start runs keeper reconciliation loops until the context is canceled.

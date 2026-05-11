@@ -112,6 +112,31 @@ var (
 			Help: "Current number of pending logical slot standby advance operations in async queue",
 		},
 	)
+	failsafeEnabledGauge = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "hysteron_keeper_failsafe_enabled",
+			Help: "Set to 1 when failsafe mode is enabled in cluster spec",
+		},
+	)
+	failsafeStateGauge = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "hysteron_keeper_failsafe_state",
+			Help: "Keeper local failsafe state",
+		},
+		[]string{"state"},
+	)
+	failsafeEntersTotal = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "hysteron_keeper_failsafe_enters_total",
+			Help: "Total keeper transitions into failsafe active state",
+		},
+	)
+	failsafeExitsTotal = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "hysteron_keeper_failsafe_exits_total",
+			Help: "Total keeper transitions out of failsafe active state",
+		},
+	)
 )
 
 // setRole is a helper that controls the targetRole metric by setting only one of the
@@ -144,4 +169,12 @@ func init() {
 	prometheus.MustRegister(logicalSlotStandbyAdvanceSkippedBackoffTotal)
 	prometheus.MustRegister(logicalSlotStandbyAdvanceRetrySlots)
 	prometheus.MustRegister(logicalSlotStandbyAdvancePendingSlots)
+	prometheus.MustRegister(failsafeEnabledGauge)
+	prometheus.MustRegister(failsafeStateGauge)
+	failsafeStateGauge.WithLabelValues("disabled").Set(1)
+	failsafeStateGauge.WithLabelValues("inactive").Set(0)
+	failsafeStateGauge.WithLabelValues("active").Set(0)
+	failsafeStateGauge.WithLabelValues("expired").Set(0)
+	prometheus.MustRegister(failsafeEntersTotal)
+	prometheus.MustRegister(failsafeExitsTotal)
 }

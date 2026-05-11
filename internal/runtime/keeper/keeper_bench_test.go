@@ -154,6 +154,7 @@ func BenchmarkKeeperUpdateReplSlotsNoChanges(b *testing.B) {
 			followersUIDs,
 			additionalReplSlots,
 			nil,
+			nil,
 			0,
 			nil,
 			nil,

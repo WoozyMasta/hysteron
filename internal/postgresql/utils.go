@@ -301,15 +301,26 @@ func getLogicalReplicationSlots(
 	}
 	defer ignoreClose(db)
 
-	rows, err := query(
-		ctx,
-		db,
-		"select slot_name, database, plugin, active, "+
-			"coalesce(pg_wal_lsn_diff(confirmed_flush_lsn, '0/0')::bigint, 0) "+
-			"from pg_replication_slots "+
-			"where temporary is false and slot_type = 'logical' "+
-			"order by slot_name",
-	)
+	versionNum, err := serverVersionNum(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+
+	sqlQuery := "select slot_name, database, plugin, active, " +
+		"coalesce(pg_wal_lsn_diff(confirmed_flush_lsn, '0/0')::bigint, 0) " +
+		"from pg_replication_slots " +
+		"where temporary is false and slot_type = 'logical' " +
+		"order by slot_name"
+	if versionNum >= 170000 {
+		sqlQuery = "select slot_name, database, plugin, active, " +
+			"coalesce(pg_wal_lsn_diff(confirmed_flush_lsn, '0/0')::bigint, 0), " +
+			"failover, synced " +
+			"from pg_replication_slots " +
+			"where temporary is false and slot_type = 'logical' " +
+			"order by slot_name"
+	}
+
+	rows, err := query(ctx, db, sqlQuery)
 	if err != nil {
 		return nil, err
 	}
@@ -319,14 +330,28 @@ func getLogicalReplicationSlots(
 	for rows.Next() {
 		var slot LogicalReplicationSlot
 		var confirmedFlushLSN int64
-		if err := rows.Scan(
-			&slot.Name,
-			&slot.Database,
-			&slot.Plugin,
-			&slot.Active,
-			&confirmedFlushLSN,
-		); err != nil {
-			return nil, err
+		if versionNum >= 170000 {
+			if err := rows.Scan(
+				&slot.Name,
+				&slot.Database,
+				&slot.Plugin,
+				&slot.Active,
+				&confirmedFlushLSN,
+				&slot.Failover,
+				&slot.Synced,
+			); err != nil {
+				return nil, err
+			}
+		} else {
+			if err := rows.Scan(
+				&slot.Name,
+				&slot.Database,
+				&slot.Plugin,
+				&slot.Active,
+				&confirmedFlushLSN,
+			); err != nil {
+				return nil, err
+			}
 		}
 		if confirmedFlushLSN > 0 {
 			slot.ConfirmedFlushLSN = uint64(confirmedFlushLSN)
@@ -338,6 +363,29 @@ func getLogicalReplicationSlots(
 	}
 
 	return slots, nil
+}
+
+func serverVersionNum(ctx context.Context, db *sql.DB) (int, error) {
+	rows, err := query(ctx, db, "select current_setting('server_version_num')::int")
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return 0, err
+		}
+		return 0, errors.New("server_version_num query returned 0 rows")
+	}
+	var versionNum int
+	if err := rows.Scan(&versionNum); err != nil {
+		return 0, err
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	return versionNum, nil
 }
 
 func createLogicalReplicationSlot(

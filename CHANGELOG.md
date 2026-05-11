@@ -313,6 +313,15 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Add integration coverage for logical-slot standby-advance resilience during
   temporary store (etcd) outage and recovery
   (`TestLogicalSlotFailoverGateStandbyAdvanceRecoversAfterStoreOutage`).
+* Add PG17+ native failover logical-slot inconsistency cleanup on standby:
+  keeper now detects managed `hysteron_*` slots in broken state
+  (`failover=true`, `synced=false`) and performs best-effort guarded cleanup
+  with warning-level observability, plus unit coverage for candidate
+  selection.
+* Extend replication-slot ignore policy with structured matcher rules
+  (`name/type/database/plugin`) and apply matcher-aware filtering across
+  keeper physical and logical slot reconcile paths, including standby logical
+  slot advance and PG17 inconsistency cleanup.
 
 ## v0.17.0
 

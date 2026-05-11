@@ -479,10 +479,12 @@ func (s *Sentinel) setDBSpecFromClusterSpec(cd *cluster.ClusterData) {
 		case dbTypePrimaryLine:
 			db.Spec.AdditionalReplicationSlots = clusterSpec.AdditionalMasterReplicationSlots
 			db.Spec.IgnoreReplicationSlots = clusterSpec.IgnoreMasterReplicationSlots
+			db.Spec.IgnoreReplicationSlotMatchers = clusterSpec.IgnoreMasterReplicationSlotMatchers
 			db.Spec.ManagedLogicalReplicationSlots = clusterSpec.ManagedLogicalReplicationSlots
 		case dbTypeReplicaLine:
 			db.Spec.AdditionalReplicationSlots = nil
 			db.Spec.IgnoreReplicationSlots = nil
+			db.Spec.IgnoreReplicationSlotMatchers = nil
 			if clusterSpec.EnableLogicalSlotFailover {
 				db.Spec.ManagedLogicalReplicationSlots = clusterSpec.ManagedLogicalReplicationSlots
 			} else {

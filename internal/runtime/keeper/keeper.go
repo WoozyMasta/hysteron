@@ -1413,6 +1413,7 @@ func (p *PostgresKeeper) updateReplSlots(
 	curReplSlots []string,
 	uid string,
 	followersUIDs, additionalReplSlots, ignoredReplSlots []string,
+	ignoredSlotMatchers []cluster.ReplicationSlotMatcher,
 	memberSlotTTL time.Duration,
 	orphanMemberSlots map[string]time.Time,
 	physicalSlotState map[string]pg.PhysicalReplicationSlot,
@@ -1423,6 +1424,7 @@ func (p *PostgresKeeper) updateReplSlots(
 		followersUIDs,
 		additionalReplSlots,
 		ignoredReplSlots,
+		ignoredSlotMatchers,
 	)
 
 	// Drop internal replication slots
@@ -1431,6 +1433,9 @@ func (p *PostgresKeeper) updateReplSlots(
 			continue
 		}
 		if _, ignored := ignoredSlots[slot]; ignored {
+			continue
+		}
+		if isIgnoredPhysicalSlotByMatcher(slot, ignoredSlotMatchers) {
 			continue
 		}
 		if _, ok := internalReplSlots[slot]; !ok {
@@ -1489,6 +1494,7 @@ func (p *PostgresKeeper) updateReplSlots(
 func managedReplicationSlots(
 	uid string,
 	followersUIDs, additionalReplSlots, ignoredReplSlots []string,
+	ignoredSlotMatchers []cluster.ReplicationSlotMatcher,
 ) (map[string]struct{}, map[string]struct{}) {
 	internalReplSlots := map[string]struct{}{}
 	ignoredSlots := map[string]struct{}{}
@@ -1506,6 +1512,9 @@ func managedReplicationSlots(
 		if _, ignored := ignoredSlots[slot]; ignored {
 			continue
 		}
+		if isIgnoredPhysicalSlotByMatcher(slot, ignoredSlotMatchers) {
+			continue
+		}
 		internalReplSlots[slot] = struct{}{}
 	}
 
@@ -1515,10 +1524,54 @@ func managedReplicationSlots(
 		if _, ignored := ignoredSlots[hysteronSlot]; ignored {
 			continue
 		}
+		if isIgnoredPhysicalSlotByMatcher(hysteronSlot, ignoredSlotMatchers) {
+			continue
+		}
 		internalReplSlots[hysteronSlot] = struct{}{}
 	}
 
 	return internalReplSlots, ignoredSlots
+}
+
+func isIgnoredPhysicalSlotByMatcher(
+	slotName string,
+	matchers []cluster.ReplicationSlotMatcher,
+) bool {
+	for _, matcher := range matchers {
+		if matcher.Type != "" && matcher.Type != cluster.ReplicationSlotTypePhysical {
+			continue
+		}
+		if matcher.Name != "" && matcher.Name != slotName {
+			continue
+		}
+		if matcher.Database != "" || matcher.Plugin != "" {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+func isIgnoredLogicalSlotByMatcher(
+	slot pg.LogicalReplicationSlot,
+	matchers []cluster.ReplicationSlotMatcher,
+) bool {
+	for _, matcher := range matchers {
+		if matcher.Type != "" && matcher.Type != cluster.ReplicationSlotTypeLogical {
+			continue
+		}
+		if matcher.Name != "" && matcher.Name != slot.Name {
+			continue
+		}
+		if matcher.Database != "" && matcher.Database != slot.Database {
+			continue
+		}
+		if matcher.Plugin != "" && matcher.Plugin != slot.Plugin {
+			continue
+		}
+		return true
+	}
+	return false
 }
 
 func shouldDropUnmanagedHysteronSlot(
@@ -1567,6 +1620,7 @@ func shouldDropUnmanagedHysteronSlot(
 func staleSlotsWithXmin(
 	slots []pg.PhysicalReplicationSlot,
 	managedSlots, ignoredSlots map[string]struct{},
+	ignoredSlotMatchers []cluster.ReplicationSlotMatcher,
 ) []string {
 	stale := []string{}
 	for _, slot := range slots {
@@ -1577,6 +1631,9 @@ func staleSlotsWithXmin(
 			continue
 		}
 		if _, ignored := ignoredSlots[slot.Name]; ignored {
+			continue
+		}
+		if isIgnoredPhysicalSlotByMatcher(slot.Name, ignoredSlotMatchers) {
 			continue
 		}
 		if _, managed := managedSlots[slot.Name]; managed {
@@ -1598,6 +1655,41 @@ type managedLogicalSlotsDecision struct {
 type managedLogicalSlotReadiness struct {
 	missing  []string
 	mismatch []string
+}
+
+func evaluateBrokenNativeFailoverLogicalSlots(
+	desired []cluster.ManagedLogicalReplicationSlot,
+	current []pg.LogicalReplicationSlot,
+	ignoredSlotMatchers []cluster.ReplicationSlotMatcher,
+) []string {
+	if len(desired) == 0 || len(current) == 0 {
+		return nil
+	}
+	desiredByName := make(map[string]cluster.ManagedLogicalReplicationSlot, len(desired))
+	for _, d := range desired {
+		desiredByName[d.Name] = d
+	}
+	broken := make([]string, 0)
+	for _, slot := range current {
+		want, ok := desiredByName[slot.Name]
+		if !ok {
+			continue
+		}
+		if !common.IsHysteronName(slot.Name) {
+			continue
+		}
+		if isIgnoredLogicalSlotByMatcher(slot, ignoredSlotMatchers) {
+			continue
+		}
+		if slot.Database != want.Database || slot.Plugin != want.Plugin {
+			continue
+		}
+		if slot.Failover && !slot.Synced {
+			broken = append(broken, slot.Name)
+		}
+	}
+	slices.Sort(broken)
+	return broken
 }
 
 type logicalSlotAdvanceOperation struct {
@@ -1943,6 +2035,7 @@ func evaluateManagedLogicalSlotAdvanceOperations(
 	current []pg.LogicalReplicationSlot,
 	masterLSN map[string]uint64,
 	replayLSN uint64,
+	ignoredSlotMatchers []cluster.ReplicationSlotMatcher,
 ) []logicalSlotAdvanceOperation {
 	if len(desired) == 0 || len(current) == 0 || len(masterLSN) == 0 || replayLSN == 0 {
 		return nil
@@ -1953,12 +2046,23 @@ func evaluateManagedLogicalSlotAdvanceOperations(
 	}
 	ops := make([]logicalSlotAdvanceOperation, 0, len(desired))
 	for _, desiredSlot := range desired {
+		desiredCurrent := pg.LogicalReplicationSlot{
+			Name:     desiredSlot.Name,
+			Database: desiredSlot.Database,
+			Plugin:   desiredSlot.Plugin,
+		}
+		if isIgnoredLogicalSlotByMatcher(desiredCurrent, ignoredSlotMatchers) {
+			continue
+		}
 		desiredLSN, ok := masterLSN[desiredSlot.Name]
 		if !ok {
 			continue
 		}
 		currentSlot, ok := currentByName[desiredSlot.Name]
 		if !ok {
+			continue
+		}
+		if isIgnoredLogicalSlotByMatcher(currentSlot, ignoredSlotMatchers) {
 			continue
 		}
 		if currentSlot.Database != desiredSlot.Database || currentSlot.Plugin != desiredSlot.Plugin {
@@ -1994,6 +2098,7 @@ func enforceHotStandbyFeedbackForLogicalSlotFailover(
 func evaluateManagedLogicalSlotsDecision(
 	desired []cluster.ManagedLogicalReplicationSlot,
 	current []pg.LogicalReplicationSlot,
+	ignoredSlotMatchers []cluster.ReplicationSlotMatcher,
 ) managedLogicalSlotsDecision {
 	decision := managedLogicalSlotsDecision{
 		create:   make([]cluster.ManagedLogicalReplicationSlot, 0),
@@ -2013,6 +2118,14 @@ func evaluateManagedLogicalSlotsDecision(
 	}
 
 	for _, desiredSlot := range desired {
+		desiredCurrent := pg.LogicalReplicationSlot{
+			Name:     desiredSlot.Name,
+			Database: desiredSlot.Database,
+			Plugin:   desiredSlot.Plugin,
+		}
+		if isIgnoredLogicalSlotByMatcher(desiredCurrent, ignoredSlotMatchers) {
+			continue
+		}
 		currentSlot, ok := currentByName[desiredSlot.Name]
 		if !ok {
 			decision.create = append(decision.create, desiredSlot)
@@ -2031,6 +2144,9 @@ func evaluateManagedLogicalSlotsDecision(
 		if !common.IsHysteronName(currentSlot.Name) {
 			continue
 		}
+		if isIgnoredLogicalSlotByMatcher(currentSlot, ignoredSlotMatchers) {
+			continue
+		}
 		if currentSlot.Active {
 			decision.active = append(decision.active, currentSlot.Name)
 			continue
@@ -2047,6 +2163,7 @@ func evaluateManagedLogicalSlotsDecision(
 func evaluateManagedLogicalSlotReadiness(
 	desired []cluster.ManagedLogicalReplicationSlot,
 	current []pg.LogicalReplicationSlot,
+	ignoredSlotMatchers []cluster.ReplicationSlotMatcher,
 ) managedLogicalSlotReadiness {
 	readiness := managedLogicalSlotReadiness{
 		missing:  make([]string, 0),
@@ -2059,9 +2176,20 @@ func evaluateManagedLogicalSlotReadiness(
 	}
 
 	for _, desiredSlot := range desired {
+		desiredCurrent := pg.LogicalReplicationSlot{
+			Name:     desiredSlot.Name,
+			Database: desiredSlot.Database,
+			Plugin:   desiredSlot.Plugin,
+		}
+		if isIgnoredLogicalSlotByMatcher(desiredCurrent, ignoredSlotMatchers) {
+			continue
+		}
 		currentSlot, ok := currentByName[desiredSlot.Name]
 		if !ok {
 			readiness.missing = append(readiness.missing, desiredSlot.Name)
+			continue
+		}
+		if isIgnoredLogicalSlotByMatcher(currentSlot, ignoredSlotMatchers) {
 			continue
 		}
 		if currentSlot.Database != desiredSlot.Database || currentSlot.Plugin != desiredSlot.Plugin {
@@ -2085,6 +2213,7 @@ func (p *PostgresKeeper) refreshReplicationSlots(
 		followersUIDs,
 		db.Spec.AdditionalReplicationSlots,
 		db.Spec.IgnoreReplicationSlots,
+		db.Spec.IgnoreReplicationSlotMatchers,
 	)
 	physicalSlots, err := p.pgm.GetPhysicalReplicationSlots()
 	if err != nil {
@@ -2117,6 +2246,7 @@ func (p *PostgresKeeper) refreshReplicationSlots(
 		followersUIDs,
 		db.Spec.AdditionalReplicationSlots,
 		db.Spec.IgnoreReplicationSlots,
+		db.Spec.IgnoreReplicationSlotMatchers,
 		memberSlotTTL,
 		db.Status.OrphanMemberSlots,
 		physicalSlotState,
@@ -2129,7 +2259,12 @@ func (p *PostgresKeeper) refreshReplicationSlots(
 		return err
 	}
 
-	if stale := staleSlotsWithXmin(physicalSlots, managedSlots, ignoredSlots); len(stale) > 0 {
+	if stale := staleSlotsWithXmin(
+		physicalSlots,
+		managedSlots,
+		ignoredSlots,
+		db.Spec.IgnoreReplicationSlotMatchers,
+	); len(stale) > 0 {
 		p.baseLog().
 			Warn().
 			Strs("stale_slots", stale).
@@ -2191,6 +2326,7 @@ func (p *PostgresKeeper) refreshReplicationSlots(
 					currentLogicalSlots,
 					masterLSN,
 					db.Status.XLogPos,
+					db.Spec.IgnoreReplicationSlotMatchers,
 				)
 				if len(ops) > 0 {
 					p.baseLog().
@@ -2217,10 +2353,34 @@ func (p *PostgresKeeper) refreshReplicationSlots(
 					Msg("logical slot failover gate enabled but standby logical-slot advance is unavailable on PostgreSQL < 16")
 				p.logicalSlotStandbyAdvanceUnavailableNoticeEmitted = true
 			}
+			if versionErr == nil && shouldUseNativeLogicalSlotFailover(
+				db.Spec.EnableLogicalSlotFailover,
+				pgMajor,
+			) {
+				broken := evaluateBrokenNativeFailoverLogicalSlots(
+					db.Spec.ManagedLogicalReplicationSlots,
+					currentLogicalSlots,
+					db.Spec.IgnoreReplicationSlotMatchers,
+				)
+				for _, slot := range broken {
+					p.baseLog().
+						Warn().
+						Str("slot", slot).
+						Msg("detected inconsistent native failover logical slot on standby (failover=true, synced=false); attempting cleanup")
+					if dropErr := p.pgm.DropLogicalReplicationSlot(slot); dropErr != nil {
+						p.baseLog().
+							Warn().
+							Err(dropErr).
+							Str("slot", slot).
+							Msg("failed to drop inconsistent native failover logical slot on standby")
+					}
+				}
+			}
 
 			readiness := evaluateManagedLogicalSlotReadiness(
 				db.Spec.ManagedLogicalReplicationSlots,
 				currentLogicalSlots,
+				db.Spec.IgnoreReplicationSlotMatchers,
 			)
 			currentSignature := managedLogicalSlotReadinessSignature(readiness)
 			if currentSignature != p.logicalSlotReadinessLast {
@@ -2251,6 +2411,7 @@ func (p *PostgresKeeper) refreshReplicationSlots(
 	logicalDecision := evaluateManagedLogicalSlotsDecision(
 		db.Spec.ManagedLogicalReplicationSlots,
 		currentLogicalSlots,
+		db.Spec.IgnoreReplicationSlotMatchers,
 	)
 	createFailoverSlot := false
 	if db.Spec.EnableLogicalSlotFailover {

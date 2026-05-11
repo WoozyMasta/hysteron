@@ -117,6 +117,7 @@ func TestManagedReplicationSlotsRespectsIgnoreList(t *testing.T) {
 		[]string{"db1", "db2", "db3"},
 		[]string{"extra"},
 		[]string{ignoredFollowerSlot, ignoredAdditionalSlot},
+		nil,
 	)
 
 	if _, ok := ignoredSlots[ignoredFollowerSlot]; !ok {
@@ -152,14 +153,14 @@ func TestStaleSlotsWithXmin(t *testing.T) {
 		"hysteron_extra": {},
 	}
 
-	got := staleSlotsWithXmin(slots, managed, ignored)
+	got := staleSlotsWithXmin(slots, managed, ignored, nil)
 	want := []string{}
 
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("unexpected stale slots, got: %v, want: %v", got, want)
 	}
 
-	got = staleSlotsWithXmin(slots, map[string]struct{}{}, ignored)
+	got = staleSlotsWithXmin(slots, map[string]struct{}{}, ignored, nil)
 	want = []string{"hysteron_db2"}
 
 	if !reflect.DeepEqual(got, want) {
@@ -286,6 +287,7 @@ func TestEvaluateManagedLogicalSlotsDecision(t *testing.T) {
 				{Name: "hysteron_slot1", Database: "postgres", Plugin: "pgoutput"},
 			},
 			nil,
+			nil,
 		)
 		if len(decision.create) != 1 || decision.create[0].Name != "hysteron_slot1" {
 			t.Fatalf("unexpected create decision: %+v", decision.create)
@@ -300,6 +302,7 @@ func TestEvaluateManagedLogicalSlotsDecision(t *testing.T) {
 			[]pg.LogicalReplicationSlot{
 				{Name: "hysteron_slot1", Database: "postgres", Plugin: "wal2json"},
 			},
+			nil,
 		)
 		if !reflect.DeepEqual(decision.mismatch, []string{"hysteron_slot1"}) {
 			t.Fatalf("unexpected mismatch decision: %+v", decision.mismatch)
@@ -317,6 +320,7 @@ func TestEvaluateManagedLogicalSlotsDecision(t *testing.T) {
 				{Name: "hysteron_active", Database: "postgres", Plugin: "pgoutput", Active: true},
 				{Name: "external_slot", Database: "postgres", Plugin: "pgoutput", Active: false},
 			},
+			nil,
 		)
 
 		if !reflect.DeepEqual(decision.drop, []string{"hysteron_old"}) {
@@ -371,6 +375,7 @@ func TestEvaluateManagedLogicalSlotReadiness(t *testing.T) {
 			[]pg.LogicalReplicationSlot{
 				{Name: "hysteron_slot1", Database: "postgres", Plugin: "wal2json"},
 			},
+			nil,
 		)
 		if !reflect.DeepEqual(readiness.missing, []string{"hysteron_slot2"}) {
 			t.Fatalf("unexpected missing readiness: %+v", readiness.missing)
@@ -399,6 +404,42 @@ func TestManagedLogicalSlotReadinessSignature(t *testing.T) {
 			t.Fatalf("expected empty signature, got %q", sig)
 		}
 	})
+}
+
+func TestEvaluateBrokenNativeFailoverLogicalSlots(t *testing.T) {
+	desired := []cluster.ManagedLogicalReplicationSlot{
+		{Name: "hysteron_slot1", Database: "postgres", Plugin: "pgoutput"},
+		{Name: "hysteron_slot2", Database: "postgres", Plugin: "pgoutput"},
+	}
+	current := []pg.LogicalReplicationSlot{
+		{
+			Name:     "hysteron_slot1",
+			Database: "postgres",
+			Plugin:   "pgoutput",
+			Failover: true,
+			Synced:   false,
+		},
+		{
+			Name:     "hysteron_slot2",
+			Database: "postgres",
+			Plugin:   "pgoutput",
+			Failover: true,
+			Synced:   true,
+		},
+		{
+			Name:     "external_slot",
+			Database: "postgres",
+			Plugin:   "pgoutput",
+			Failover: true,
+			Synced:   false,
+		},
+	}
+
+	got := evaluateBrokenNativeFailoverLogicalSlots(desired, current, nil)
+	want := []string{"hysteron_slot1"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("unexpected broken slot decision: got=%v want=%v", got, want)
+	}
 }
 
 func TestShouldUseNativeLogicalSlotFailover(t *testing.T) {
@@ -555,7 +596,7 @@ func TestEvaluateManagedLogicalSlotAdvanceOperations(t *testing.T) {
 	}
 
 	t.Run("computes safe target and filters mismatch", func(t *testing.T) {
-		ops := evaluateManagedLogicalSlotAdvanceOperations(desired, current, masterLSN, 150)
+		ops := evaluateManagedLogicalSlotAdvanceOperations(desired, current, masterLSN, 150, nil)
 		want := []logicalSlotAdvanceOperation{
 			{Name: "slot1", Database: "postgres", TargetLSN: 150},
 		}
@@ -565,11 +606,51 @@ func TestEvaluateManagedLogicalSlotAdvanceOperations(t *testing.T) {
 	})
 
 	t.Run("no ops when replay lsn is zero", func(t *testing.T) {
-		ops := evaluateManagedLogicalSlotAdvanceOperations(desired, current, masterLSN, 0)
+		ops := evaluateManagedLogicalSlotAdvanceOperations(desired, current, masterLSN, 0, nil)
 		if len(ops) != 0 {
 			t.Fatalf("expected no ops, got=%v", ops)
 		}
 	})
+
+	t.Run("ignores slots matched by structured ignore matcher", func(t *testing.T) {
+		ops := evaluateManagedLogicalSlotAdvanceOperations(
+			desired,
+			current,
+			masterLSN,
+			150,
+			[]cluster.ReplicationSlotMatcher{
+				{
+					Type:     cluster.ReplicationSlotTypeLogical,
+					Name:     "slot1",
+					Database: "postgres",
+					Plugin:   "pgoutput",
+				},
+			},
+		)
+		if len(ops) != 0 {
+			t.Fatalf("expected no ops for ignored slot, got=%v", ops)
+		}
+	})
+}
+
+func TestEvaluateManagedLogicalSlotsDecisionRespectsIgnoreMatcher(t *testing.T) {
+	decision := evaluateManagedLogicalSlotsDecision(
+		[]cluster.ManagedLogicalReplicationSlot{
+			{Name: "hysteron_slot1", Database: "postgres", Plugin: "pgoutput"},
+		},
+		nil,
+		[]cluster.ReplicationSlotMatcher{
+			{
+				Type:     cluster.ReplicationSlotTypeLogical,
+				Name:     "hysteron_slot1",
+				Database: "postgres",
+				Plugin:   "pgoutput",
+			},
+		},
+	)
+	if len(decision.create) != 0 {
+		t.Fatalf("expected ignored desired slot not to be created, got=%v", decision.create)
+	}
 }
 
 func TestLogicalSlotAdvanceRetryBackoffHelpers(t *testing.T) {

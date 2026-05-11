@@ -131,6 +131,8 @@ type LogicalReplicationSlot struct {
 	Plugin            string
 	Active            bool
 	ConfirmedFlushLSN uint64
+	Failover          bool
+	Synced            bool
 }
 
 // RecoveryMode defines PostgreSQL startup recovery mode.

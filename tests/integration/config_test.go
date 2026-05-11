@@ -900,6 +900,32 @@ func TestAdditionalReplicationSlots(t *testing.T) {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
+	// Structured matcher ignore policy should behave like Patroni-style subset
+	// matchers (name/type/database/plugin), including physical-slot name+type.
+	if _, err := master.Exec("select pg_create_physical_replication_slot('hysteron_manualkeep2')"); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	err = HysteronCluster(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		"update",
+		"--patch",
+		`{
+			"ignoreMasterReplicationSlots" : [ "hysteron_manualkeep" ],
+			"ignoreMasterReplicationSlotMatchers" : [
+				{ "name": "hysteron_manualkeep2", "type": "physical" }
+			]
+		}`,
+	)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := waitHysteronReplicationSlots(master, []string{standbyDBUID, "replslot01", "replslot02", "manualkeep", "manualkeep2"}, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
 	// Once ignore policy is removed, unmanaged hysteron_* slot must be dropped again.
 	err = HysteronCluster(
 		t,
@@ -908,7 +934,10 @@ func TestAdditionalReplicationSlots(t *testing.T) {
 		storeEndpoints,
 		"update",
 		"--patch",
-		`{ "ignoreMasterReplicationSlots" : null }`,
+		`{
+			"ignoreMasterReplicationSlots" : null,
+			"ignoreMasterReplicationSlotMatchers" : null
+		}`,
 	)
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)

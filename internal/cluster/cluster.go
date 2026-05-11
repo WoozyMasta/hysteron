@@ -279,6 +279,28 @@ type ManagedLogicalReplicationSlot struct {
 	Plugin string `json:"plugin,omitempty"`
 }
 
+// ReplicationSlotType identifies replication slot type for ignore matchers.
+type ReplicationSlotType string
+
+const (
+	// ReplicationSlotTypePhysical matches physical replication slots.
+	ReplicationSlotTypePhysical ReplicationSlotType = "physical"
+	// ReplicationSlotTypeLogical matches logical replication slots.
+	ReplicationSlotTypeLogical ReplicationSlotType = "logical"
+)
+
+// ReplicationSlotMatcher defines subset matching for slot ignore policies.
+type ReplicationSlotMatcher struct {
+	// Name is an optional slot name selector.
+	Name string `json:"name,omitempty"`
+	// Type optionally constrains slot type (`physical` or `logical`).
+	Type ReplicationSlotType `json:"type,omitempty"`
+	// Database optionally constrains logical slot database.
+	Database string `json:"database,omitempty"`
+	// Plugin optionally constrains logical slot plugin.
+	Plugin string `json:"plugin,omitempty"`
+}
+
 // SUReplAccessMode identifies default superuser replication access scope.
 type SUReplAccessMode string
 
@@ -387,6 +409,9 @@ type ClusterSpec struct { //nolint:revive
 	// IgnoreMasterReplicationSlots defines replication slots that hysteron
 	// should not create, alter, or drop on the current master instance.
 	IgnoreMasterReplicationSlots []string `json:"ignoreMasterReplicationSlots"`
+	// IgnoreMasterReplicationSlotMatchers defines structured matcher rules for
+	// replication slots that hysteron should ignore on the current master.
+	IgnoreMasterReplicationSlotMatchers []ReplicationSlotMatcher `json:"ignoreMasterReplicationSlotMatchers,omitempty"`
 	// ManagedLogicalReplicationSlots defines desired logical slots managed by
 	// hysteron on the current primary instance.
 	ManagedLogicalReplicationSlots []ManagedLogicalReplicationSlot `json:"managedLogicalReplicationSlots,omitempty"`
@@ -581,6 +606,11 @@ func (c *ClusterSpec) Validate() error {
 			return err
 		}
 	}
+	for _, matcher := range s.IgnoreMasterReplicationSlotMatchers {
+		if err := validateReplicationSlotMatcher(matcher); err != nil {
+			return err
+		}
+	}
 	if s.MemberReplicationSlotTTL != nil && s.MemberReplicationSlotTTL.Duration < 0 {
 		return errors.New("memberReplicationSlotTTL must be positive")
 	}
@@ -710,6 +740,36 @@ func validateReplicationSlot(replicationSlot string) error {
 func validateReplicationSlotName(replicationSlot string) error {
 	if !util.IsValidReplSlotName(replicationSlot) {
 		return fmt.Errorf("wrong replication slot name: %q", replicationSlot)
+	}
+	return nil
+}
+
+func validateReplicationSlotMatcher(matcher ReplicationSlotMatcher) error {
+	if matcher.Name != "" {
+		if err := validateReplicationSlotName(matcher.Name); err != nil {
+			return err
+		}
+	}
+	switch matcher.Type {
+	case "":
+	case ReplicationSlotTypePhysical, ReplicationSlotTypeLogical:
+	default:
+		return fmt.Errorf("wrong replication slot matcher type: %q", matcher.Type)
+	}
+	if matcher.Type == ReplicationSlotTypePhysical {
+		if strings.TrimSpace(matcher.Database) != "" || strings.TrimSpace(matcher.Plugin) != "" {
+			return errors.New("physical replication slot matcher cannot define database or plugin")
+		}
+	}
+	if strings.TrimSpace(matcher.Database) != "" || strings.TrimSpace(matcher.Plugin) != "" {
+		if matcher.Type != "" && matcher.Type != ReplicationSlotTypeLogical {
+			return errors.New("replication slot matcher with database or plugin must have logical type")
+		}
+	}
+	if matcher.Name == "" && matcher.Type == "" &&
+		strings.TrimSpace(matcher.Database) == "" &&
+		strings.TrimSpace(matcher.Plugin) == "" {
+		return errors.New("empty replication slot matcher is not allowed")
 	}
 	return nil
 }
@@ -862,6 +922,9 @@ type DBSpec struct {
 	// IgnoreReplicationSlots defines replication slots that hysteron should not
 	// create, alter, or drop on the instance.
 	IgnoreReplicationSlots []string `json:"ignoreReplicationSlots"`
+	// IgnoreReplicationSlotMatchers defines structured matcher rules for
+	// replication slots that hysteron should not create, alter, or drop.
+	IgnoreReplicationSlotMatchers []ReplicationSlotMatcher `json:"ignoreReplicationSlotMatchers,omitempty"`
 	// ManagedLogicalReplicationSlots defines logical slots managed by hysteron
 	// on this database instance.
 	ManagedLogicalReplicationSlots []ManagedLogicalReplicationSlot `json:"managedLogicalReplicationSlots,omitempty"`

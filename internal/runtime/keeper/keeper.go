@@ -1852,6 +1852,10 @@ func (p *PostgresKeeper) standbyLogicalSlotAdvanceWorker(ctx context.Context) {
 				logicalSlotStandbyAdvanceRetrySlots.Set(float64(len(p.logicalSlotStandbyAdvanceRetryAfter)))
 				p.logicalSlotAdvanceMutex.Unlock()
 				logicalSlotStandbyAdvanceFailuresTotal.Inc()
+				activeConflict := isReplicationSlotActiveError(err)
+				if activeConflict {
+					logicalSlotStandbyAdvanceActiveConflictsTotal.Inc()
+				}
 				logEvt := p.baseLog().
 					Warn().
 					Err(err).
@@ -1859,7 +1863,7 @@ func (p *PostgresKeeper) standbyLogicalSlotAdvanceWorker(ctx context.Context) {
 					Uint64("desired_lsn", selected.DesiredLSN).
 					Uint64("replay_lsn", selected.ReplayLSN).
 					Uint64("target_lsn", selected.TargetLSN)
-				if isReplicationSlotActiveError(err) {
+				if activeConflict {
 					logEvt = p.baseLog().
 						Debug().
 						Err(err).

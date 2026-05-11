@@ -88,6 +88,12 @@ var (
 			Help: "Total failed logical slot standby advance operations",
 		},
 	)
+	logicalSlotStandbyAdvanceActiveConflictsTotal = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "hysteron_keeper_logical_slot_standby_advance_active_conflicts_total",
+			Help: "Total standby logical-slot advance attempts blocked because slot is active (SQLSTATE 55006)",
+		},
+	)
 	logicalSlotStandbyAdvanceSkippedBackoffTotal = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Name: "hysteron_keeper_logical_slot_standby_advance_skipped_backoff_total",
@@ -128,6 +134,7 @@ func init() {
 	prometheus.MustRegister(logicalSlotStandbyAdvanceAttemptsTotal)
 	prometheus.MustRegister(logicalSlotStandbyAdvanceSuccessTotal)
 	prometheus.MustRegister(logicalSlotStandbyAdvanceFailuresTotal)
+	prometheus.MustRegister(logicalSlotStandbyAdvanceActiveConflictsTotal)
 	prometheus.MustRegister(logicalSlotStandbyAdvanceSkippedBackoffTotal)
 	prometheus.MustRegister(logicalSlotStandbyAdvanceRetrySlots)
 }

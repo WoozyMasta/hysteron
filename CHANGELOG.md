@@ -303,6 +303,10 @@ The format is based on [Keep a Changelog][], and this project adheres to
   non-blocking while preserving bounded retry/backoff behavior.
 * Fix keeper physical-slot reconcile input to use only physical slots, avoiding
   accidental logical-slot churn when managed logical slots are enabled.
+* Reduce expected standby logical-slot advance log noise by downgrading
+  `SQLSTATE 55006` (slot active) events to debug level, and add dedicated
+  metric `hysteron_keeper_logical_slot_standby_advance_active_conflicts_total`
+  to track these conflicts explicitly.
 
 ## v0.17.0
 

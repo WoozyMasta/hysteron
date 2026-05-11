@@ -294,6 +294,59 @@ func TestClusterSpecValidate(t *testing.T) {
 			wantErr: "memberReplicationSlotTTL must be positive",
 		},
 		{
+			name: "negative failsafe probe interval is rejected",
+			spec: &ClusterSpec{
+				InitMode:              &newMode,
+				FailsafeProbeInterval: negativeDuration,
+			},
+			wantErr: "failsafeProbeInterval must be positive",
+		},
+		{
+			name: "negative failsafe probe timeout is rejected",
+			spec: &ClusterSpec{
+				InitMode:             &newMode,
+				FailsafeProbeTimeout: negativeDuration,
+			},
+			wantErr: "failsafeProbeTimeout must be positive",
+		},
+		{
+			name: "negative failsafe ttl is rejected",
+			spec: &ClusterSpec{
+				InitMode:    &newMode,
+				FailsafeTTL: negativeDuration,
+			},
+			wantErr: "failsafeTTL must be positive",
+		},
+		{
+			name: "failsafe probe timeout cannot exceed interval",
+			spec: &ClusterSpec{
+				InitMode:              &newMode,
+				FailsafeProbeInterval: &Duration{Duration: time.Second},
+				FailsafeProbeTimeout:  &Duration{Duration: 2 * time.Second},
+			},
+			wantErr: "failsafeProbeTimeout should be less than or equal to failsafeProbeInterval",
+		},
+		{
+			name: "failsafe ttl cannot be lower than probe interval",
+			spec: &ClusterSpec{
+				InitMode:              &newMode,
+				FailsafeProbeInterval: &Duration{Duration: 2 * time.Second},
+				FailsafeTTL:           &Duration{Duration: time.Second},
+			},
+			wantErr: "failsafeTTL should be greater than or equal to failsafeProbeInterval",
+		},
+		{
+			name: "valid failsafe settings are accepted",
+			spec: &ClusterSpec{
+				InitMode:                &newMode,
+				EnableFailsafeMode:      BoolP(true),
+				FailsafeProbeInterval:   &Duration{Duration: 2 * time.Second},
+				FailsafeProbeTimeout:    &Duration{Duration: time.Second},
+				FailsafeTTL:             &Duration{Duration: 10 * time.Second},
+				FailsafeMaxMissingPeers: Uint16P(1),
+			},
+		},
+		{
 			name: "managed logical slot validates required fields",
 			spec: &ClusterSpec{
 				InitMode: &newMode,

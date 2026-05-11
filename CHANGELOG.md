@@ -325,6 +325,9 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Add validation and integration coverage for structured slot ignore matchers,
   including logical managed-slot behavior where matcher-gated slots are
   skipped until matcher removal.
+* Add cluster-spec failsafe contract scaffolding and validation guardrails
+  (`enableFailsafeMode`, probe interval/timeout, max missing peers, TTL) with
+  safe defaults and unit test coverage.
 
 ## v0.17.0
 
@@ -815,4 +818,3 @@ Thanks to all the contributors!
 [Semantic Versioning]: https://semver.org/spec/v2.0.0.html
 
 * Add per-cycle debug summary for standby advance operations skipped by retry backoff.
-

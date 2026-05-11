@@ -100,6 +100,16 @@ const (
 	DefaultSUReplAccess SUReplAccessMode = SUReplAccessAll
 	// DefaultAutomaticPgRestart is the default automatic PostgreSQL restart setting.
 	DefaultAutomaticPgRestart = false
+	// DefaultEnableFailsafeMode controls whether failsafe mode is enabled.
+	DefaultEnableFailsafeMode = false
+	// DefaultFailsafeProbeInterval is the default interval between failsafe probes.
+	DefaultFailsafeProbeInterval = 2 * time.Second
+	// DefaultFailsafeProbeTimeout is the default timeout of one failsafe probe.
+	DefaultFailsafeProbeTimeout = 1 * time.Second
+	// DefaultFailsafeMaxMissingPeers is the default allowed missing peer probes.
+	DefaultFailsafeMaxMissingPeers uint16 = 0
+	// DefaultFailsafeTTL is the default maximum time in failsafe mode without DCS.
+	DefaultFailsafeTTL = 15 * time.Second
 )
 
 const (
@@ -333,6 +343,20 @@ type ClusterSpec struct { //nolint:revive
 	DBWaitReadyTimeout *Duration `json:"dbWaitReadyTimeout,omitempty"`
 	// Interval after the first fail to declare a keeper or a db as not healthy.
 	FailInterval *Duration `json:"failInterval,omitempty"`
+	// EnableFailsafeMode allows a gated failsafe behavior during temporary DCS
+	// outages. Disabled by default.
+	EnableFailsafeMode *bool `json:"enableFailsafeMode,omitempty"`
+	// FailsafeProbeInterval defines how often failsafe peer probes are executed
+	// while DCS is degraded.
+	FailsafeProbeInterval *Duration `json:"failsafeProbeInterval,omitempty"`
+	// FailsafeProbeTimeout defines the timeout for one failsafe peer probe.
+	FailsafeProbeTimeout *Duration `json:"failsafeProbeTimeout,omitempty"`
+	// FailsafeMaxMissingPeers defines how many peer probes may be missing while
+	// keeping failsafe active.
+	FailsafeMaxMissingPeers *uint16 `json:"failsafeMaxMissingPeers,omitempty"`
+	// FailsafeTTL defines the maximum time window for failsafe mode while DCS is
+	// unavailable.
+	FailsafeTTL *Duration `json:"failsafeTTL,omitempty"`
 	// Interval after which a dead keeper will be removed from the cluster data
 	DeadKeeperRemovalInterval *Duration `json:"deadKeeperRemovalInterval,omitempty"`
 	// Interval to wait before next proxy check
@@ -488,6 +512,21 @@ func (c *ClusterSpec) WithDefaults() *ClusterSpec {
 	if s.FailInterval == nil {
 		s.FailInterval = &Duration{Duration: DefaultFailInterval}
 	}
+	if s.EnableFailsafeMode == nil {
+		s.EnableFailsafeMode = BoolP(DefaultEnableFailsafeMode)
+	}
+	if s.FailsafeProbeInterval == nil {
+		s.FailsafeProbeInterval = &Duration{Duration: DefaultFailsafeProbeInterval}
+	}
+	if s.FailsafeProbeTimeout == nil {
+		s.FailsafeProbeTimeout = &Duration{Duration: DefaultFailsafeProbeTimeout}
+	}
+	if s.FailsafeMaxMissingPeers == nil {
+		s.FailsafeMaxMissingPeers = Uint16P(DefaultFailsafeMaxMissingPeers)
+	}
+	if s.FailsafeTTL == nil {
+		s.FailsafeTTL = &Duration{Duration: DefaultFailsafeTTL}
+	}
 	if s.DeadKeeperRemovalInterval == nil {
 		s.DeadKeeperRemovalInterval = &Duration{Duration: DefaultDeadKeeperRemovalInterval}
 	}
@@ -561,6 +600,21 @@ func (c *ClusterSpec) Validate() error {
 	}
 	if s.FailInterval.Duration < 0 {
 		return errors.New("failInterval must be positive")
+	}
+	if s.FailsafeProbeInterval.Duration < 0 {
+		return errors.New("failsafeProbeInterval must be positive")
+	}
+	if s.FailsafeProbeTimeout.Duration < 0 {
+		return errors.New("failsafeProbeTimeout must be positive")
+	}
+	if s.FailsafeTTL.Duration < 0 {
+		return errors.New("failsafeTTL must be positive")
+	}
+	if s.FailsafeProbeTimeout.Duration > s.FailsafeProbeInterval.Duration {
+		return errors.New("failsafeProbeTimeout should be less than or equal to failsafeProbeInterval")
+	}
+	if s.FailsafeTTL.Duration < s.FailsafeProbeInterval.Duration {
+		return errors.New("failsafeTTL should be greater than or equal to failsafeProbeInterval")
 	}
 	if s.DeadKeeperRemovalInterval.Duration < 0 {
 		return errors.New("deadKeeperRemovalInterval must be positive")

@@ -13,6 +13,7 @@ primary concepts and avoid possible mistakes.
 * [Hysteron Proxy](proxy.md)
 * [Kubernetes Service Publishing](kubernetes_service_publishing.md)
 * [Setting instance parameters](postgres_parameters.md)
+* [Managed Logical Slots](logical_slots.md)
 * [Custom pg_hba.conf entries](custom_pg_hba_entries.md)
 * Backup/Restore
   * [Point In Time Recovery](pitr.md)

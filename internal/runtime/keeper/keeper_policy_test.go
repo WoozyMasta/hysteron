@@ -464,20 +464,26 @@ func TestShouldUseNativeLogicalSlotFailover(t *testing.T) {
 
 func TestShouldUseStandbyLogicalSlotAdvance(t *testing.T) {
 	t.Run("disabled gate", func(t *testing.T) {
-		if shouldUseStandbyLogicalSlotAdvance(false, 18) {
+		if shouldUseStandbyLogicalSlotAdvance(false, 18, false) {
 			t.Fatalf("expected false when gate is disabled")
 		}
 	})
 
 	t.Run("enabled but pg15", func(t *testing.T) {
-		if shouldUseStandbyLogicalSlotAdvance(true, 15) {
+		if shouldUseStandbyLogicalSlotAdvance(true, 15, false) {
 			t.Fatalf("expected false for pg15")
 		}
 	})
 
 	t.Run("enabled on pg16", func(t *testing.T) {
-		if !shouldUseStandbyLogicalSlotAdvance(true, 16) {
+		if !shouldUseStandbyLogicalSlotAdvance(true, 16, false) {
 			t.Fatalf("expected true for pg16")
+		}
+	})
+
+	t.Run("disabled when noStream", func(t *testing.T) {
+		if shouldUseStandbyLogicalSlotAdvance(true, 18, true) {
+			t.Fatalf("expected false when noStream is enabled")
 		}
 	})
 }

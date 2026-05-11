@@ -337,6 +337,11 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Add integration validation for failsafe spec guardrails and update path:
   invalid probe timeout/interval and ttl/interval combinations are rejected,
   while a valid failsafe configuration patch is accepted.
+* Update cluster-spec docs for failsafe options and structured slot-ignore
+  matchers, including defaults and validation constraints.
+* Add explicit standby `noStream` contract propagation and disable standby
+  logical-slot sync/advance path under logical-slot-failover gate when
+  `noStream=true`, clarifying archive-recovery-only topology behavior.
 
 ## v0.17.0
 

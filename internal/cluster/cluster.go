@@ -244,6 +244,9 @@ type StandbyConfig struct {
 	StandbySettings *StandbySettings `json:"standbySettings,omitempty"`
 	// ArchiveRecoverySettings defines restore behavior for standby role.
 	ArchiveRecoverySettings *ArchiveRecoverySettings `json:"archiveRecoverySettings,omitempty"`
+	// NoStream declares archive-recovery-only mode (no streaming). When true,
+	// standby logical-slot synchronization/advance paths are disabled.
+	NoStream bool `json:"noStream,omitempty"`
 }
 
 // ArchiveRecoverySettings defines archive recovery settings.
@@ -957,6 +960,8 @@ type DBSpec struct {
 	PGParameters PGParameters `json:"pgParameters,omitempty"`
 	// FollowConfig when Role is "standby"
 	FollowConfig *FollowConfig `json:"followConfig,omitempty"`
+	// NoStream declares archive-recovery-only mode for this DB assignment.
+	NoStream bool `json:"noStream,omitempty"`
 	// The KeeperUID this db is assigned to
 	KeeperUID string `json:"keeperUID,omitempty"`
 	// InitMode defines the db initialization mode. Current modes are: none, new

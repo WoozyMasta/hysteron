@@ -94,10 +94,11 @@ Some options in a running cluster specification can be changed to update the des
 
 #### StandbyConfig
 
-| Name                    | Description                    | Required | Type                    | Default |
-|-------------------------|--------------------------------|----------|-------------------------|---------|
-| standbySettings         | standby configuration          | no       | StandbySettings         |         |
-| archiveRecoverySettings | archive recovery configuration | no       | ArchiveRecoverySettings |         |
+| Name                    | Description                                                                                                                                                     | Required | Type                    | Default |
+|-------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|-------------------------|---------|
+| standbySettings         | standby configuration                                                                                                                                           | no       | StandbySettings         |         |
+| archiveRecoverySettings | archive recovery configuration                                                                                                                                  | no       | ArchiveRecoverySettings |         |
+| noStream                | archive-recovery-only mode marker. When `true`, standby logical-slot synchronization/advance paths are explicitly disabled (useful for no-stream topologies). | no       | bool                    | false   |
 
 #### ArchiveRecoverySettings
 

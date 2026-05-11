@@ -665,6 +665,8 @@ type PostgresKeeper struct {
 	logicalSlotNativeModeNoticeEmitted bool
 	// Emits one-time warning when standby logical-slot advance path is unavailable.
 	logicalSlotStandbyAdvanceUnavailableNoticeEmitted bool
+	// Emits one-time warning when noStream disables standby logical-slot sync path.
+	logicalSlotNoStreamNoticeEmitted bool
 	// Per-slot retry-after map for standby logical-slot advance failures.
 	logicalSlotStandbyAdvanceRetryAfter map[string]time.Time
 	// Delay before retrying failed standby logical-slot advance operations.
@@ -1890,8 +1892,12 @@ func shouldUseNativeLogicalSlotFailover(enableLogicalSlotFailover bool, pgMajor 
 	return enableLogicalSlotFailover && pgMajor >= 17
 }
 
-func shouldUseStandbyLogicalSlotAdvance(enableLogicalSlotFailover bool, pgMajor int) bool {
-	return enableLogicalSlotFailover && pgMajor >= 16
+func shouldUseStandbyLogicalSlotAdvance(
+	enableLogicalSlotFailover bool,
+	pgMajor int,
+	noStream bool,
+) bool {
+	return enableLogicalSlotFailover && pgMajor >= 16 && !noStream
 }
 
 func logicalSlotAdvanceRetryKey(slotName, database string) string {
@@ -2453,6 +2459,18 @@ func (p *PostgresKeeper) refreshReplicationSlots(
 
 	if db.Spec.Role != common.RoleMaster {
 		if db.Spec.EnableLogicalSlotFailover {
+			if db.Spec.NoStream {
+				if !p.logicalSlotNoStreamNoticeEmitted {
+					p.baseLog().Warn().
+						Msg("logical slot failover gate enabled but standby noStream=true; skipping standby logical-slot sync/advance path")
+					p.logicalSlotNoStreamNoticeEmitted = true
+				}
+				p.logicalSlotReadinessLast = ""
+				p.logicalSlotStandbyAdvanceUnavailableNoticeEmitted = false
+				p.resetLogicalSlotAdvanceState()
+				return nil
+			}
+			p.logicalSlotNoStreamNoticeEmitted = false
 			pgMajor, _, versionErr := p.pgm.BinaryVersion()
 			if versionErr != nil {
 				p.baseLog().
@@ -2463,6 +2481,7 @@ func (p *PostgresKeeper) refreshReplicationSlots(
 			if versionErr == nil && shouldUseStandbyLogicalSlotAdvance(
 				db.Spec.EnableLogicalSlotFailover,
 				pgMajor,
+				db.Spec.NoStream,
 			) {
 				p.logicalSlotStandbyAdvanceUnavailableNoticeEmitted = false
 				masterLSN := masterManagedLogicalSlotLSN(dbs)
@@ -2546,6 +2565,7 @@ func (p *PostgresKeeper) refreshReplicationSlots(
 		} else {
 			p.logicalSlotReadinessLast = ""
 			p.logicalSlotStandbyAdvanceUnavailableNoticeEmitted = false
+			p.logicalSlotNoStreamNoticeEmitted = false
 			p.resetLogicalSlotAdvanceState()
 		}
 		return nil

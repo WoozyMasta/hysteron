@@ -482,10 +482,12 @@ func (s *Sentinel) setDBSpecFromClusterSpec(cd *cluster.ClusterData) {
 			db.Spec.IgnoreReplicationSlots = clusterSpec.IgnoreMasterReplicationSlots
 			db.Spec.IgnoreReplicationSlotMatchers = clusterSpec.IgnoreMasterReplicationSlotMatchers
 			db.Spec.ManagedLogicalReplicationSlots = clusterSpec.ManagedLogicalReplicationSlots
+			db.Spec.NoStream = false
 		case dbTypeReplicaLine:
 			db.Spec.AdditionalReplicationSlots = nil
 			db.Spec.IgnoreReplicationSlots = nil
 			db.Spec.IgnoreReplicationSlotMatchers = nil
+			db.Spec.NoStream = clusterSpec.StandbyConfig != nil && clusterSpec.StandbyConfig.NoStream
 			if clusterSpec.EnableLogicalSlotFailover {
 				db.Spec.ManagedLogicalReplicationSlots = clusterSpec.ManagedLogicalReplicationSlots
 			} else {

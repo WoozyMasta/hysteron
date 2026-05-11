@@ -24,7 +24,7 @@ DOC_COMMANDS_DIR ?= doc/commands
 
 INTEGRATION_TAGS          ?= integration
 INTEGRATION_TIMEOUT       ?= 30m
-INTEGRATION_PARALLEL      ?= 16
+INTEGRATION_PARALLEL      ?= 4
 INTEGRATION_MAX_STORES    ?= 8
 INTEGRATION_RUN           ?=
 INTEGRATION_TEST_ARGS     ?=
@@ -191,14 +191,22 @@ integration: build
 	$(GO) test -tags "$(INTEGRATION_TAGS)" -timeout "$(INTEGRATION_TIMEOUT)" \
 		-parallel "$(INTEGRATION_PARALLEL)" $(INTEGRATION_RUN_ARG) \
 		$(INTEGRATION_TEST_ARGS) \
-		-v -count 1 ./tests/integration 2>&1 | tee "$$log_file"
+		-v -count 1 ./tests/integration > "$$log_file" 2>&1; \
+	status=$$?; cat "$$log_file"; exit $$status
 
 integration-compose:
 	@mkdir -p "$(INTEGRATION_ARTIFACTS_DIR)"
 	@log_file="$(INTEGRATION_ARTIFACTS_DIR)/integration-compose-pg$(PG_MAJOR)-$(INTEGRATION_TIMESTAMP).log"; \
 	echo ">> writing integration compose log to $$log_file"; \
 	PG_MAJOR="$(PG_MAJOR)" $(CRI) compose -f tests/integration/compose.yml \
-		run --rm integration 2>&1 | tee "$$log_file"
+		build integration > "$$log_file" 2>&1; \
+	status=$$?; \
+	if [ $$status -eq 0 ]; then \
+		PG_MAJOR="$(PG_MAJOR)" $(CRI) compose -f tests/integration/compose.yml \
+			run --rm integration >> "$$log_file" 2>&1; \
+		status=$$?; \
+	fi; \
+	cat "$$log_file"; exit $$status
 
 integration-matrix:
 	@mkdir -p "$(INTEGRATION_ARTIFACTS_DIR)"
@@ -207,7 +215,14 @@ integration-matrix:
 		log_file="$(INTEGRATION_ARTIFACTS_DIR)/integration-compose-pg$${pg}-$(INTEGRATION_TIMESTAMP).log"; \
 		echo ">> writing integration compose log to $$log_file"; \
 		PG_MAJOR="$$pg" $(CRI) compose -f tests/integration/compose.yml \
-			run --rm integration 2>&1 | tee "$$log_file" || exit $$?; \
+			build integration > "$$log_file" 2>&1; \
+		status=$$?; \
+		if [ $$status -eq 0 ]; then \
+			PG_MAJOR="$$pg" $(CRI) compose -f tests/integration/compose.yml \
+				run --rm integration >> "$$log_file" 2>&1; \
+			status=$$?; \
+		fi; \
+		cat "$$log_file"; if [ $$status -ne 0 ]; then exit $$status; fi; \
 	done
 
 integration-matrix-ci:
@@ -217,7 +232,14 @@ integration-matrix-ci:
 		log_file="$(INTEGRATION_ARTIFACTS_DIR)/integration-compose-pg$${pg}-$(INTEGRATION_TIMESTAMP).log"; \
 		echo ">> writing integration compose log to $$log_file"; \
 		PG_MAJOR="$$pg" $(CRI) compose -f tests/integration/compose.yml \
-			run --rm integration 2>&1 | tee "$$log_file" || exit $$?; \
+			build integration > "$$log_file" 2>&1; \
+		status=$$?; \
+		if [ $$status -eq 0 ]; then \
+			PG_MAJOR="$$pg" $(CRI) compose -f tests/integration/compose.yml \
+				run --rm integration >> "$$log_file" 2>&1; \
+			status=$$?; \
+		fi; \
+		cat "$$log_file"; if [ $$status -ne 0 ]; then exit $$status; fi; \
 	done
 
 tools: tool-golangci-lint tool-betteralign tool-benchstat tool-govulncheck

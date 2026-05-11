@@ -1781,6 +1781,7 @@ func (p *PostgresKeeper) enqueueLogicalSlotAdvanceOperations(
 		queued++
 	}
 	logicalSlotStandbyAdvanceRetrySlots.Set(float64(len(p.logicalSlotStandbyAdvanceRetryAfter)))
+	logicalSlotStandbyAdvancePendingSlots.Set(float64(len(p.logicalSlotAdvancePending)))
 	if queued > 0 {
 		p.notifyLogicalSlotAdvanceWorker()
 	}
@@ -1794,6 +1795,7 @@ func (p *PostgresKeeper) resetLogicalSlotAdvanceState() {
 	for key := range p.logicalSlotAdvancePending {
 		delete(p.logicalSlotAdvancePending, key)
 	}
+	logicalSlotStandbyAdvancePendingSlots.Set(0)
 }
 
 func (p *PostgresKeeper) standbyLogicalSlotAdvanceWorker(ctx context.Context) {
@@ -1813,6 +1815,7 @@ func (p *PostgresKeeper) standbyLogicalSlotAdvanceWorker(ctx context.Context) {
 
 			p.logicalSlotAdvanceMutex.Lock()
 			if len(p.logicalSlotAdvancePending) == 0 {
+				logicalSlotStandbyAdvancePendingSlots.Set(0)
 				p.logicalSlotAdvanceMutex.Unlock()
 				break
 			}
@@ -1830,6 +1833,7 @@ func (p *PostgresKeeper) standbyLogicalSlotAdvanceWorker(ctx context.Context) {
 				break
 			}
 			logicalSlotStandbyAdvanceRetrySlots.Set(float64(len(p.logicalSlotStandbyAdvanceRetryAfter)))
+			logicalSlotStandbyAdvancePendingSlots.Set(float64(len(p.logicalSlotAdvancePending)))
 			p.logicalSlotAdvanceMutex.Unlock()
 
 			if selectedKey == "" {

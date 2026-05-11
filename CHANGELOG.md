@@ -307,6 +307,9 @@ The format is based on [Keep a Changelog][], and this project adheres to
   `SQLSTATE 55006` (slot active) events to debug level, and add dedicated
   metric `hysteron_keeper_logical_slot_standby_advance_active_conflicts_total`
   to track these conflicts explicitly.
+* Add keeper metric
+  `hysteron_keeper_logical_slot_standby_advance_pending_slots`
+  for async standby slot-advance queue depth/backlog visibility.
 
 ## v0.17.0
 

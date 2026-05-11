@@ -624,6 +624,103 @@ func TestResetLogicalSlotAdvanceRetryState(t *testing.T) {
 	}
 }
 
+func TestEnqueueLogicalSlotAdvanceOperations(t *testing.T) {
+	p := &PostgresKeeper{
+		logicalSlotStandbyAdvanceRetryAfter: make(map[string]time.Time),
+		logicalSlotAdvancePending:           make(map[string]queuedLogicalSlotAdvanceOperation),
+		logicalSlotAdvanceNotify:            make(chan struct{}, 1),
+	}
+
+	now := time.Now()
+	retryKey := logicalSlotAdvanceRetryKey("slot_blocked", "postgres")
+	markLogicalSlotAdvanceFailure(
+		p.logicalSlotStandbyAdvanceRetryAfter,
+		retryKey,
+		now,
+		10*time.Minute,
+	)
+
+	queued := p.enqueueLogicalSlotAdvanceOperations(
+		[]logicalSlotAdvanceOperation{
+			{Name: "slot_blocked", Database: "postgres", TargetLSN: 50},
+			{Name: "slot_ok", Database: "postgres", TargetLSN: 100},
+		},
+		map[string]uint64{
+			"slot_blocked": 60,
+			"slot_ok":      120,
+		},
+		110,
+	)
+	if queued != 1 {
+		t.Fatalf("unexpected queued count: got=%d want=1", queued)
+	}
+	if len(p.logicalSlotAdvancePending) != 1 {
+		t.Fatalf("unexpected pending size: got=%d want=1", len(p.logicalSlotAdvancePending))
+	}
+
+	keyOK := logicalSlotAdvanceRetryKey("slot_ok", "postgres")
+	op := p.logicalSlotAdvancePending[keyOK]
+	if op.TargetLSN != 100 || op.DesiredLSN != 120 || op.ReplayLSN != 110 {
+		t.Fatalf("unexpected queued op: %+v", op)
+	}
+
+	queued = p.enqueueLogicalSlotAdvanceOperations(
+		[]logicalSlotAdvanceOperation{
+			{Name: "slot_ok", Database: "postgres", TargetLSN: 90},
+		},
+		map[string]uint64{"slot_ok": 130},
+		115,
+	)
+	if queued != 0 {
+		t.Fatalf("expected dedup skip for lower target, got queued=%d", queued)
+	}
+	if p.logicalSlotAdvancePending[keyOK].TargetLSN != 100 {
+		t.Fatalf("pending target changed unexpectedly: got=%d want=100", p.logicalSlotAdvancePending[keyOK].TargetLSN)
+	}
+
+	queued = p.enqueueLogicalSlotAdvanceOperations(
+		[]logicalSlotAdvanceOperation{
+			{Name: "slot_ok", Database: "postgres", TargetLSN: 140},
+		},
+		map[string]uint64{"slot_ok": 150},
+		145,
+	)
+	if queued != 1 {
+		t.Fatalf("expected queue update for higher target, got queued=%d", queued)
+	}
+	if p.logicalSlotAdvancePending[keyOK].TargetLSN != 140 {
+		t.Fatalf("pending target not updated: got=%d want=140", p.logicalSlotAdvancePending[keyOK].TargetLSN)
+	}
+	if len(p.logicalSlotAdvanceNotify) != 1 {
+		t.Fatalf("expected one worker notification in buffered channel, got=%d", len(p.logicalSlotAdvanceNotify))
+	}
+}
+
+func TestResetLogicalSlotAdvanceState(t *testing.T) {
+	p := &PostgresKeeper{
+		logicalSlotStandbyAdvanceRetryAfter: map[string]time.Time{
+			"slot1@postgres": time.Now().Add(1 * time.Minute),
+		},
+		logicalSlotAdvancePending: map[string]queuedLogicalSlotAdvanceOperation{
+			"slot1@postgres": {
+				Name:      "slot1",
+				Database:  "postgres",
+				TargetLSN: 100,
+			},
+		},
+		logicalSlotAdvanceNotify: make(chan struct{}, 1),
+	}
+
+	p.resetLogicalSlotAdvanceState()
+
+	if len(p.logicalSlotStandbyAdvanceRetryAfter) != 0 {
+		t.Fatalf("expected empty retry map, got len=%d", len(p.logicalSlotStandbyAdvanceRetryAfter))
+	}
+	if len(p.logicalSlotAdvancePending) != 0 {
+		t.Fatalf("expected empty pending queue, got len=%d", len(p.logicalSlotAdvancePending))
+	}
+}
+
 func TestShouldEmitLogicalSlotGateNotice(t *testing.T) {
 	tests := []struct {
 		name           string

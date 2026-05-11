@@ -1629,7 +1629,6 @@ func TestLogicalSlotFailoverGateStandbyAdvanceWhenSlotExistsOnStandby(t *testing
 	); err != nil {
 		t.Fatalf("failed to create standby logical slot: %v", err)
 	}
-
 	standbyBefore, err := getLogicalSlotConfirmedFlushLSN(standby, slotName)
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
@@ -1717,16 +1716,9 @@ func TestLogicalSlotFailoverGateStandbyAdvanceUnavailableOnLegacyPG(t *testing.T
 	if err := waitLogicalReplicationSlotPresent(master, slotName, 30*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if _, err := standby.Exec(
-		"select * from pg_create_logical_replication_slot($1, $2)",
-		slotName,
-		"test_decoding",
-	); err != nil {
-		t.Fatalf("failed to create standby logical slot: %v", err)
-	}
-
-	standbyBefore, err := getLogicalSlotConfirmedFlushLSN(standby, slotName)
-	if err != nil {
+	// PostgreSQL <16 cannot create logical slots on standby. Validate that
+	// standby slot remains absent when failover gate is enabled.
+	if err := waitLogicalReplicationSlotAbsent(standby, slotName, 20*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
@@ -1740,12 +1732,7 @@ func TestLogicalSlotFailoverGateStandbyAdvanceUnavailableOnLegacyPG(t *testing.T
 		t.Fatalf("unexpected err: %v", err)
 	}
 
-	if err := waitLogicalSlotConfirmedFlushLSNStable(
-		standby,
-		slotName,
-		standbyBefore,
-		20*time.Second,
-	); err != nil {
+	if err := waitLogicalReplicationSlotAbsent(standby, slotName, 15*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 }

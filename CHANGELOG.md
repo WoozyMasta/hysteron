@@ -298,6 +298,9 @@ The format is based on [Keep a Changelog][], and this project adheres to
   entries so retry backlog metrics reflect active waits.
 * Reset standby logical-slot advance retry state on gate/role transitions to
   avoid stale retry backlog across mode changes.
+* Move standby logical-slot advance SQL execution to an async keeper worker
+  with deduplicating in-memory queueing, keeping reconcile-loop planning
+  non-blocking while preserving bounded retry/backoff behavior.
 
 ## v0.17.0
 
@@ -786,3 +789,6 @@ Thanks to all the contributors!
 <!--links-->
 [Keep a Changelog]: https://keepachangelog.com/en/1.1.0/
 [Semantic Versioning]: https://semver.org/spec/v2.0.0.html
+
+* Add per-cycle debug summary for standby advance operations skipped by retry backoff.
+

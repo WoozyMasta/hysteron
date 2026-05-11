@@ -668,6 +668,12 @@ type PostgresKeeper struct {
 	logicalSlotStandbyAdvanceRetryAfter map[string]time.Time
 	// Delay before retrying failed standby logical-slot advance operations.
 	logicalSlotStandbyAdvanceRetryDelay time.Duration
+	// Serialized state for async standby logical-slot advance queue and retries.
+	logicalSlotAdvanceMutex sync.Mutex
+	// Pending async standby logical-slot advance operations keyed by slot/database.
+	logicalSlotAdvancePending map[string]queuedLogicalSlotAdvanceOperation
+	// Wake-up channel for async standby logical-slot advance worker.
+	logicalSlotAdvanceNotify chan struct{}
 }
 
 type standbyReplayController interface {
@@ -744,6 +750,8 @@ func NewPostgresKeeper(
 
 		logicalSlotStandbyAdvanceRetryAfter: make(map[string]time.Time),
 		logicalSlotStandbyAdvanceRetryDelay: 10 * time.Second,
+		logicalSlotAdvancePending:           make(map[string]queuedLogicalSlotAdvanceOperation),
+		logicalSlotAdvanceNotify:            make(chan struct{}, 1),
 	}
 
 	err = p.loadKeeperLocalState()
@@ -1224,6 +1232,7 @@ func (p *PostgresKeeper) Start(ctx context.Context) {
 	}
 
 	_ = p.pgm.StopIfStarted(true)
+	go p.standbyLogicalSlotAdvanceWorker(ctx)
 
 	smTimerCh := time.NewTimer(0).C
 	updatePGStateTimerCh := time.NewTimer(0).C
@@ -1596,6 +1605,14 @@ type logicalSlotAdvanceOperation struct {
 	TargetLSN uint64
 }
 
+type queuedLogicalSlotAdvanceOperation struct {
+	Name       string
+	Database   string
+	DesiredLSN uint64
+	ReplayLSN  uint64
+	TargetLSN  uint64
+}
+
 func shouldEmitLogicalSlotGateNotice(enabled, alreadyEmitted bool) bool {
 	return enabled && !alreadyEmitted
 }
@@ -1708,6 +1725,139 @@ func resetLogicalSlotAdvanceRetryState(
 		delete(retryAfter, key)
 	}
 	logicalSlotStandbyAdvanceRetrySlots.Set(0)
+}
+
+func (p *PostgresKeeper) notifyLogicalSlotAdvanceWorker() {
+	select {
+	case p.logicalSlotAdvanceNotify <- struct{}{}:
+	default:
+	}
+}
+
+func (p *PostgresKeeper) enqueueLogicalSlotAdvanceOperations(
+	ops []logicalSlotAdvanceOperation,
+	masterLSN map[string]uint64,
+	replayLSN uint64,
+) int {
+	if len(ops) == 0 {
+		return 0
+	}
+	now := time.Now()
+	queued := 0
+
+	p.logicalSlotAdvanceMutex.Lock()
+	defer p.logicalSlotAdvanceMutex.Unlock()
+
+	pruneLogicalSlotAdvanceRetryAfter(p.logicalSlotStandbyAdvanceRetryAfter, now)
+	for _, op := range ops {
+		key := logicalSlotAdvanceRetryKey(op.Name, op.Database)
+		if !shouldAttemptLogicalSlotAdvance(p.logicalSlotStandbyAdvanceRetryAfter, key, now) {
+			logicalSlotStandbyAdvanceSkippedBackoffTotal.Inc()
+			continue
+		}
+		next := queuedLogicalSlotAdvanceOperation{
+			Name:       op.Name,
+			Database:   op.Database,
+			DesiredLSN: masterLSN[op.Name],
+			ReplayLSN:  replayLSN,
+			TargetLSN:  op.TargetLSN,
+		}
+		if current, ok := p.logicalSlotAdvancePending[key]; ok && current.TargetLSN >= next.TargetLSN {
+			continue
+		}
+		p.logicalSlotAdvancePending[key] = next
+		queued++
+	}
+	logicalSlotStandbyAdvanceRetrySlots.Set(float64(len(p.logicalSlotStandbyAdvanceRetryAfter)))
+	if queued > 0 {
+		p.notifyLogicalSlotAdvanceWorker()
+	}
+	return queued
+}
+
+func (p *PostgresKeeper) resetLogicalSlotAdvanceState() {
+	p.logicalSlotAdvanceMutex.Lock()
+	defer p.logicalSlotAdvanceMutex.Unlock()
+	resetLogicalSlotAdvanceRetryState(p.logicalSlotStandbyAdvanceRetryAfter)
+	for key := range p.logicalSlotAdvancePending {
+		delete(p.logicalSlotAdvancePending, key)
+	}
+}
+
+func (p *PostgresKeeper) standbyLogicalSlotAdvanceWorker(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-p.logicalSlotAdvanceNotify:
+		}
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+
+			p.logicalSlotAdvanceMutex.Lock()
+			if len(p.logicalSlotAdvancePending) == 0 {
+				p.logicalSlotAdvanceMutex.Unlock()
+				break
+			}
+			now := time.Now()
+			pruneLogicalSlotAdvanceRetryAfter(p.logicalSlotStandbyAdvanceRetryAfter, now)
+			var selectedKey string
+			var selected queuedLogicalSlotAdvanceOperation
+			for key, op := range p.logicalSlotAdvancePending {
+				if !shouldAttemptLogicalSlotAdvance(p.logicalSlotStandbyAdvanceRetryAfter, key, now) {
+					continue
+				}
+				selectedKey = key
+				selected = op
+				delete(p.logicalSlotAdvancePending, key)
+				break
+			}
+			logicalSlotStandbyAdvanceRetrySlots.Set(float64(len(p.logicalSlotStandbyAdvanceRetryAfter)))
+			p.logicalSlotAdvanceMutex.Unlock()
+
+			if selectedKey == "" {
+				break
+			}
+
+			logicalSlotStandbyAdvanceAttemptsTotal.Inc()
+			if err := p.pgm.AdvanceLogicalReplicationSlot(
+				selected.Name,
+				selected.Database,
+				selected.TargetLSN,
+			); err != nil {
+				p.logicalSlotAdvanceMutex.Lock()
+				markLogicalSlotAdvanceFailure(
+					p.logicalSlotStandbyAdvanceRetryAfter,
+					selectedKey,
+					now,
+					p.logicalSlotStandbyAdvanceRetryDelay,
+				)
+				logicalSlotStandbyAdvanceRetrySlots.Set(float64(len(p.logicalSlotStandbyAdvanceRetryAfter)))
+				p.logicalSlotAdvanceMutex.Unlock()
+				logicalSlotStandbyAdvanceFailuresTotal.Inc()
+				p.baseLog().
+					Warn().
+					Err(err).
+					Str("slot", selected.Name).
+					Uint64("desired_lsn", selected.DesiredLSN).
+					Uint64("replay_lsn", selected.ReplayLSN).
+					Uint64("target_lsn", selected.TargetLSN).
+					Msg("failed to advance managed logical replication slot on standby")
+				continue
+			}
+
+			p.logicalSlotAdvanceMutex.Lock()
+			clearLogicalSlotAdvanceFailure(p.logicalSlotStandbyAdvanceRetryAfter, selectedKey)
+			logicalSlotStandbyAdvanceRetrySlots.Set(float64(len(p.logicalSlotStandbyAdvanceRetryAfter)))
+			p.logicalSlotAdvanceMutex.Unlock()
+			logicalSlotStandbyAdvanceSuccessTotal.Inc()
+		}
+	}
 }
 
 func computeLogicalSlotAdvanceTarget(
@@ -1900,16 +2050,6 @@ func (p *PostgresKeeper) refreshReplicationSlots(
 	db *cluster.DB,
 	dbs cluster.DBs,
 ) error {
-	var currentReplicationSlots []string
-	currentReplicationSlots, err := p.pgm.GetReplicationSlots()
-	if err != nil {
-		p.baseLog().
-			Error().
-			Err(err).
-			Msg("failed to get replication slots")
-		return err
-	}
-
 	followersUIDs := db.Spec.Followers
 	managedSlots, ignoredSlots := managedReplicationSlots(
 		db.UID,
@@ -1924,6 +2064,10 @@ func (p *PostgresKeeper) refreshReplicationSlots(
 			Err(err).
 			Msg("failed to inspect physical replication slots")
 		physicalSlots = nil
+	}
+	currentReplicationSlots := make([]string, 0, len(physicalSlots))
+	for _, slot := range physicalSlots {
+		currentReplicationSlots = append(currentReplicationSlots, slot.Name)
 	}
 	physicalSlotState := map[string]pg.PhysicalReplicationSlot{}
 	for _, slot := range physicalSlots {
@@ -2011,13 +2155,6 @@ func (p *PostgresKeeper) refreshReplicationSlots(
 				db.Spec.EnableLogicalSlotFailover,
 				pgMajor,
 			) {
-				pruneLogicalSlotAdvanceRetryAfter(
-					p.logicalSlotStandbyAdvanceRetryAfter,
-					time.Now(),
-				)
-				logicalSlotStandbyAdvanceRetrySlots.Set(
-					float64(len(p.logicalSlotStandbyAdvanceRetryAfter)),
-				)
 				p.logicalSlotStandbyAdvanceUnavailableNoticeEmitted = false
 				masterLSN := masterManagedLogicalSlotLSN(dbs)
 				ops := evaluateManagedLogicalSlotAdvanceOperations(
@@ -2033,55 +2170,17 @@ func (p *PostgresKeeper) refreshReplicationSlots(
 						Uint64("replay_lsn", db.Status.XLogPos).
 						Msg("planned managed logical slot standby advance operations")
 				}
-				for _, op := range ops {
-					now := time.Now()
-					retryKey := logicalSlotAdvanceRetryKey(op.Name, op.Database)
-					if !shouldAttemptLogicalSlotAdvance(
-						p.logicalSlotStandbyAdvanceRetryAfter,
-						retryKey,
-						now,
-					) {
-						logicalSlotStandbyAdvanceSkippedBackoffTotal.Inc()
-						continue
-					}
-					logicalSlotStandbyAdvanceAttemptsTotal.Inc()
-					if err := p.pgm.AdvanceLogicalReplicationSlot(
-						op.Name,
-						op.Database,
-						op.TargetLSN,
-					); err != nil {
-						markLogicalSlotAdvanceFailure(
-							p.logicalSlotStandbyAdvanceRetryAfter,
-							retryKey,
-							now,
-							p.logicalSlotStandbyAdvanceRetryDelay,
-						)
-						logicalSlotStandbyAdvanceRetrySlots.Set(
-							float64(len(p.logicalSlotStandbyAdvanceRetryAfter)),
-						)
-						logicalSlotStandbyAdvanceFailuresTotal.Inc()
-						p.baseLog().
-							Warn().
-							Err(err).
-							Str("slot", op.Name).
-							Uint64("desired_lsn", masterLSN[op.Name]).
-							Uint64("replay_lsn", db.Status.XLogPos).
-							Uint64("target_lsn", op.TargetLSN).
-							Msg("failed to advance managed logical replication slot on standby")
-						continue
-					}
-					clearLogicalSlotAdvanceFailure(
-						p.logicalSlotStandbyAdvanceRetryAfter,
-						retryKey,
-					)
-					logicalSlotStandbyAdvanceRetrySlots.Set(
-						float64(len(p.logicalSlotStandbyAdvanceRetryAfter)),
-					)
-					logicalSlotStandbyAdvanceSuccessTotal.Inc()
-				}
-				logicalSlotStandbyAdvanceRetrySlots.Set(
-					float64(len(p.logicalSlotStandbyAdvanceRetryAfter)),
+				queued := p.enqueueLogicalSlotAdvanceOperations(
+					ops,
+					masterLSN,
+					db.Status.XLogPos,
 				)
+				if len(ops)-queued > 0 {
+					p.baseLog().
+						Debug().
+						Int("skipped_by_backoff", len(ops)-queued).
+						Msg("skipped standby logical-slot advance operations due to retry backoff or dedup")
+				}
 			} else if versionErr == nil && !p.logicalSlotStandbyAdvanceUnavailableNoticeEmitted {
 				p.baseLog().
 					Warn().
@@ -2113,11 +2212,11 @@ func (p *PostgresKeeper) refreshReplicationSlots(
 		} else {
 			p.logicalSlotReadinessLast = ""
 			p.logicalSlotStandbyAdvanceUnavailableNoticeEmitted = false
-			resetLogicalSlotAdvanceRetryState(p.logicalSlotStandbyAdvanceRetryAfter)
+			p.resetLogicalSlotAdvanceState()
 		}
 		return nil
 	}
-	resetLogicalSlotAdvanceRetryState(p.logicalSlotStandbyAdvanceRetryAfter)
+	p.resetLogicalSlotAdvanceState()
 	p.logicalSlotReadinessLast = ""
 
 	logicalDecision := evaluateManagedLogicalSlotsDecision(

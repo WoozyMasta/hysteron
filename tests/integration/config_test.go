@@ -169,6 +169,34 @@ func waitLogicalSlotConfirmedFlushLSNStable(
 	return nil
 }
 
+func waitLogicalSlotConsumeChanges(
+	q Querier,
+	slotName string,
+	timeout time.Duration,
+) error {
+	start := time.Now()
+	var lastErr error
+	for time.Since(start) < timeout {
+		if _, err := q.Exec(
+			"select count(*) from pg_logical_slot_get_changes($1, NULL, NULL)",
+			slotName,
+		); err != nil {
+			lastErr = err
+			if strings.Contains(err.Error(), "SQLSTATE 55006") {
+				time.Sleep(500 * time.Millisecond)
+				continue
+			}
+			return err
+		}
+		return nil
+	}
+	return fmt.Errorf(
+		"timeout waiting to consume changes from logical slot %q, last err: %v",
+		slotName,
+		lastErr,
+	)
+}
+
 func getServerVersionNum(q Querier) (int, error) {
 	rows, err := q.Query("select current_setting('server_version_num')::int")
 	if err != nil {
@@ -1585,7 +1613,7 @@ func TestLogicalSlotFailoverGateStandbyAdvanceWhenSlotExistsOnStandby(t *testing
 		storeEndpoints,
 		"update",
 		"--patch",
-		`{ "enableLogicalSlotFailover": true, "managedLogicalReplicationSlots" : [ { "name" : "hysteron_logic_adv01", "database" : "postgres", "plugin" : "pgoutput" } ] }`,
+		`{ "enableLogicalSlotFailover": true, "managedLogicalReplicationSlots" : [ { "name" : "hysteron_logic_adv01", "database" : "postgres", "plugin" : "test_decoding" } ] }`,
 	)
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
@@ -1597,7 +1625,7 @@ func TestLogicalSlotFailoverGateStandbyAdvanceWhenSlotExistsOnStandby(t *testing
 	if _, err := standby.Exec(
 		"select * from pg_create_logical_replication_slot($1, $2)",
 		slotName,
-		"pgoutput",
+		"test_decoding",
 	); err != nil {
 		t.Fatalf("failed to create standby logical slot: %v", err)
 	}
@@ -1613,7 +1641,7 @@ func TestLogicalSlotFailoverGateStandbyAdvanceWhenSlotExistsOnStandby(t *testing
 	if err := write(t, master, 1, 1); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if _, err := master.Exec("select count(*) from pg_logical_slot_get_changes($1, NULL, NULL)", slotName); err != nil {
+	if err := waitLogicalSlotConsumeChanges(master, slotName, 20*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
@@ -1680,7 +1708,7 @@ func TestLogicalSlotFailoverGateStandbyAdvanceUnavailableOnLegacyPG(t *testing.T
 		storeEndpoints,
 		"update",
 		"--patch",
-		`{ "enableLogicalSlotFailover": true, "managedLogicalReplicationSlots" : [ { "name" : "hysteron_logic_adv_legacy01", "database" : "postgres", "plugin" : "pgoutput" } ] }`,
+		`{ "enableLogicalSlotFailover": true, "managedLogicalReplicationSlots" : [ { "name" : "hysteron_logic_adv_legacy01", "database" : "postgres", "plugin" : "test_decoding" } ] }`,
 	)
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
@@ -1692,7 +1720,7 @@ func TestLogicalSlotFailoverGateStandbyAdvanceUnavailableOnLegacyPG(t *testing.T
 	if _, err := standby.Exec(
 		"select * from pg_create_logical_replication_slot($1, $2)",
 		slotName,
-		"pgoutput",
+		"test_decoding",
 	); err != nil {
 		t.Fatalf("failed to create standby logical slot: %v", err)
 	}
@@ -1708,7 +1736,7 @@ func TestLogicalSlotFailoverGateStandbyAdvanceUnavailableOnLegacyPG(t *testing.T
 	if err := write(t, master, 1, 1); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if _, err := master.Exec("select count(*) from pg_logical_slot_get_changes($1, NULL, NULL)", slotName); err != nil {
+	if err := waitLogicalSlotConsumeChanges(master, slotName, 20*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 

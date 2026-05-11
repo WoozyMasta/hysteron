@@ -322,6 +322,9 @@ The format is based on [Keep a Changelog][], and this project adheres to
   (`name/type/database/plugin`) and apply matcher-aware filtering across
   keeper physical and logical slot reconcile paths, including standby logical
   slot advance and PG17 inconsistency cleanup.
+* Add validation and integration coverage for structured slot ignore matchers,
+  including logical managed-slot behavior where matcher-gated slots are
+  skipped until matcher removal.
 
 ## v0.17.0
 

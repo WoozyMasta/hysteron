@@ -247,6 +247,45 @@ func TestClusterSpecValidate(t *testing.T) {
 			wantErr: `wrong replication slot name: "bad-slot-name"`,
 		},
 		{
+			name: "invalid matcher slot type is rejected",
+			spec: &ClusterSpec{
+				InitMode: &newMode,
+				IgnoreMasterReplicationSlotMatchers: []ReplicationSlotMatcher{
+					{Name: "goodslot", Type: "unknown"},
+				},
+			},
+			wantErr: `wrong replication slot matcher type: "unknown"`,
+		},
+		{
+			name: "empty matcher is rejected",
+			spec: &ClusterSpec{
+				InitMode: &newMode,
+				IgnoreMasterReplicationSlotMatchers: []ReplicationSlotMatcher{
+					{},
+				},
+			},
+			wantErr: "empty replication slot matcher is not allowed",
+		},
+		{
+			name: "physical matcher with logical fields is rejected",
+			spec: &ClusterSpec{
+				InitMode: &newMode,
+				IgnoreMasterReplicationSlotMatchers: []ReplicationSlotMatcher{
+					{Name: "goodslot", Type: ReplicationSlotTypePhysical, Database: "postgres"},
+				},
+			},
+			wantErr: "physical replication slot matcher cannot define database or plugin",
+		},
+		{
+			name: "valid logical matcher is accepted",
+			spec: &ClusterSpec{
+				InitMode: &newMode,
+				IgnoreMasterReplicationSlotMatchers: []ReplicationSlotMatcher{
+					{Name: "goodslot", Type: ReplicationSlotTypeLogical, Database: "postgres", Plugin: "pgoutput"},
+				},
+			},
+		},
+		{
 			name: "negative member replication slot ttl is rejected",
 			spec: &ClusterSpec{
 				InitMode:                 &newMode,

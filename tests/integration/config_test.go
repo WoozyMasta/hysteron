@@ -1305,6 +1305,87 @@ func TestManagedLogicalReplicationSlotsMismatchNoDestructiveAction(t *testing.T)
 	}
 }
 
+func TestManagedLogicalReplicationSlotsIgnoreMatcher(t *testing.T) {
+	t.Parallel()
+
+	dir, err := os.MkdirTemp("", "hysteron")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	clusterName := uuid.NewString()
+	tks, tss, tp, tstore := setupServers(
+		t,
+		clusterName,
+		dir,
+		1,
+		1,
+		false,
+		false,
+		nil,
+		func(spec *cluster.ClusterSpec) {
+			spec.PGParameters = cluster.PGParameters{
+				"wal_level": "logical",
+			}
+		},
+	)
+	defer shutdown(tks, tss, tp, tstore)
+
+	storeEndpoints := fmt.Sprintf("%s:%s", tstore.listenAddress, tstore.port)
+	storePath := filepath.Join(common.StorePrefix, clusterName)
+	sm := store.NewKVBackedStore(tstore.store, storePath)
+
+	master, _ := waitMasterStandbysReady(t, sm, tks)
+
+	slotName := "hysteron_logic_ignore01"
+	err = HysteronCluster(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		"update",
+		"--patch",
+		`{
+			"managedLogicalReplicationSlots" : [
+				{ "name" : "hysteron_logic_ignore01", "database" : "postgres", "plugin" : "pgoutput" }
+			],
+			"ignoreMasterReplicationSlotMatchers" : [
+				{ "name": "hysteron_logic_ignore01", "type": "logical", "database": "postgres", "plugin": "pgoutput" }
+			]
+		}`,
+	)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	if err := waitLogicalReplicationSlotAbsent(master, slotName, 30*time.Second); err != nil {
+		t.Fatalf("expected ignored logical slot to stay absent: %v", err)
+	}
+
+	err = HysteronCluster(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		"update",
+		"--patch",
+		`{
+			"managedLogicalReplicationSlots" : [
+				{ "name" : "hysteron_logic_ignore01", "database" : "postgres", "plugin" : "pgoutput" }
+			],
+			"ignoreMasterReplicationSlotMatchers" : null
+		}`,
+	)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	if err := waitLogicalReplicationSlotPresent(master, slotName, 30*time.Second); err != nil {
+		t.Fatalf("expected logical slot to be created after ignore removal: %v", err)
+	}
+}
+
 func assertClusterUpdateFailsWith(
 	t *testing.T,
 	clusterName string,

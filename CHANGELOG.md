@@ -331,6 +331,9 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Add keeper-side failsafe runtime scaffold and Prometheus metrics for
   failsafe enabled/state/enter/exit tracking, wired to cluster-spec runtime
   config application while keeping behavior default-off.
+* Add DCS degraded/recovered coordination hooks in keeper and sentinel for
+  failsafe observability state transitions (active/expired/inactive), without
+  changing failover or leadership decision semantics.
 
 ## v0.17.0
 

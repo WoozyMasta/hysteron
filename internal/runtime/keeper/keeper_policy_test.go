@@ -850,6 +850,39 @@ func TestApplyFailsafeRuntimeConfig(t *testing.T) {
 	}
 }
 
+func TestHandleDCSDegradedAndRecovered(t *testing.T) {
+	now := time.Unix(1000, 0).UTC()
+	p := &PostgresKeeper{
+		cfg:              &config{},
+		failsafeEnabled:  true,
+		failsafeTTL:      10 * time.Second,
+		failsafeState:    failsafeStateInactive,
+		dcsDegraded:      false,
+		dcsDegradedSince: time.Time{},
+	}
+
+	p.handleDCSDegraded(now, errors.New("store timeout"))
+	if !p.dcsDegraded {
+		t.Fatalf("expected degraded flag set")
+	}
+	if p.failsafeState != failsafeStateActive {
+		t.Fatalf("expected active failsafe state, got %q", p.failsafeState)
+	}
+
+	p.handleDCSDegraded(now.Add(11*time.Second), errors.New("store timeout"))
+	if p.failsafeState != failsafeStateExpired {
+		t.Fatalf("expected expired failsafe state, got %q", p.failsafeState)
+	}
+
+	p.handleDCSRecovered()
+	if p.dcsDegraded {
+		t.Fatalf("expected degraded flag cleared")
+	}
+	if p.failsafeState != failsafeStateInactive {
+		t.Fatalf("expected inactive after recovery, got %q", p.failsafeState)
+	}
+}
+
 func TestShouldEmitLogicalSlotGateNotice(t *testing.T) {
 	tests := []struct {
 		name           string

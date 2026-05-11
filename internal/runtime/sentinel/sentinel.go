@@ -97,6 +97,7 @@ func (s *Sentinel) electionLoop(ctx context.Context) {
 					s.log.Info().Msg("sentinel leadership acquired")
 					s.leader = true
 					s.leadershipCount++
+					s.dcsDegradedSeen = false
 					isLeaderGauge.WithLabelValues(s.clusterName).Set(1)
 					leaderCountGauge.WithLabelValues(s.clusterName).Set(float64(s.leadershipCount))
 				} else {
@@ -2493,6 +2494,8 @@ type Sentinel struct {
 
 	// Current local leadership flag.
 	leader bool
+	// Marks whether DCS retrieval failures happened in current leadership epoch.
+	dcsDegradedSeen bool
 }
 
 func sortedStringSetKeys(m map[string]struct{}) []string {
@@ -2621,9 +2624,17 @@ func (s *Sentinel) clusterSentinelCheck(pctx context.Context) {
 
 	cd, prevCDPair, err := e.GetClusterData(pctx)
 	if err != nil {
+		if !s.dcsDegradedSeen {
+			s.log.Warn().Err(err).Msg("detected DCS degraded condition")
+		}
+		s.dcsDegradedSeen = true
 		s.log.Error().Err(err).Msg("error retrieving cluster data")
 		return
 	}
+	if s.dcsDegradedSeen {
+		s.log.Info().Msg("DCS connectivity recovered")
+	}
+	s.dcsDegradedSeen = false
 	if cd != nil {
 		if cd.FormatVersion != cluster.CurrentCDFormatVersion {
 			s.log.Error().

@@ -688,6 +688,10 @@ type PostgresKeeper struct {
 	failsafeTTL time.Duration
 	// Current keeper-local failsafe state (scaffold only, no behavior change).
 	failsafeState failsafeState
+	// Tracks whether DCS errors are currently observed.
+	dcsDegraded bool
+	// First-observed timestamp of current DCS degraded window.
+	dcsDegradedSince time.Time
 }
 
 type standbyReplayController interface {
@@ -1256,6 +1260,44 @@ func (p *PostgresKeeper) applyFailsafeRuntimeConfig(spec *cluster.ClusterSpec) {
 		p.setFailsafeState(failsafeStateDisabled)
 	}
 	failsafeEnabledGauge.Set(boolToFloat64(p.failsafeEnabled))
+}
+
+func (p *PostgresKeeper) handleDCSDegraded(now time.Time, cause error) {
+	if !p.dcsDegraded {
+		p.dcsDegraded = true
+		p.dcsDegradedSince = now
+		p.baseLog().Warn().
+			Err(cause).
+			Bool("failsafe_enabled", p.failsafeEnabled).
+			Msg("detected DCS degraded condition")
+	}
+	if !p.failsafeEnabled {
+		p.setFailsafeState(failsafeStateDisabled)
+		return
+	}
+	if now.Sub(p.dcsDegradedSince) >= p.failsafeTTL {
+		p.setFailsafeState(failsafeStateExpired)
+		return
+	}
+	p.setFailsafeState(failsafeStateActive)
+}
+
+func (p *PostgresKeeper) handleDCSRecovered() {
+	if !p.dcsDegraded {
+		return
+	}
+	p.dcsDegraded = false
+	duration := time.Since(p.dcsDegradedSince)
+	p.dcsDegradedSince = time.Time{}
+	p.baseLog().Info().
+		Dur("dcs_degraded_duration", duration).
+		Bool("failsafe_enabled", p.failsafeEnabled).
+		Msg("DCS connectivity recovered")
+	if p.failsafeEnabled {
+		p.setFailsafeState(failsafeStateInactive)
+		return
+	}
+	p.setFailsafeState(failsafeStateDisabled)
 }
 
 func (p *PostgresKeeper) applyRuntimeConfigFromClusterData(cd *cluster.ClusterData) {
@@ -2597,12 +2639,14 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 
 	cd, _, err := e.GetClusterData(pctx)
 	if err != nil {
+		p.handleDCSDegraded(time.Now(), err)
 		p.baseLog().
 			Error().
 			Err(err).
 			Msg("error retrieving cluster data")
 		return
 	}
+	p.handleDCSRecovered()
 	p.baseLog().
 		Debug().
 		Fields(cluster.LogSummaryClusterData(cd)).

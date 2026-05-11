@@ -301,6 +301,8 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Move standby logical-slot advance SQL execution to an async keeper worker
   with deduplicating in-memory queueing, keeping reconcile-loop planning
   non-blocking while preserving bounded retry/backoff behavior.
+* Fix keeper physical-slot reconcile input to use only physical slots, avoiding
+  accidental logical-slot churn when managed logical slots are enabled.
 
 ## v0.17.0
 

@@ -15,10 +15,12 @@
 package keeper
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/woozymasta/hysteron/internal/cluster"
 	"github.com/woozymasta/hysteron/internal/common"
 	pg "github.com/woozymasta/hysteron/internal/postgresql"
@@ -740,4 +742,27 @@ func TestShouldEmitLogicalSlotGateNotice(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestIsReplicationSlotActiveError(t *testing.T) {
+	t.Run("matches pg error code", func(t *testing.T) {
+		err := &pgconn.PgError{Code: "55006", Message: "replication slot is active"}
+		if !isReplicationSlotActiveError(err) {
+			t.Fatalf("expected active-slot error to match")
+		}
+	})
+
+	t.Run("does not match other pg error code", func(t *testing.T) {
+		err := &pgconn.PgError{Code: "42P01", Message: "missing relation"}
+		if isReplicationSlotActiveError(err) {
+			t.Fatalf("did not expect non-active error code to match")
+		}
+	})
+
+	t.Run("matches sqlstate text fallback", func(t *testing.T) {
+		err := errors.New("ERROR: replication slot \"a\" is active (SQLSTATE 55006)")
+		if !isReplicationSlotActiveError(err) {
+			t.Fatalf("expected SQLSTATE fallback to match")
+		}
+	})
 }

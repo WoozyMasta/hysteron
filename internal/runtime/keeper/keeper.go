@@ -38,6 +38,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/mitchellh/copystructure"
 	"github.com/woozymasta/hysteron/internal/cluster"
 	"github.com/woozymasta/hysteron/internal/common"
@@ -1727,6 +1728,17 @@ func resetLogicalSlotAdvanceRetryState(
 	logicalSlotStandbyAdvanceRetrySlots.Set(0)
 }
 
+func isReplicationSlotActiveError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return pgErr.Code == "55006"
+	}
+	return strings.Contains(err.Error(), "SQLSTATE 55006")
+}
+
 func (p *PostgresKeeper) notifyLogicalSlotAdvanceWorker() {
 	select {
 	case p.logicalSlotAdvanceNotify <- struct{}{}:
@@ -1840,14 +1852,23 @@ func (p *PostgresKeeper) standbyLogicalSlotAdvanceWorker(ctx context.Context) {
 				logicalSlotStandbyAdvanceRetrySlots.Set(float64(len(p.logicalSlotStandbyAdvanceRetryAfter)))
 				p.logicalSlotAdvanceMutex.Unlock()
 				logicalSlotStandbyAdvanceFailuresTotal.Inc()
-				p.baseLog().
+				logEvt := p.baseLog().
 					Warn().
 					Err(err).
 					Str("slot", selected.Name).
 					Uint64("desired_lsn", selected.DesiredLSN).
 					Uint64("replay_lsn", selected.ReplayLSN).
-					Uint64("target_lsn", selected.TargetLSN).
-					Msg("failed to advance managed logical replication slot on standby")
+					Uint64("target_lsn", selected.TargetLSN)
+				if isReplicationSlotActiveError(err) {
+					logEvt = p.baseLog().
+						Debug().
+						Err(err).
+						Str("slot", selected.Name).
+						Uint64("desired_lsn", selected.DesiredLSN).
+						Uint64("replay_lsn", selected.ReplayLSN).
+						Uint64("target_lsn", selected.TargetLSN)
+				}
+				logEvt.Msg("failed to advance managed logical replication slot on standby")
 				continue
 			}
 

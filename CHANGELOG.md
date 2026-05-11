@@ -294,6 +294,10 @@ The format is based on [Keep a Changelog][], and this project adheres to
   keeper now emits a one-time warning when `enableLogicalSlotFailover` is
   enabled, clarifying that the mode is experimental and standby behavior is
   currently readiness-only.
+* Automatically prune expired standby logical-slot advance retry-backoff
+  entries so retry backlog metrics reflect active waits.
+* Reset standby logical-slot advance retry state on gate/role transitions to
+  avoid stale retry backlog across mode changes.
 
 ## v0.17.0
 
@@ -782,6 +786,3 @@ Thanks to all the contributors!
 <!--links-->
 [Keep a Changelog]: https://keepachangelog.com/en/1.1.0/
 [Semantic Versioning]: https://semver.org/spec/v2.0.0.html
-
-* Automatically prune expired standby logical-slot advance retry-backoff entries so retry backlog metrics reflect active waits.
-

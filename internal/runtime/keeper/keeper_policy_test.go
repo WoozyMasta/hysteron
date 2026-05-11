@@ -613,6 +613,17 @@ func TestPruneLogicalSlotAdvanceRetryAfter(t *testing.T) {
 	}
 }
 
+func TestResetLogicalSlotAdvanceRetryState(t *testing.T) {
+	retryAfter := map[string]time.Time{
+		"slot1@postgres": time.Now().Add(10 * time.Second),
+		"slot2@postgres": time.Now().Add(20 * time.Second),
+	}
+	resetLogicalSlotAdvanceRetryState(retryAfter)
+	if len(retryAfter) != 0 {
+		t.Fatalf("expected empty retry map, got len=%d", len(retryAfter))
+	}
+}
+
 func TestShouldEmitLogicalSlotGateNotice(t *testing.T) {
 	tests := []struct {
 		name           string

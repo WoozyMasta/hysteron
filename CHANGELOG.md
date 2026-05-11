@@ -310,6 +310,9 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Add keeper metric
   `hysteron_keeper_logical_slot_standby_advance_pending_slots`
   for async standby slot-advance queue depth/backlog visibility.
+* Add integration coverage for logical-slot standby-advance resilience during
+  temporary store (etcd) outage and recovery
+  (`TestLogicalSlotFailoverGateStandbyAdvanceRecoversAfterStoreOutage`).
 
 ## v0.17.0
 

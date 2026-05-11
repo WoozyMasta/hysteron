@@ -1737,6 +1737,158 @@ func TestLogicalSlotFailoverGateStandbyAdvanceUnavailableOnLegacyPG(t *testing.T
 	}
 }
 
+func TestLogicalSlotFailoverGateStandbyAdvanceRecoversAfterStoreOutage(t *testing.T) {
+	t.Parallel()
+
+	dir, err := os.MkdirTemp("", "hysteron")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	clusterName := uuid.NewString()
+	tks, tss, tp, tstore := setupServers(
+		t,
+		clusterName,
+		dir,
+		2,
+		1,
+		false,
+		false,
+		nil,
+		func(spec *cluster.ClusterSpec) {
+			spec.PGParameters = cluster.PGParameters{
+				"wal_level": "logical",
+			}
+		},
+	)
+	defer shutdown(tks, tss, tp, tstore)
+
+	storeEndpoints := fmt.Sprintf("%s:%s", tstore.listenAddress, tstore.port)
+	storePath := filepath.Join(common.StorePrefix, clusterName)
+	sm := store.NewKVBackedStore(tstore.store, storePath)
+
+	master, standbys := waitMasterStandbysReady(t, sm, tks)
+	if len(standbys) == 0 {
+		t.Fatalf("expected at least one standby keeper")
+	}
+	standby := standbys[0]
+
+	versionNum, err := getServerVersionNum(standby)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if versionNum < 160000 {
+		t.Skipf("requires PostgreSQL 16+ for logical slot on standby, got %d", versionNum)
+	}
+
+	slotName := "hysteron_logic_adv_store01"
+	err = HysteronCluster(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		"update",
+		"--patch",
+		`{ "enableLogicalSlotFailover": true, "managedLogicalReplicationSlots" : [ { "name" : "hysteron_logic_adv_store01", "database" : "postgres", "plugin" : "test_decoding" } ] }`,
+	)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	if err := waitLogicalReplicationSlotPresent(master, slotName, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if _, err := standby.Exec(
+		"select * from pg_create_logical_replication_slot($1, $2)",
+		slotName,
+		"test_decoding",
+	); err != nil {
+		t.Fatalf("failed to create standby logical slot: %v", err)
+	}
+
+	standbyBefore, err := getLogicalSlotConfirmedFlushLSN(standby, slotName)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := populate(t, master); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	standbyAfterBaseline, err := driveAndWaitStandbySlotAdvance(
+		t,
+		master,
+		standby,
+		slotName,
+		standbyBefore,
+		1,
+		60*time.Second,
+	)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	tstore.Stop()
+	if err := tstore.WaitDown(15 * time.Second); err != nil {
+		t.Fatalf("error waiting on store down: %v", err)
+	}
+
+	if err := write(t, master, 2, 2); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := waitLogicalSlotConsumeChanges(master, slotName, 20*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	if err := tstore.Start(); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := tstore.WaitUp(30 * time.Second); err != nil {
+		t.Fatalf("error waiting on store up: %v", err)
+	}
+
+	if err := WaitClusterPhase(sm, cluster.ClusterPhaseNormal, 60*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := master.WaitDBUp(30 * time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := standby.WaitDBUp(30 * time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	if _, err := driveAndWaitStandbySlotAdvance(
+		t,
+		master,
+		standby,
+		slotName,
+		standbyAfterBaseline,
+		3,
+		90*time.Second,
+	); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+}
+
+func driveAndWaitStandbySlotAdvance(
+	t *testing.T,
+	master *TestKeeper,
+	standby Querier,
+	slotName string,
+	base uint64,
+	writeID int,
+	timeout time.Duration,
+) (uint64, error) {
+	t.Helper()
+
+	if err := write(t, master, writeID, writeID); err != nil {
+		return 0, err
+	}
+	if err := waitLogicalSlotConsumeChanges(master, slotName, 20*time.Second); err != nil {
+		return 0, err
+	}
+	return waitLogicalSlotConfirmedFlushLSNGreaterThan(standby, slotName, base, timeout)
+}
+
 func TestManagedLogicalSlotsMasterOnlyWhenGateDisabled(t *testing.T) {
 	t.Parallel()
 

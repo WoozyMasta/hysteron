@@ -52,6 +52,42 @@ var (
 			Help: "Set to 1 if Postgres requires restart",
 		},
 	)
+	pgRunningGauge = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "hysteron_pg_running",
+			Help: "Set to 1 when local PostgreSQL instance is observed healthy/running by keeper",
+		},
+	)
+	pgInRecoveryGauge = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "hysteron_pg_in_recovery",
+			Help: "Set to 1 when local PostgreSQL instance is in recovery role (standby)",
+		},
+	)
+	pgTimelineGauge = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "hysteron_pg_timeline",
+			Help: "Current local PostgreSQL timeline ID observed by keeper",
+		},
+	)
+	pgServerVersionGauge = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "hysteron_pg_server_version",
+			Help: "PostgreSQL binary version encoded as major*10000+minor",
+		},
+	)
+	pgPendingRestartGauge = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "hysteron_pg_pending_restart",
+			Help: "Set to 1 when PostgreSQL reports pending restart-required parameters",
+		},
+	)
+	pgStreamingGauge = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "hysteron_pg_streaming",
+			Help: "Set to 1 when PostgreSQL standby appears configured to stream from upstream",
+		},
+	)
 	lastSyncSuccessSeconds = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "hysteron_keeper_last_sync_success_seconds",
@@ -186,6 +222,12 @@ func init() {
 	setRole(localRoleGauge, nil)
 	prometheus.MustRegister(needsReloadGauge)
 	prometheus.MustRegister(needsRestartGauge)
+	prometheus.MustRegister(pgRunningGauge)
+	prometheus.MustRegister(pgInRecoveryGauge)
+	prometheus.MustRegister(pgTimelineGauge)
+	prometheus.MustRegister(pgServerVersionGauge)
+	prometheus.MustRegister(pgPendingRestartGauge)
+	prometheus.MustRegister(pgStreamingGauge)
 	prometheus.MustRegister(lastSyncSuccessSeconds)
 	prometheus.MustRegister(reconcileDurationSeconds)
 	prometheus.MustRegister(reconcileErrorsTotal)

@@ -110,6 +110,10 @@ The format is based on [Keep a Changelog][], and this project adheres to
   `hysteron_dcs_operation_errors_total`,
   `hysteron_dcs_watch_resets_total`) and wire election reset metrics with
   per-cluster context for multi-cluster sentinel deployments.
+* Add baseline PostgreSQL parity telemetry from keeper:
+  `hysteron_pg_running`, `hysteron_pg_in_recovery`,
+  `hysteron_pg_timeline`, `hysteron_pg_server_version`,
+  `hysteron_pg_pending_restart`, and `hysteron_pg_streaming`.
 * Check or explicitly discard remaining command, PostgreSQL, and store cleanup
   errors so `errcheck` is clean.
 * Clean up initial style lint findings for whitespace, unconvert, gocritic,

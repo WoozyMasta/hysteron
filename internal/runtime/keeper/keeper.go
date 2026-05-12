@@ -957,6 +957,39 @@ func (p *PostgresKeeper) updatePGState(pctx context.Context) {
 		p.baseLog().Error().Err(err).Msg("failed to get pg state")
 	}
 	p.lastPGState = pgState
+	p.updatePGStateMetrics(pgState)
+}
+
+func (p *PostgresKeeper) updatePGStateMetrics(pgState *cluster.PostgresState) {
+	if pgState == nil {
+		pgRunningGauge.Set(0)
+		pgInRecoveryGauge.Set(0)
+		pgTimelineGauge.Set(0)
+		pgStreamingGauge.Set(0)
+		return
+	}
+
+	pgRunningGauge.Set(boolToFloat64(pgState.Healthy))
+	pgTimelineGauge.Set(float64(pgState.TimelineID))
+
+	major, minor, err := p.binaryVersion()
+	if err == nil {
+		pgServerVersionGauge.Set(float64(major*10000 + minor))
+	}
+
+	role, roleErr := p.pgm.GetRole()
+	if roleErr != nil {
+		pgInRecoveryGauge.Set(0)
+		pgStreamingGauge.Set(0)
+		return
+	}
+
+	inRecovery := role == common.RoleStandby
+	pgInRecoveryGauge.Set(boolToFloat64(inRecovery))
+
+	// Streaming is meaningful for standbys only; infer from configured upstream.
+	streaming := inRecovery && pgState.PGParameters["primary_conninfo"] != ""
+	pgStreamingGauge.Set(boolToFloat64(streaming))
 }
 
 func (p *PostgresKeeper) validatePostgresVersion() error {
@@ -3729,6 +3762,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 
 		if restartRequirement != nil && restartRequirement.Required {
 			needsRestartGauge.Set(1) // mark as restart needed
+			pgPendingRestartGauge.Set(1)
 			p.baseLog().
 				Warn().
 				Strs("pending_restart_params", restartRequirement.PendingParams).
@@ -3743,8 +3777,11 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 						Msg("failed to restart postgres instance")
 				} else {
 					needsRestartGauge.Set(0) // successful restart implies no longer required
+					pgPendingRestartGauge.Set(0)
 				}
 			}
+		} else {
+			pgPendingRestartGauge.Set(0)
 		}
 	}
 

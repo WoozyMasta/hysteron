@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -161,7 +162,141 @@ func TestProxyStopIsIdempotent(t *testing.T) {
 	waitProxy(t, proxyDone)
 }
 
+func TestProxyOnConnectErrorNoDestination(t *testing.T) {
+	var (
+		mu      sync.Mutex
+		reasons []string
+	)
+	proxy, proxyAddr, proxyDone := startProxyWithOptions(t, Options{
+		OnConnectError: func(reason string) {
+			mu.Lock()
+			reasons = append(reasons, reason)
+			mu.Unlock()
+		},
+	})
+
+	conn := dialTCP(t, proxyAddr)
+	defer conn.Close()
+	if _, err := fmt.Fprintln(conn, "ping"); err != nil {
+		t.Fatalf("write to proxy: %v", err)
+	}
+
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		mu.Lock()
+		n := len(reasons)
+		mu.Unlock()
+		if n > 0 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(reasons) == 0 {
+		t.Fatal("expected connect error callback")
+	}
+	if reasons[0] != "no_destination" {
+		t.Fatalf("unexpected connect error reason: %q", reasons[0])
+	}
+
+	proxy.Stop()
+	waitProxy(t, proxyDone)
+}
+
+func TestProxyOnConnectErrorDial(t *testing.T) {
+	var (
+		mu      sync.Mutex
+		reasons []string
+	)
+	proxy, proxyAddr, proxyDone := startProxyWithOptions(t, Options{
+		OnConnectError: func(reason string) {
+			mu.Lock()
+			reasons = append(reasons, reason)
+			mu.Unlock()
+		},
+	})
+	// Pick an unbound local port to force dial error.
+	proxy.SetDestination(&net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 1})
+
+	conn := dialTCP(t, proxyAddr)
+	defer conn.Close()
+	if _, err := fmt.Fprintln(conn, "ping"); err != nil {
+		t.Fatalf("write to proxy: %v", err)
+	}
+
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		mu.Lock()
+		n := len(reasons)
+		mu.Unlock()
+		if n > 0 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(reasons) == 0 {
+		t.Fatal("expected connect error callback")
+	}
+	if reasons[0] != "dial" {
+		t.Fatalf("unexpected connect error reason: %q", reasons[0])
+	}
+
+	proxy.Stop()
+	waitProxy(t, proxyDone)
+}
+
+func TestProxyOnActiveConnectionsDeltaBalanced(t *testing.T) {
+	var (
+		mu    sync.Mutex
+		total int
+	)
+	backend := startEchoServer(t, "one")
+	proxy, proxyAddr, proxyDone := startProxyWithOptions(t, Options{
+		OnActiveConnectionsDelta: func(delta int) {
+			mu.Lock()
+			total += delta
+			mu.Unlock()
+		},
+	})
+	proxy.SetDestination(backend)
+
+	conn := dialTCP(t, proxyAddr)
+	if got := roundTrip(t, conn, "ping"); got != "one:ping" {
+		t.Fatalf("unexpected response: %q", got)
+	}
+	_ = conn.Close()
+
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		mu.Lock()
+		cur := total
+		mu.Unlock()
+		if cur == 0 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if total != 0 {
+		t.Fatalf("expected balanced active-connection deltas, got %d", total)
+	}
+
+	proxy.Stop()
+	waitProxy(t, proxyDone)
+}
+
 func startProxy(t *testing.T) (*Proxy, *net.TCPAddr, <-chan error) {
+	return startProxyWithOptions(t, Options{})
+}
+
+func startProxyWithOptions(t *testing.T, opts Options) (*Proxy, *net.TCPAddr, <-chan error) {
 	t.Helper()
 
 	listener, err := net.ListenTCP("tcp", tcpLocalhost(t))
@@ -169,7 +304,7 @@ func startProxy(t *testing.T) (*Proxy, *net.TCPAddr, <-chan error) {
 		t.Fatalf("listen proxy: %v", err)
 	}
 
-	proxy := New(listener, Options{})
+	proxy := New(listener, opts)
 	done := make(chan error, 1)
 	go func() {
 		done <- proxy.Start()

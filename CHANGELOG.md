@@ -122,6 +122,9 @@ The format is based on [Keep a Changelog][], and this project adheres to
   `hysteron_proxy_active_connections{mode=...}` and
   `hysteron_proxy_connect_errors_total{mode=...,reason=...}`,
   wired from TCP proxy runtime connection hooks.
+* Add TCP proxy regression tests for connection telemetry hooks:
+  `OnConnectError` (`no_destination`, `dial`) and balanced
+  `OnActiveConnectionsDelta` lifecycle behavior.
 * Add keeper lifecycle operation telemetry for resync/bootstrap flows:
   `hysteron_keeper_basebackup_total{result=...}`,
   `hysteron_keeper_basebackup_duration_seconds`,

@@ -79,14 +79,12 @@ Current values:
 
 ### `hysteron_keeper_pgrewind_total{result=...}`
 
-### `hysteron_keeper_bootstrap_total{result=...}`
+### `hysteron_keeper_bootstrap_total{mode=...,result=...}`
 
 Current `result` values:
 
 * `success`
 * `error`
-
-### `hysteron_keeper_bootstrap_total{mode=...}`
 
 Current `mode` values:
 

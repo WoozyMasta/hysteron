@@ -38,6 +38,35 @@ Do not use gauge for event counts.
   * check/cycle duration histogram;
   * error counter by stable stage/reason.
 
+## Controlled label values
+
+Keep these label vocabularies stable and extend deliberately.
+
+### `hysteron_dcs_operation_errors_total{code=...}`
+
+Allowed values:
+
+* `key_not_found`
+* `key_modified`
+* `election_no_leader`
+* `other`
+
+### `hysteron_proxy_check_errors_total{stage=...}`
+
+Current values:
+
+* `get_cluster_data`
+* `start_writable_listener`
+* `start_read_only_listener`
+* `unsupported_clusterdata_format`
+* `invalid_cluster_spec`
+* `resolve_master_address`
+* `set_proxy_info`
+* `check_timeout`
+* `check_failed`
+* `writable_proxy_runtime`
+* `read_only_proxy_runtime`
+
 ## Compatibility policy
 
 This fork does not require strict backward compatibility for metric names.

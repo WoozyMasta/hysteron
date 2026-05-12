@@ -100,6 +100,8 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Add DCS watch/session reset telemetry:
   `hysteron_dcs_watch_resets_total{backend,watcher}` for etcd and Kubernetes
   election reset events.
+* Extend proxy check error stage telemetry to cover timeout/check-loop/runtime
+  listener failures, and document controlled metric label vocabularies.
 * Check or explicitly discard remaining command, PostgreSQL, and store cleanup
   errors so `errcheck` is clean.
 * Clean up initial style lint findings for whitespace, unconvert, gocritic,

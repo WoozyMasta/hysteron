@@ -598,6 +598,7 @@ func (c *ClusterChecker) TimeoutChecker(checkOkCh chan struct{}) {
 	for {
 		select {
 		case <-timeoutTimer.C:
+			checkErrorsTotal.WithLabelValues("check_timeout").Inc()
 			log.Info().Msg("check timeout timer fired")
 			// if the check timeouts close all connections and stop listening
 			// (for example to avoid load balancers forward connections to us
@@ -648,6 +649,7 @@ func (c *ClusterChecker) Start() error {
 			}()
 		case err := <-checkCh:
 			if err != nil {
+				checkErrorsTotal.WithLabelValues("check_failed").Inc()
 				// don't report check ok since it returned an error
 				log.Error().
 					Err(err).
@@ -662,10 +664,12 @@ func (c *ClusterChecker) Start() error {
 
 		case err := <-writableEndCh:
 			if err != nil {
+				checkErrorsTotal.WithLabelValues("writable_proxy_runtime").Inc()
 				return fmt.Errorf("writable proxy error: %v", err)
 			}
 		case err := <-readOnlyEndCh:
 			if err != nil {
+				checkErrorsTotal.WithLabelValues("read_only_proxy_runtime").Inc()
 				return fmt.Errorf("read-only proxy error: %v", err)
 			}
 		}

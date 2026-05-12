@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"slices"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -127,6 +128,10 @@ type ClusterChecker struct {
 	configMutex sync.Mutex
 	// Stop listener when critical store errors happen.
 	stopListening bool
+	// Last writable destination string for switch detection.
+	lastWritableDestination string
+	// Last read-only destination signature for switch detection.
+	lastReadOnlyDestinations string
 }
 
 // NewClusterChecker creates a ClusterChecker from proxy configuration.
@@ -301,18 +306,26 @@ func (c *ClusterChecker) SetProxyInfo(
 
 // Check reads the cluster data and applies the right proxy configuration.
 func (c *ClusterChecker) Check() error {
+	start := time.Now()
+	defer func() {
+		checkDurationSeconds.Observe(time.Since(start).Seconds())
+	}()
+
 	cd, _, err := c.e.GetClusterData(context.TODO())
 	if err != nil {
+		checkErrorsTotal.WithLabelValues("get_cluster_data").Inc()
 		return fmt.Errorf("cannot get cluster data: %v", err)
 	}
 
 	if c.writable != nil {
 		if err = c.writable.start(); err != nil {
+			checkErrorsTotal.WithLabelValues("start_writable_listener").Inc()
 			return fmt.Errorf("failed to start writable proxy: %v", err)
 		}
 	}
 	if c.readOnly != nil {
 		if err = c.readOnly.start(); err != nil {
+			checkErrorsTotal.WithLabelValues("start_read_only_listener").Inc()
 			return fmt.Errorf("failed to start read-only proxy: %v", err)
 		}
 	}
@@ -327,6 +340,7 @@ func (c *ClusterChecker) Check() error {
 		return nil
 	}
 	if cd.FormatVersion != cluster.CurrentCDFormatVersion {
+		checkErrorsTotal.WithLabelValues("unsupported_clusterdata_format").Inc()
 		c.clearDestinations()
 		return fmt.Errorf(
 			"unsupported clusterdata format version: %d",
@@ -334,6 +348,7 @@ func (c *ClusterChecker) Check() error {
 		)
 	}
 	if err = cd.Cluster.Spec.Validate(); err != nil {
+		checkErrorsTotal.WithLabelValues("invalid_cluster_spec").Inc()
 		c.clearDestinations()
 		return fmt.Errorf("clusterdata validation failed: %v", err)
 	}
@@ -385,6 +400,7 @@ func (c *ClusterChecker) Check() error {
 		net.JoinHostPort(db.Status.ListenAddress, db.Status.Port),
 	)
 	if err != nil {
+		checkErrorsTotal.WithLabelValues("resolve_master_address").Inc()
 		log.Error().Err(err).Msg("cannot resolve db address")
 		c.clearDestinations()
 		return nil
@@ -394,6 +410,7 @@ func (c *ClusterChecker) Check() error {
 		Msg("resolved current master address")
 	if c.writable != nil {
 		if err = c.SetProxyInfo(proxy.Generation, proxyTimeout); err != nil {
+			checkErrorsTotal.WithLabelValues("set_proxy_info").Inc()
 			// if we failed to update our proxy info when a master is defined we
 			// cannot ignore this error since the sentinel won't know that we exist
 			// and are sending connections to a master so, when electing a new
@@ -435,12 +452,47 @@ func (c *ClusterChecker) clearDestinations() {
 
 func (c *ClusterChecker) setWritableDestination(addr *net.TCPAddr) {
 	if c.writable != nil {
+		next := ""
+		if addr != nil {
+			next = addr.String()
+		}
+		if c.lastWritableDestination != next {
+			backendSwitchesTotal.WithLabelValues(string(proxyModeWritable)).Inc()
+			c.lastWritableDestination = next
+		}
+		if addr == nil {
+			routeStateGauge.WithLabelValues(string(proxyModeWritable), "enabled").Set(0)
+			routeStateGauge.WithLabelValues(string(proxyModeWritable), "disabled").Set(1)
+		} else {
+			routeStateGauge.WithLabelValues(string(proxyModeWritable), "enabled").Set(1)
+			routeStateGauge.WithLabelValues(string(proxyModeWritable), "disabled").Set(0)
+		}
 		c.writable.setDestination(addr)
 	}
 }
 
 func (c *ClusterChecker) setReadOnlyDestinations(addrs []*net.TCPAddr) {
 	if c.readOnly != nil {
+		keys := make([]string, 0, len(addrs))
+		for _, addr := range addrs {
+			if addr != nil {
+				keys = append(keys, addr.String())
+			}
+		}
+		sort.Strings(keys)
+		next := strings.Join(keys, ",")
+		if c.lastReadOnlyDestinations != next {
+			backendSwitchesTotal.WithLabelValues(string(proxyModeReadOnly)).Inc()
+			c.lastReadOnlyDestinations = next
+		}
+		readOnlyDestinationsGauge.Set(float64(len(keys)))
+		if len(keys) == 0 {
+			routeStateGauge.WithLabelValues(string(proxyModeReadOnly), "enabled").Set(0)
+			routeStateGauge.WithLabelValues(string(proxyModeReadOnly), "disabled").Set(1)
+		} else {
+			routeStateGauge.WithLabelValues(string(proxyModeReadOnly), "enabled").Set(1)
+			routeStateGauge.WithLabelValues(string(proxyModeReadOnly), "disabled").Set(0)
+		}
 		c.readOnly.setDestinations(addrs)
 	}
 }
@@ -466,6 +518,7 @@ func (c *ClusterChecker) readOnlyDestinations(cd *cluster.ClusterData, primary *
 				Str(slog.FieldDBUID, primary.UID).
 				Uint64("max_lag", uint64(c.readOnlyOptions.MaxLag)).
 				Msg("read-only proxy falling back to primary")
+			readOnlyFallbacksTotal.Inc()
 			selected = append(selected, primaryDest)
 		}
 	}

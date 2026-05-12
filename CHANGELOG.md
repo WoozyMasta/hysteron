@@ -86,6 +86,13 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Expand keeper reconcile error reason coverage for common failure paths in
   `postgresKeeperSM` (state persistence, PostgreSQL lifecycle, init/restore,
   and recovery readiness checks).
+* Add proxy observability metrics for writable and read-only routing:
+  `hysteron_proxy_check_duration_seconds`,
+  `hysteron_proxy_check_errors_total{stage=...}`,
+  `hysteron_proxy_backend_switches_total{mode=...}`,
+  `hysteron_proxy_route_state{mode=...,state=...}`,
+  `hysteron_proxy_read_only_destinations`,
+  and `hysteron_proxy_read_only_fallbacks_total`.
 * Check or explicitly discard remaining command, PostgreSQL, and store cleanup
   errors so `errcheck` is clean.
 * Clean up initial style lint findings for whitespace, unconvert, gocritic,

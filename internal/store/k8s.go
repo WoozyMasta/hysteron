@@ -710,6 +710,9 @@ func (e *KubeElection) campaign() {
 					e.electedCh <- true
 				},
 				OnStoppedLeading: func() {
+					if e.ctx.Err() == nil {
+						dcsWatchResetsTotal.WithLabelValues("kubernetes", "election").Inc()
+					}
 					e.electedCh <- false
 				},
 			},

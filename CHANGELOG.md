@@ -97,6 +97,9 @@ The format is based on [Keep a Changelog][], and this project adheres to
   `hysteron_dcs_operation_duration_seconds{backend,operation}` and
   `hysteron_dcs_operation_errors_total{backend,operation,code}`,
   wired into high-level KV-backed and Kubernetes-backed store operations.
+* Add DCS watch/session reset telemetry:
+  `hysteron_dcs_watch_resets_total{backend,watcher}` for etcd and Kubernetes
+  election reset events.
 * Check or explicitly discard remaining command, PostgreSQL, and store cleanup
   errors so `errcheck` is clean.
 * Clean up initial style lint findings for whitespace, unconvert, gocritic,

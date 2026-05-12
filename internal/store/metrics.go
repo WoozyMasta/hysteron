@@ -37,11 +37,19 @@ var (
 		},
 		[]string{"backend", "operation", "code"},
 	)
+	dcsWatchResetsTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "hysteron_dcs_watch_resets_total",
+			Help: "Total number of DCS watch/session resets by backend and watcher",
+		},
+		[]string{"backend", "watcher"},
+	)
 )
 
 func init() {
 	prometheus.MustRegister(dcsOperationDurationSeconds)
 	prometheus.MustRegister(dcsOperationErrorsTotal)
+	prometheus.MustRegister(dcsWatchResetsTotal)
 }
 
 func observeDCSOperation(

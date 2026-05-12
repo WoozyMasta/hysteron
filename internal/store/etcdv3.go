@@ -250,6 +250,10 @@ func (e *etcdv3Election) campaign() {
 		case <-e.ctx.Done():
 			return
 		case <-s.Done():
+			if e.ctx.Err() == nil {
+				// Session ended unexpectedly; campaign loop will retry.
+				dcsWatchResetsTotal.WithLabelValues("etcdv3", "election").Inc()
+			}
 			e.electedCh <- false
 		}
 	}

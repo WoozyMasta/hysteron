@@ -83,6 +83,9 @@ The format is based on [Keep a Changelog][], and this project adheres to
   `hysteron_keeper_reconcile_errors_total{phase=...,reason=...}`,
   `hysteron_keeper_dcs_degraded`, and
   `hysteron_keeper_dcs_last_success_seconds`.
+* Expand keeper reconcile error reason coverage for common failure paths in
+  `postgresKeeperSM` (state persistence, PostgreSQL lifecycle, init/restore,
+  and recovery readiness checks).
 * Check or explicitly discard remaining command, PostgreSQL, and store cleanup
   errors so `errcheck` is clean.
 * Clean up initial style lint findings for whitespace, unconvert, gocritic,

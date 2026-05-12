@@ -2736,6 +2736,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 		if p.keeperLocalState.ClusterUID != cd.Cluster.UID {
 			p.keeperLocalState.ClusterUID = cd.Cluster.UID
 			if err = p.saveKeeperLocalState(); err != nil {
+				reconcileErrorsTotal.WithLabelValues(reconcilePhase, "save_keeper_local_state").Inc()
 				p.baseLog().
 					Error().
 					Err(err).
@@ -2761,6 +2762,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 			Str(slog.FieldKeeperUID, k.UID).
 			Msg("no database is assigned to this keeper yet; stopping PostgreSQL if it is running")
 		if err = p.stopPostgresIfStarted(pgm, db); err != nil {
+			reconcileErrorsTotal.WithLabelValues(reconcilePhase, "stop_postgres").Inc()
 			p.baseLog().
 				Error().
 				Err(err).
@@ -2775,6 +2777,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 			Str("cluster_boot_uuid", k.Status.BootUUID).
 			Msg("boot UID from local process differs from cluster data; stopping PostgreSQL until sentinel updates cluster state")
 		if err = p.stopPostgresIfStarted(pgm, db); err != nil {
+			reconcileErrorsTotal.WithLabelValues(reconcilePhase, "stop_postgres").Inc()
 			p.baseLog().
 				Error().
 				Err(err).
@@ -2803,6 +2806,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 		p.baseLog().Error().Msg("db failed to initialize or resync")
 
 		if err = p.stopPostgresIfStarted(pgm, db); err != nil {
+			reconcileErrorsTotal.WithLabelValues(reconcilePhase, "stop_postgres").Inc()
 			p.baseLog().
 				Error().
 				Err(err).
@@ -2812,6 +2816,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 
 		// Clean up cluster db datadir
 		if err = pgm.RemoveAll(); err != nil {
+			reconcileErrorsTotal.WithLabelValues(reconcilePhase, "remove_data_dir").Inc()
 			p.baseLog().
 				Error().
 				Err(err).
@@ -2825,6 +2830,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 			Initializing: false,
 		}
 		if err = p.saveDBLocalState(ndbls); err != nil {
+			reconcileErrorsTotal.WithLabelValues(reconcilePhase, "save_db_local_state").Inc()
 			p.baseLog().
 				Error().
 				Err(err).
@@ -2837,6 +2843,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 		var initialized bool
 		initialized, err = pgm.IsInitialized()
 		if err != nil {
+			reconcileErrorsTotal.WithLabelValues(reconcilePhase, "is_initialized").Inc()
 			p.baseLog().
 				Error().
 				Err(err).
@@ -2861,6 +2868,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 				Initializing: true,
 			}
 			if err = p.saveDBLocalState(ndbls); err != nil {
+				reconcileErrorsTotal.WithLabelValues(reconcilePhase, "save_db_local_state").Inc()
 				p.baseLog().
 					Error().
 					Err(err).
@@ -2882,6 +2890,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 			}
 
 			if err = p.stopPostgresIfStarted(pgm, db); err != nil {
+				reconcileErrorsTotal.WithLabelValues(reconcilePhase, "stop_postgres").Inc()
 				p.baseLog().
 					Error().
 					Err(err).
@@ -2889,6 +2898,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 				return
 			}
 			if err = pgm.RemoveAll(); err != nil {
+				reconcileErrorsTotal.WithLabelValues(reconcilePhase, "remove_data_dir").Inc()
 				p.baseLog().
 					Error().
 					Err(err).
@@ -2896,6 +2906,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 				return
 			}
 			if err = pgm.Init(initConfig); err != nil {
+				reconcileErrorsTotal.WithLabelValues(reconcilePhase, "init_postgres").Inc()
 				p.baseLog().
 					Error().
 					Err(err).
@@ -2904,6 +2915,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 			}
 
 			if err = pgm.StartTmpMerged(); err != nil {
+				reconcileErrorsTotal.WithLabelValues(reconcilePhase, "start_tmp_merged").Inc()
 				p.baseLog().
 					Error().
 					Err(err).
@@ -2911,6 +2923,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 				return
 			}
 			if err = pgm.WaitReady(cd.Cluster.DefSpec().DBWaitReadyTimeout.Duration); err != nil {
+				reconcileErrorsTotal.WithLabelValues(reconcilePhase, "wait_ready").Inc()
 				p.baseLog().
 					Error().
 					Err(err).
@@ -2928,6 +2941,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 				}
 				ndbls.InitPGParameters = pgParameters
 				if err = p.saveDBLocalState(ndbls); err != nil {
+					reconcileErrorsTotal.WithLabelValues(reconcilePhase, "save_db_local_state").Inc()
 					p.baseLog().
 						Error().
 						Err(err).
@@ -2940,6 +2954,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 				Info().
 				Msg("database files created; creating replication and application roles")
 			if err = pgm.SetupRoles(); err != nil {
+				reconcileErrorsTotal.WithLabelValues(reconcilePhase, "setup_roles").Inc()
 				p.baseLog().
 					Error().
 					Err(err).
@@ -2948,6 +2963,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 			}
 
 			if err = p.stopPostgresIfStarted(pgm, db); err != nil {
+				reconcileErrorsTotal.WithLabelValues(reconcilePhase, "stop_postgres").Inc()
 				p.baseLog().
 					Error().
 					Err(err).
@@ -2965,6 +2981,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 				Initializing: true,
 			}
 			if err = p.saveDBLocalState(ndbls); err != nil {
+				reconcileErrorsTotal.WithLabelValues(reconcilePhase, "save_db_local_state").Inc()
 				p.baseLog().
 					Error().
 					Err(err).
@@ -2978,6 +2995,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 			pgm.SetParameters(pgParameters)
 
 			if err = p.stopPostgresIfStarted(pgm, db); err != nil {
+				reconcileErrorsTotal.WithLabelValues(reconcilePhase, "stop_postgres").Inc()
 				p.baseLog().
 					Error().
 					Err(err).
@@ -2985,6 +3003,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 				return
 			}
 			if err = pgm.RemoveAll(); err != nil {
+				reconcileErrorsTotal.WithLabelValues(reconcilePhase, "remove_data_dir").Inc()
 				p.baseLog().
 					Error().
 					Err(err).
@@ -2995,6 +3014,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 				Info().
 				Msg("running archive restore command from cluster specification")
 			if err = pgm.Restore(db.Spec.PITRConfig.DataRestoreCommand); err != nil {
+				reconcileErrorsTotal.WithLabelValues(reconcilePhase, "restore_data").Inc()
 				p.baseLog().
 					Error().
 					Err(err).
@@ -3020,6 +3040,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 			)
 
 			if err = pgm.StartTmpMerged(); err != nil {
+				reconcileErrorsTotal.WithLabelValues(reconcilePhase, "start_tmp_merged").Inc()
 				p.baseLog().
 					Error().
 					Err(err).
@@ -3034,6 +3055,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 					Str(slog.FieldDBUID, db.UID).
 					Msg("waiting for PostgreSQL to finish replaying WAL (PITR)")
 				if err = pgm.WaitRecoveryDone(cd.Cluster.DefSpec().SyncTimeout.Duration); err != nil {
+					reconcileErrorsTotal.WithLabelValues(reconcilePhase, "wait_recovery_done").Inc()
 					p.baseLog().
 						Error().
 						Err(err).
@@ -3047,6 +3069,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 					Msg("point-in-time recovery replay completed")
 			}
 			if err = pgm.WaitReady(cd.Cluster.DefSpec().SyncTimeout.Duration); err != nil {
+				reconcileErrorsTotal.WithLabelValues(reconcilePhase, "wait_ready").Inc()
 				p.baseLog().
 					Error().
 					Err(err).

@@ -124,7 +124,14 @@ func NewElectionForCluster(
 		if err != nil {
 			return nil, err
 		}
-		return store.NewKubeElection(kubecli, podName, namespace, resourceName, uid)
+		return store.NewKubeElection(
+			kubecli,
+			podName,
+			namespace,
+			resourceName,
+			clusterName,
+			uid,
+		)
 	}
 	return nil, fmt.Errorf("unknown store backend: %q", cfg.Store.Backend)
 }

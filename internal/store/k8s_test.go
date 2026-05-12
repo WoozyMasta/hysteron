@@ -141,7 +141,14 @@ func TestKubeStoreSecretAtomicPutClusterData(t *testing.T) {
 func TestKubeElectionUsesLeaseLock(t *testing.T) {
 	ctx := context.Background()
 	kubecli := fake.NewSimpleClientset()
-	election, err := NewKubeElection(kubecli, "pod-01", "default", "hysteron-cluster-test", "sentinel-01")
+	election, err := NewKubeElection(
+		kubecli,
+		"pod-01",
+		"default",
+		"hysteron-cluster-test",
+		"test",
+		"sentinel-01",
+	)
 	if err != nil {
 		t.Fatalf("NewKubeElection() error = %v", err)
 	}

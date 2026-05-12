@@ -183,6 +183,7 @@ func NewKVStore(cfg Config) (KVStore, error) {
 type KVBackedStore struct {
 	store       KVStore
 	clusterPath string
+	clusterName string
 	backend     string
 }
 
@@ -195,6 +196,7 @@ func NewKVBackedStore(kvStore KVStore, path string) *KVBackedStore {
 	}
 	return &KVBackedStore{
 		clusterPath: path,
+		clusterName: filepath.Base(path),
 		store:       kvStore,
 		backend:     backend,
 	}
@@ -205,7 +207,7 @@ func (s *KVBackedStore) AtomicPutClusterData(ctx context.Context, cd *cluster.Cl
 	start := time.Now()
 	var opErr error
 	defer func() {
-		observeDCSOperation(start, s.backend, "atomic_put_cluster_data", opErr)
+		observeDCSOperation(start, s.clusterName, s.backend, "atomic_put_cluster_data", opErr)
 	}()
 
 	cdj, err := json.Marshal(cd)
@@ -232,7 +234,7 @@ func (s *KVBackedStore) PutClusterData(ctx context.Context, cd *cluster.ClusterD
 	start := time.Now()
 	var opErr error
 	defer func() {
-		observeDCSOperation(start, s.backend, "put_cluster_data", opErr)
+		observeDCSOperation(start, s.clusterName, s.backend, "put_cluster_data", opErr)
 	}()
 
 	cdj, err := json.Marshal(cd)
@@ -250,7 +252,7 @@ func (s *KVBackedStore) GetClusterData(ctx context.Context) (*cluster.ClusterDat
 	start := time.Now()
 	var opErr error
 	defer func() {
-		observeDCSOperation(start, s.backend, "get_cluster_data", opErr)
+		observeDCSOperation(start, s.clusterName, s.backend, "get_cluster_data", opErr)
 	}()
 
 	var cd *cluster.ClusterData
@@ -275,7 +277,7 @@ func (s *KVBackedStore) SetKeeperInfo(ctx context.Context, id string, ms *cluste
 	start := time.Now()
 	var opErr error
 	defer func() {
-		observeDCSOperation(start, s.backend, "set_keeper_info", opErr)
+		observeDCSOperation(start, s.clusterName, s.backend, "set_keeper_info", opErr)
 	}()
 
 	msj, err := json.Marshal(ms)
@@ -295,7 +297,7 @@ func (s *KVBackedStore) GetKeepersInfo(ctx context.Context) (cluster.KeepersInfo
 	start := time.Now()
 	var opErr error
 	defer func() {
-		observeDCSOperation(start, s.backend, "get_keepers_info", opErr)
+		observeDCSOperation(start, s.clusterName, s.backend, "get_keepers_info", opErr)
 	}()
 
 	keepers := cluster.KeepersInfo{}
@@ -324,7 +326,7 @@ func (s *KVBackedStore) SetSentinelInfo(ctx context.Context, si *cluster.Sentine
 	start := time.Now()
 	var opErr error
 	defer func() {
-		observeDCSOperation(start, s.backend, "set_sentinel_info", opErr)
+		observeDCSOperation(start, s.clusterName, s.backend, "set_sentinel_info", opErr)
 	}()
 
 	sij, err := json.Marshal(si)
@@ -344,7 +346,7 @@ func (s *KVBackedStore) GetSentinelsInfo(ctx context.Context) (cluster.Sentinels
 	start := time.Now()
 	var opErr error
 	defer func() {
-		observeDCSOperation(start, s.backend, "get_sentinels_info", opErr)
+		observeDCSOperation(start, s.clusterName, s.backend, "get_sentinels_info", opErr)
 	}()
 
 	ssi := cluster.SentinelsInfo{}
@@ -373,7 +375,7 @@ func (s *KVBackedStore) SetProxyInfo(ctx context.Context, pi *cluster.ProxyInfo,
 	start := time.Now()
 	var opErr error
 	defer func() {
-		observeDCSOperation(start, s.backend, "set_proxy_info", opErr)
+		observeDCSOperation(start, s.clusterName, s.backend, "set_proxy_info", opErr)
 	}()
 
 	pij, err := json.Marshal(pi)
@@ -393,7 +395,7 @@ func (s *KVBackedStore) GetProxiesInfo(ctx context.Context) (cluster.ProxiesInfo
 	start := time.Now()
 	var opErr error
 	defer func() {
-		observeDCSOperation(start, s.backend, "get_proxies_info", opErr)
+		observeDCSOperation(start, s.clusterName, s.backend, "get_proxies_info", opErr)
 	}()
 
 	psi := cluster.ProxiesInfo{}
@@ -425,6 +427,7 @@ func NewKVBackedElection(kvStore KVStore, path, candidateUID string, timeout tim
 		return &etcdv3Election{
 			c:              etcdV3Store.c,
 			path:           path,
+			clusterName:    filepath.Base(filepath.Dir(path)),
 			candidateUID:   candidateUID,
 			ttl:            MinTTL,
 			requestTimeout: timeout,

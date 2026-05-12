@@ -151,7 +151,7 @@ func (s *KubeStore) AtomicPutClusterData(ctx context.Context, cd *cluster.Cluste
 	start := time.Now()
 	var opErr error
 	defer func() {
-		observeDCSOperation(start, "kubernetes", "atomic_put_cluster_data", opErr)
+		observeDCSOperation(start, s.clusterName, "kubernetes", "atomic_put_cluster_data", opErr)
 	}()
 
 	cdj, err := json.Marshal(cd)
@@ -296,7 +296,7 @@ func (s *KubeStore) PutClusterData(ctx context.Context, cd *cluster.ClusterData)
 	start := time.Now()
 	var opErr error
 	defer func() {
-		observeDCSOperation(start, "kubernetes", "put_cluster_data", opErr)
+		observeDCSOperation(start, s.clusterName, "kubernetes", "put_cluster_data", opErr)
 	}()
 
 	cdj, err := json.Marshal(cd)
@@ -390,7 +390,7 @@ func (s *KubeStore) GetClusterData(ctx context.Context) (*cluster.ClusterData, *
 	start := time.Now()
 	var opErr error
 	defer func() {
-		observeDCSOperation(start, "kubernetes", "get_cluster_data", opErr)
+		observeDCSOperation(start, s.clusterName, "kubernetes", "get_cluster_data", opErr)
 	}()
 
 	if s.resourceKind == "secret" {
@@ -452,7 +452,7 @@ func (s *KubeStore) SetKeeperInfo(ctx context.Context, _ string, ms *cluster.Kee
 	start := time.Now()
 	var opErr error
 	defer func() {
-		observeDCSOperation(start, "kubernetes", "set_keeper_info", opErr)
+		observeDCSOperation(start, s.clusterName, "kubernetes", "set_keeper_info", opErr)
 	}()
 
 	msj, err := json.Marshal(ms)
@@ -469,7 +469,7 @@ func (s *KubeStore) GetKeepersInfo(ctx context.Context) (cluster.KeepersInfo, er
 	start := time.Now()
 	var opErr error
 	defer func() {
-		observeDCSOperation(start, "kubernetes", "get_keepers_info", opErr)
+		observeDCSOperation(start, s.clusterName, "kubernetes", "get_keepers_info", opErr)
 	}()
 
 	keepers := cluster.KeepersInfo{}
@@ -505,7 +505,7 @@ func (s *KubeStore) SetSentinelInfo(ctx context.Context, si *cluster.SentinelInf
 	start := time.Now()
 	var opErr error
 	defer func() {
-		observeDCSOperation(start, "kubernetes", "set_sentinel_info", opErr)
+		observeDCSOperation(start, s.clusterName, "kubernetes", "set_sentinel_info", opErr)
 	}()
 
 	sij, err := json.Marshal(si)
@@ -522,7 +522,7 @@ func (s *KubeStore) GetSentinelsInfo(ctx context.Context) (cluster.SentinelsInfo
 	start := time.Now()
 	var opErr error
 	defer func() {
-		observeDCSOperation(start, "kubernetes", "get_sentinels_info", opErr)
+		observeDCSOperation(start, s.clusterName, "kubernetes", "get_sentinels_info", opErr)
 	}()
 
 	ssi := cluster.SentinelsInfo{}
@@ -558,7 +558,7 @@ func (s *KubeStore) SetProxyInfo(ctx context.Context, pi *cluster.ProxyInfo, _ t
 	start := time.Now()
 	var opErr error
 	defer func() {
-		observeDCSOperation(start, "kubernetes", "set_proxy_info", opErr)
+		observeDCSOperation(start, s.clusterName, "kubernetes", "set_proxy_info", opErr)
 	}()
 
 	pij, err := json.Marshal(pi)
@@ -575,7 +575,7 @@ func (s *KubeStore) GetProxiesInfo(ctx context.Context) (cluster.ProxiesInfo, er
 	start := time.Now()
 	var opErr error
 	defer func() {
-		observeDCSOperation(start, "kubernetes", "get_proxies_info", opErr)
+		observeDCSOperation(start, s.clusterName, "kubernetes", "get_proxies_info", opErr)
 	}()
 
 	psi := cluster.ProxiesInfo{}
@@ -626,12 +626,17 @@ type KubeElection struct {
 	namespace string
 	// resourceName is lease object name.
 	resourceName string
+	// clusterName is logical Hysteron cluster name used for metrics labeling.
+	clusterName string
 	// running reports whether campaign loop is running.
 	running bool
 }
 
 // NewKubeElection creates a Kubernetes-backed election.
-func NewKubeElection(kubecli kubernetes.Interface, podName, namespace, resourceName, candidateUID string) (*KubeElection, error) {
+func NewKubeElection(
+	kubecli kubernetes.Interface,
+	podName, namespace, resourceName, clusterName, candidateUID string,
+) (*KubeElection, error) {
 	rl, err := resourcelock.New(resourcelock.LeasesResourceLock,
 		namespace,
 		resourceName,
@@ -650,6 +655,7 @@ func NewKubeElection(kubecli kubernetes.Interface, podName, namespace, resourceN
 		podName:      podName,
 		namespace:    namespace,
 		resourceName: resourceName,
+		clusterName:  clusterName,
 		rl:           rl,
 	}, nil
 }
@@ -711,7 +717,7 @@ func (e *KubeElection) campaign() {
 				},
 				OnStoppedLeading: func() {
 					if e.ctx.Err() == nil {
-						dcsWatchResetsTotal.WithLabelValues("kubernetes", "election").Inc()
+						dcsWatchResetsTotal.WithLabelValues(e.clusterName, "kubernetes", "election").Inc()
 					}
 					e.electedCh <- false
 				},

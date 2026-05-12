@@ -174,6 +174,7 @@ type etcdv3Election struct {
 	errCh          chan error
 	cancel         context.CancelFunc
 	path           string
+	clusterName    string
 	candidateUID   string
 	ttl            time.Duration
 	requestTimeout time.Duration
@@ -252,7 +253,7 @@ func (e *etcdv3Election) campaign() {
 		case <-s.Done():
 			if e.ctx.Err() == nil {
 				// Session ended unexpectedly; campaign loop will retry.
-				dcsWatchResetsTotal.WithLabelValues("etcdv3", "election").Inc()
+				dcsWatchResetsTotal.WithLabelValues(e.clusterName, "etcdv3", "election").Inc()
 			}
 			e.electedCh <- false
 		}

@@ -28,21 +28,21 @@ var (
 			Help:    "Duration of store (DCS) operations by backend and operation",
 			Buckets: prometheus.DefBuckets,
 		},
-		[]string{"backend", "operation"},
+		[]string{"cluster_name", "backend", "operation"},
 	)
 	dcsOperationErrorsTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "hysteron_dcs_operation_errors_total",
 			Help: "Total number of store (DCS) operation errors by backend, operation, and code",
 		},
-		[]string{"backend", "operation", "code"},
+		[]string{"cluster_name", "backend", "operation", "code"},
 	)
 	dcsWatchResetsTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "hysteron_dcs_watch_resets_total",
 			Help: "Total number of DCS watch/session resets by backend and watcher",
 		},
-		[]string{"backend", "watcher"},
+		[]string{"cluster_name", "backend", "watcher"},
 	)
 )
 
@@ -54,14 +54,15 @@ func init() {
 
 func observeDCSOperation(
 	start time.Time,
+	clusterName string,
 	backend string,
 	operation string,
 	err error,
 ) {
-	dcsOperationDurationSeconds.WithLabelValues(backend, operation).
+	dcsOperationDurationSeconds.WithLabelValues(clusterName, backend, operation).
 		Observe(time.Since(start).Seconds())
 	if err != nil {
-		dcsOperationErrorsTotal.WithLabelValues(backend, operation, dcsErrorCode(err)).
+		dcsOperationErrorsTotal.WithLabelValues(clusterName, backend, operation, dcsErrorCode(err)).
 			Inc()
 	}
 }

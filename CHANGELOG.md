@@ -105,6 +105,11 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Add sentinel master transition telemetry:
   `hysteron_sentinel_failovers_total{reason=...}` and
   `hysteron_sentinel_failover_duration_seconds{reason=...}`.
+* Add `cluster_name` label to shared DCS telemetry
+  (`hysteron_dcs_operation_duration_seconds`,
+  `hysteron_dcs_operation_errors_total`,
+  `hysteron_dcs_watch_resets_total`) and wire election reset metrics with
+  per-cluster context for multi-cluster sentinel deployments.
 * Check or explicitly discard remaining command, PostgreSQL, and store cleanup
   errors so `errcheck` is clean.
 * Clean up initial style lint findings for whitespace, unconvert, gocritic,

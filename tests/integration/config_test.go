@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -2660,6 +2661,168 @@ func TestLogicalSlotFailoverGateRepeatedFailoverCycles(t *testing.T) {
 			t.Fatalf("unexpected err: %v", err)
 		}
 		if err := waitLogicalSlotConsumeChanges(currentMaster, slotName, 20*time.Second); err != nil {
+			t.Fatalf("expected logical slot consume after failover: %v", err)
+		}
+		writeID++
+		seenMasters[currentMaster.uid] = struct{}{}
+	}
+
+	if len(seenMasters) < 2 {
+		t.Fatalf("expected failover to involve at least two masters, got %d", len(seenMasters))
+	}
+}
+
+func TestLogicalSlotFailoverGateSoakFailoverCycles(t *testing.T) {
+	t.Parallel()
+
+	if strings.TrimSpace(os.Getenv("HYSTERON_INTEGRATION_SOAK")) != "1" {
+		t.Skipf("set HYSTERON_INTEGRATION_SOAK=1 to enable soak integration tests")
+	}
+
+	cycles := 8
+	if raw := strings.TrimSpace(os.Getenv("HYSTERON_INTEGRATION_SOAK_FAILOVER_CYCLES")); raw != "" {
+		v, err := strconv.Atoi(raw)
+		if err != nil || v < 1 {
+			t.Fatalf("invalid HYSTERON_INTEGRATION_SOAK_FAILOVER_CYCLES=%q", raw)
+		}
+		cycles = v
+	}
+	t.Logf("running logical slot soak failover cycles: %d", cycles)
+
+	dir, err := os.MkdirTemp("", "")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	clusterName := uuid.NewString()
+	tks, tss, tp, tstore := setupServers(
+		t,
+		clusterName,
+		dir,
+		3,
+		1,
+		false,
+		false,
+		nil,
+		func(spec *cluster.ClusterSpec) {
+			spec.PGParameters = cluster.PGParameters{
+				"wal_level": "logical",
+			}
+		},
+	)
+	defer shutdown(tks, tss, tp, tstore)
+
+	storeEndpoints := fmt.Sprintf("%s:%s", tstore.listenAddress, tstore.port)
+	storePath := filepath.Join(common.StorePrefix, clusterName)
+	sm := store.NewKVBackedStore(tstore.store, storePath)
+
+	master, _ := waitMasterStandbysReady(t, sm, tks)
+
+	versionNum, err := getServerVersionNum(master)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if versionNum < 170000 {
+		t.Skipf("requires PostgreSQL 17+ for native failover logical slots, got %d", versionNum)
+	}
+
+	slotName := "hysteron_logic_soak01"
+	err = HysteronCluster(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		"update",
+		"--patch",
+		`{ "enableLogicalSlotFailover": true, "managedLogicalReplicationSlots" : [ { "name" : "hysteron_logic_soak01", "database" : "postgres", "plugin" : "test_decoding" } ] }`,
+	)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	if err := waitLogicalReplicationSlotPresent(master, slotName, 45*time.Second); err != nil {
+		t.Fatalf("expected logical slot present on initial master: %v", err)
+	}
+	failoverEnabled, err := getLogicalSlotFailoverFlag(master, slotName)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if !failoverEnabled {
+		t.Fatalf("expected logical slot %q failover=true on initial master", slotName)
+	}
+	if err := populate(t, master); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	currentMaster := master
+	writeID := 1000
+	seenMasters := map[string]struct{}{currentMaster.uid: {}}
+
+	for cycle := 0; cycle < cycles; cycle++ {
+		if err := write(t, currentMaster, writeID, writeID); err != nil {
+			t.Fatalf("unexpected err: %v", err)
+		}
+		if err := waitLogicalSlotConsumeChanges(currentMaster, slotName, 30*time.Second); err != nil {
+			t.Fatalf("expected logical slot consume before failover: %v", err)
+		}
+		writeID++
+
+		oldMasterUID := currentMaster.uid
+		promotedUID := ""
+		for attempt := 0; attempt < 3; attempt++ {
+			err = HysteronFailover(
+				t,
+				clusterName,
+				tstore.storeBackend,
+				storeEndpoints,
+				"keeper",
+				"--keeper-uid",
+				oldMasterUID,
+			)
+			if err != nil {
+				t.Fatalf("unexpected err: %v", err)
+			}
+
+			start := time.Now()
+			for time.Since(start) < 45*time.Second {
+				cd, _, getErr := sm.GetClusterData(context.TODO())
+				if getErr == nil && cd != nil && cd.Cluster.Status.Phase == cluster.ClusterPhaseNormal && cd.Cluster.Status.Master != "" {
+					newMasterUID := cd.DBs[cd.Cluster.Status.Master].Spec.KeeperUID
+					if newMasterUID != oldMasterUID {
+						promotedUID = newMasterUID
+						break
+					}
+				}
+				time.Sleep(sleepInterval)
+			}
+			if promotedUID != "" {
+				break
+			}
+		}
+		if promotedUID == "" {
+			t.Fatalf("cycle=%d: expected master switch from %q", cycle, oldMasterUID)
+		}
+
+		currentMaster = tks[promotedUID]
+		if err := currentMaster.WaitDBRole(common.RoleMaster, nil, 45*time.Second); err != nil {
+			t.Fatalf("unexpected err: %v", err)
+		}
+		if err := waitLogicalReplicationSlotPresent(currentMaster, slotName, 45*time.Second); err != nil {
+			t.Fatalf("expected logical slot present on promoted master: %v", err)
+		}
+		failoverEnabled, err = getLogicalSlotFailoverFlag(currentMaster, slotName)
+		if err != nil {
+			t.Fatalf("unexpected err: %v", err)
+		}
+		if !failoverEnabled {
+			t.Fatalf("expected logical slot %q failover=true on promoted master", slotName)
+		}
+
+		if err := write(t, currentMaster, writeID, writeID); err != nil {
+			t.Fatalf("unexpected err: %v", err)
+		}
+		if err := waitLogicalSlotConsumeChanges(currentMaster, slotName, 30*time.Second); err != nil {
 			t.Fatalf("expected logical slot consume after failover: %v", err)
 		}
 		writeID++

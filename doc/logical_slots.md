@@ -177,3 +177,18 @@ Runbook quick checks:
 * verify standby replay health (`pg_last_wal_replay_lsn`, replay lag) on the
   target standby;
 * check for long-running transactions/consumers pinning slot activity.
+
+## Soak test (opt-in)
+
+Long failover-cycle soak is available as an opt-in integration test:
+`TestLogicalSlotFailoverGateSoakFailoverCycles`.
+
+Example:
+
+```bash
+HYSTERON_INTEGRATION_SOAK=1 \
+HYSTERON_INTEGRATION_SOAK_FAILOVER_CYCLES=8 \
+make integration-compose \
+  INTEGRATION_PARALLEL=2 \
+  INTEGRATION_RUN='TestLogicalSlotFailoverGateSoakFailoverCycles'
+```

@@ -219,6 +219,9 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Add integration chaos-lite coverage for repeated PG17+ native logical-slot
   failover cycles (`TestLogicalSlotFailoverGateRepeatedFailoverCycles`) to
   verify slot presence/consumption continuity on promoted masters.
+* Add opt-in long-run integration soak coverage for logical-slot failover
+  cycles (`TestLogicalSlotFailoverGateSoakFailoverCycles`) with configurable
+  cycle count via `HYSTERON_INTEGRATION_SOAK_FAILOVER_CYCLES`.
 * Add integration coverage for gate-disabled managed logical slot behavior:
   with `managedLogicalReplicationSlots` configured and
   `enableLogicalSlotFailover` disabled, slots remain master-only before

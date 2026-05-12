@@ -34,10 +34,10 @@ var (
 		},
 		[]string{"cluster_name"},
 	)
-	leaderCountGauge = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Name: "hysteron_sentinel_leader_count",
-			Help: "Number of times this sentinel has been elected as leader",
+	leaderElectionsTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "hysteron_sentinel_leader_elections_total",
+			Help: "Total number of times this sentinel has been elected as leader",
 		},
 		[]string{"cluster_name"},
 	)
@@ -47,5 +47,5 @@ var (
 func init() {
 	prometheus.MustRegister(lastCheckSuccessSeconds)
 	prometheus.MustRegister(isLeaderGauge)
-	prometheus.MustRegister(leaderCountGauge)
+	prometheus.MustRegister(leaderElectionsTotal)
 }

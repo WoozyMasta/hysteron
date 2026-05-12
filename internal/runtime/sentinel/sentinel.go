@@ -99,7 +99,7 @@ func (s *Sentinel) electionLoop(ctx context.Context) {
 					s.leadershipCount++
 					s.dcsDegradedSeen = false
 					isLeaderGauge.WithLabelValues(s.clusterName).Set(1)
-					leaderCountGauge.WithLabelValues(s.clusterName).Set(float64(s.leadershipCount))
+					leaderElectionsTotal.WithLabelValues(s.clusterName).Inc()
 				} else {
 					if s.leader {
 						s.log.Info().Msg("sentinel leadership lost")

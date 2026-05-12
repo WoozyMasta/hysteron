@@ -2140,10 +2140,7 @@ func computeLogicalSlotAdvanceTarget(
 	if desiredLSN == 0 || replayLSN == 0 {
 		return 0, false
 	}
-	target := desiredLSN
-	if replayLSN < target {
-		target = replayLSN
-	}
+	target := min(replayLSN, desiredLSN)
 	if target <= currentConfirmedFlushLSN {
 		return 0, false
 	}

@@ -72,6 +72,9 @@ The format is based on [Keep a Changelog][], and this project adheres to
   `managedLogicalReplicationSlots` is unset:
   primary reconciliation now drops inactive unmanaged `hysteron_*`
   logical slots instead of skipping cleanup entirely.
+* Replace `hysteron_sentinel_leader_count` with
+  `hysteron_sentinel_leader_elections_total` to model leader elections as
+  a monotonic counter.
 * Check or explicitly discard remaining command, PostgreSQL, and store cleanup
   errors so `errcheck` is clean.
 * Clean up initial style lint findings for whitespace, unconvert, gocritic,

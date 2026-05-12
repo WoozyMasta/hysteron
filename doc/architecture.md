@@ -107,9 +107,9 @@ application availability.
 
 By default, clusterdata is stored in a ConfigMap resource named
 `hysteron-$CLUSTERNAME`. Pay attention to don't delete this ConfigMap
-or you'll lose your cluster data. The legacy ConfigMap backend stores
-clusterdata inside a metadata annotation called `hysteron-clusterdata`. Users
-should not manually modify this resource.
+or you'll lose your cluster data. Clusterdata is stored in the
+`clusterdata` entry of the resource `data` field. Users should not manually
+modify this resource.
 
 Use `--k8s-resource-name` to change the Kubernetes object name used for
 clusterdata and sentinel leader election. The value supports `{cluster}` as
@@ -117,7 +117,7 @@ a cluster-name placeholder and must be a valid Kubernetes DNS label.
 
 As an alternative, `--k8s-resource-kind=secret` stores clusterdata in an
 opaque Secret with the same `hysteron-$CLUSTERNAME` name, using the
-`clusterdata` data key. This allows a different Kubernetes RBAC policy and
+same `clusterdata` data key. This allows a different Kubernetes RBAC policy and
 reduces accidental visibility, but it is not a replacement for Kubernetes
 encryption-at-rest.
 

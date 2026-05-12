@@ -32,9 +32,6 @@ const (
 	// KubeClusterLabel is the label key for cluster name association.
 	KubeClusterLabel = "hysteron-cluster"
 
-	// KubeClusterDataAnnotation stores serialized cluster data.
-	KubeClusterDataAnnotation = "hysteron-clusterdata"
-
 	// KubeClusterDataKey stores serialized cluster data in Kubernetes object data.
 	KubeClusterDataKey = "clusterdata"
 

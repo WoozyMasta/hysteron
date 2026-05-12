@@ -170,7 +170,7 @@ func ListClusters(ctx context.Context, cfg *CommonConfig) ([]string, error) {
 				return nil, fmt.Errorf("cannot list cluster configmaps: %v", err)
 			}
 			for _, cm := range configMaps.Items {
-				if _, ok := cm.Annotations[k8sutil.KubeClusterDataAnnotation]; ok {
+				if _, ok := cm.Data[k8sutil.KubeClusterDataKey]; ok {
 					if name := clusterNameFromKubeObject(cm.Name, cm.Labels); name != "" {
 						clusterNames[name] = struct{}{}
 					}

@@ -170,8 +170,8 @@ func (s *KubeStore) atomicPutConfigMapClusterData(ctx context.Context, cdj []byt
 			// configmap exists
 
 			if previous == nil {
-				if result.Annotations != nil {
-					_, ok := result.Annotations[k8sutil.KubeClusterDataAnnotation]
+				if result.Data != nil {
+					_, ok := result.Data[k8sutil.KubeClusterDataKey]
 					if ok {
 						// cd exists but previous is nil
 						return ErrKeyModified
@@ -180,14 +180,14 @@ func (s *KubeStore) atomicPutConfigMapClusterData(ctx context.Context, cdj []byt
 			}
 
 			if previous != nil {
-				if result.Annotations == nil {
-					// empty annotations but previous isn't nil
+				if result.Data == nil {
+					// empty data but previous isn't nil
 					return ErrKeyModified
 				}
-				curcd, ok := result.Annotations[k8sutil.KubeClusterDataAnnotation]
+				curcd, ok := result.Data[k8sutil.KubeClusterDataKey]
 				if ok {
 					// check that the previous cd is the same as the current one in the
-					// configmap annotation
+					// configmap data key
 					if string(previous.Value) != curcd {
 						return ErrKeyModified
 					}
@@ -196,14 +196,14 @@ func (s *KubeStore) atomicPutConfigMapClusterData(ctx context.Context, cdj []byt
 					return ErrKeyModified
 				}
 			}
-			if result.Annotations == nil {
-				result.Annotations = map[string]string{}
+			if result.Data == nil {
+				result.Data = map[string]string{}
 			}
 			if result.Labels == nil {
 				result.Labels = map[string]string{}
 			}
 			maps.Copy(result.Labels, s.clusterLabels())
-			result.Annotations[k8sutil.KubeClusterDataAnnotation] = string(cdj)
+			result.Data[k8sutil.KubeClusterDataKey] = string(cdj)
 			_, err = epsClient.Update(ctx, result, metav1.UpdateOptions{})
 			return err
 		}
@@ -213,13 +213,12 @@ func (s *KubeStore) atomicPutConfigMapClusterData(ctx context.Context, cdj []byt
 		if previous != nil {
 			return ErrKeyModified
 		}
-		annotations := map[string]string{k8sutil.KubeClusterDataAnnotation: string(cdj)}
 		_, err = epsClient.Create(ctx, &v1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:        s.resourceName,
-				Annotations: annotations,
-				Labels:      s.clusterLabels(),
+				Name:   s.resourceName,
+				Labels: s.clusterLabels(),
 			},
+			Data: map[string]string{k8sutil.KubeClusterDataKey: string(cdj)},
 		}, metav1.CreateOptions{})
 		return err
 	})
@@ -303,25 +302,24 @@ func (s *KubeStore) putConfigMapClusterData(ctx context.Context, cdj []byte) err
 		}
 		if !apierrors.IsNotFound(err) {
 			// configmap exists
-			if result.Annotations == nil {
-				result.Annotations = map[string]string{}
+			if result.Data == nil {
+				result.Data = map[string]string{}
 			}
 			if result.Labels == nil {
 				result.Labels = map[string]string{}
 			}
 			maps.Copy(result.Labels, s.clusterLabels())
-			result.Annotations[k8sutil.KubeClusterDataAnnotation] = string(cdj)
+			result.Data[k8sutil.KubeClusterDataKey] = string(cdj)
 			_, err = epsClient.Update(ctx, result, metav1.UpdateOptions{})
 			return err
 		}
 		// configmap does not exists
-		annotations := map[string]string{k8sutil.KubeClusterDataAnnotation: string(cdj)}
 		_, err = epsClient.Create(ctx, &v1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:        s.resourceName,
-				Annotations: annotations,
-				Labels:      s.clusterLabels(),
+				Name:   s.resourceName,
+				Labels: s.clusterLabels(),
 			},
+			Data: map[string]string{k8sutil.KubeClusterDataKey: string(cdj)},
 		}, metav1.CreateOptions{})
 		return err
 	})
@@ -384,7 +382,7 @@ func (s *KubeStore) getConfigMapClusterData(ctx context.Context) (*cluster.Clust
 		}
 		return nil, nil, fmt.Errorf("failed to get latest version of configmap: %v", err)
 	}
-	cdj, ok := result.Annotations[k8sutil.KubeClusterDataAnnotation]
+	cdj, ok := result.Data[k8sutil.KubeClusterDataKey]
 	if !ok {
 		return nil, nil, nil
 	}

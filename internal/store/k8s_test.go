@@ -63,8 +63,8 @@ func TestKubeStoreConfigMapClusterDataRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConfigMaps.Get() error = %v", err)
 	}
-	if cm.Annotations[k8sutil.KubeClusterDataAnnotation] == "" {
-		t.Fatalf("ConfigMap annotation %q is empty", k8sutil.KubeClusterDataAnnotation)
+	if cm.Data[k8sutil.KubeClusterDataKey] == "" {
+		t.Fatalf("ConfigMap data key %q is empty", k8sutil.KubeClusterDataKey)
 	}
 	if cm.Labels[k8sutil.KubeClusterLabel] != "test" {
 		t.Fatalf("ConfigMap cluster label = %q, want test", cm.Labels[k8sutil.KubeClusterLabel])

@@ -2438,6 +2438,14 @@ func (p *PostgresKeeper) refreshReplicationSlots(
 	if !db.Spec.EnableLogicalSlotFailover {
 		p.logicalSlotGateNoticeEmitted = false
 	}
+	currentLogicalSlots, err := p.pgm.GetLogicalReplicationSlots()
+	if err != nil {
+		p.baseLog().
+			Debug().
+			Err(err).
+			Msg("failed to inspect logical replication slots")
+		return nil
+	}
 	if !reconcileLogicalSlots {
 		if reason == "wal_level_not_logical" {
 			p.baseLog().
@@ -2445,15 +2453,27 @@ func (p *PostgresKeeper) refreshReplicationSlots(
 				Str("wal_level", db.Status.PGParameters["wal_level"]).
 				Msg("managed logical replication slots configured but wal_level is not logical; skipping logical slot reconcile")
 		}
-		return nil
-	}
-
-	currentLogicalSlots, err := p.pgm.GetLogicalReplicationSlots()
-	if err != nil {
-		p.baseLog().
-			Debug().
-			Err(err).
-			Msg("failed to inspect logical replication slots")
+		if reason == "not_configured" && db.Spec.Role == common.RoleMaster {
+			logicalDecision := evaluateManagedLogicalSlotsDecision(
+				nil,
+				currentLogicalSlots,
+				db.Spec.IgnoreReplicationSlotMatchers,
+			)
+			for _, slot := range logicalDecision.active {
+				p.baseLog().
+					Warn().
+					Str("slot", slot).
+					Msg("logical replication slot scheduled for cleanup is active; skipping drop")
+			}
+			for _, slot := range logicalDecision.drop {
+				p.baseLog().Info().
+					Str("slot", slot).
+					Msg("dropping unmanaged hysteron logical replication slot")
+				if err := p.pgm.DropLogicalReplicationSlot(slot); err != nil {
+					return fmt.Errorf("failed to drop logical replication slot %q: %w", slot, err)
+				}
+			}
+		}
 		return nil
 	}
 

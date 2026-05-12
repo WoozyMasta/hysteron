@@ -68,6 +68,10 @@ The format is based on [Keep a Changelog][], and this project adheres to
   version smoke checks.
 * Add a strict PostgreSQL major-version support check with an explicit
   `--allow-unsupported-postgres-version` keeper override.
+* Fix managed logical slot cleanup when
+  `managedLogicalReplicationSlots` is unset:
+  primary reconciliation now drops inactive unmanaged `hysteron_*`
+  logical slots instead of skipping cleanup entirely.
 * Check or explicitly discard remaining command, PostgreSQL, and store cleanup
   errors so `errcheck` is clean.
 * Clean up initial style lint findings for whitespace, unconvert, gocritic,

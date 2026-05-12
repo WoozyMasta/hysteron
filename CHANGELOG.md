@@ -216,6 +216,9 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Add integration coverage for logical-slot-failover standby readiness mode:
   under the gate, managed logical slots stay master-only before promotion,
   standby emits readiness warnings, and failover remains successful.
+* Add integration chaos-lite coverage for repeated PG17+ native logical-slot
+  failover cycles (`TestLogicalSlotFailoverGateRepeatedFailoverCycles`) to
+  verify slot presence/consumption continuity on promoted masters.
 * Add integration coverage for gate-disabled managed logical slot behavior:
   with `managedLogicalReplicationSlots` configured and
   `enableLogicalSlotFailover` disabled, slots remain master-only before

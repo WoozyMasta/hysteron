@@ -88,6 +88,24 @@ var (
 			Help: "Set to 1 when PostgreSQL standby appears configured to stream from upstream",
 		},
 	)
+	pgWALReceiveLSNBytesGauge = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "hysteron_pg_wal_receive_lsn_bytes",
+			Help: "WAL receive LSN (standby) converted to integer bytes",
+		},
+	)
+	pgWALReplayLSNBytesGauge = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "hysteron_pg_wal_replay_lsn_bytes",
+			Help: "WAL replay LSN (standby) converted to integer bytes",
+		},
+	)
+	pgReplayLagSecondsGauge = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "hysteron_pg_replay_lag_seconds",
+			Help: "Approximate standby replay lag in seconds from last replay timestamp",
+		},
+	)
 	lastSyncSuccessSeconds = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "hysteron_keeper_last_sync_success_seconds",
@@ -228,6 +246,9 @@ func init() {
 	prometheus.MustRegister(pgServerVersionGauge)
 	prometheus.MustRegister(pgPendingRestartGauge)
 	prometheus.MustRegister(pgStreamingGauge)
+	prometheus.MustRegister(pgWALReceiveLSNBytesGauge)
+	prometheus.MustRegister(pgWALReplayLSNBytesGauge)
+	prometheus.MustRegister(pgReplayLagSecondsGauge)
 	prometheus.MustRegister(lastSyncSuccessSeconds)
 	prometheus.MustRegister(reconcileDurationSeconds)
 	prometheus.MustRegister(reconcileErrorsTotal)

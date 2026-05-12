@@ -966,6 +966,9 @@ func (p *PostgresKeeper) updatePGStateMetrics(pgState *cluster.PostgresState) {
 		pgInRecoveryGauge.Set(0)
 		pgTimelineGauge.Set(0)
 		pgStreamingGauge.Set(0)
+		pgWALReceiveLSNBytesGauge.Set(0)
+		pgWALReplayLSNBytesGauge.Set(0)
+		pgReplayLagSecondsGauge.Set(0)
 		return
 	}
 
@@ -981,6 +984,9 @@ func (p *PostgresKeeper) updatePGStateMetrics(pgState *cluster.PostgresState) {
 	if roleErr != nil {
 		pgInRecoveryGauge.Set(0)
 		pgStreamingGauge.Set(0)
+		pgWALReceiveLSNBytesGauge.Set(0)
+		pgWALReplayLSNBytesGauge.Set(0)
+		pgReplayLagSecondsGauge.Set(0)
 		return
 	}
 
@@ -990,6 +996,23 @@ func (p *PostgresKeeper) updatePGStateMetrics(pgState *cluster.PostgresState) {
 	// Streaming is meaningful for standbys only; infer from configured upstream.
 	streaming := inRecovery && pgState.PGParameters["primary_conninfo"] != ""
 	pgStreamingGauge.Set(boolToFloat64(streaming))
+	if !inRecovery {
+		pgWALReceiveLSNBytesGauge.Set(0)
+		pgWALReplayLSNBytesGauge.Set(0)
+		pgReplayLagSecondsGauge.Set(0)
+		return
+	}
+
+	standbyStatus, err := p.pgm.GetStandbyStatus()
+	if err != nil || standbyStatus == nil {
+		pgWALReceiveLSNBytesGauge.Set(0)
+		pgWALReplayLSNBytesGauge.Set(0)
+		pgReplayLagSecondsGauge.Set(0)
+		return
+	}
+	pgWALReceiveLSNBytesGauge.Set(float64(standbyStatus.ReceiveLSN))
+	pgWALReplayLSNBytesGauge.Set(float64(standbyStatus.ReplayLSN))
+	pgReplayLagSecondsGauge.Set(standbyStatus.ReplayLagSeconds)
 }
 
 func (p *PostgresKeeper) validatePostgresVersion() error {

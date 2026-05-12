@@ -737,6 +737,54 @@ func getConfigFilePGParameters(ctx context.Context, connParams ConnParams) (comm
 	return pgParameters, nil
 }
 
+func getStandbyStatus(ctx context.Context, connParams ConnParams) (*StandbyStatus, error) {
+	db, err := openDB(connParams)
+	if err != nil {
+		return nil, err
+	}
+	defer ignoreClose(db)
+
+	// replay lag can be NULL when no replay timestamp is available yet.
+	var receiveLSN sql.NullString
+	var replayLSN sql.NullString
+	var replayLagSeconds sql.NullFloat64
+	row := db.QueryRowContext(ctx, `
+select
+  pg_last_wal_receive_lsn()::text,
+  pg_last_wal_replay_lsn()::text,
+  extract(epoch from now() - pg_last_xact_replay_timestamp())`)
+	if err := row.Scan(&receiveLSN, &replayLSN, &replayLagSeconds); err != nil {
+		return nil, err
+	}
+
+	var receive uint64
+	if receiveLSN.Valid && receiveLSN.String != "" {
+		receive, err = PGLsnToInt(receiveLSN.String)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var replay uint64
+	if replayLSN.Valid && replayLSN.String != "" {
+		replay, err = PGLsnToInt(replayLSN.String)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var lagSeconds float64
+	if replayLagSeconds.Valid && replayLagSeconds.Float64 > 0 {
+		lagSeconds = replayLagSeconds.Float64
+	}
+
+	return &StandbyStatus{
+		ReceiveLSN:       receive,
+		ReplayLSN:        replay,
+		ReplayLagSeconds: lagSeconds,
+	}, nil
+}
+
 func hasPGFileSettings(ctx context.Context, db *sql.DB) (bool, error) {
 	rows, err := query(ctx, db, "select 1 from information_schema.tables where table_schema = 'pg_catalog' and table_name = 'pg_file_settings'")
 	if err != nil {

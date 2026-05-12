@@ -172,6 +172,13 @@ type SystemData struct {
 	XLogPos    uint64
 }
 
+// StandbyStatus contains standby WAL receiver/replay state.
+type StandbyStatus struct {
+	ReceiveLSN       uint64
+	ReplayLSN        uint64
+	ReplayLagSeconds float64
+}
+
 // TimelineHistory is one timeline history record from PostgreSQL.
 type TimelineHistory struct {
 	Reason      string
@@ -1176,6 +1183,13 @@ func (p *Manager) IsRestartRequiredDetailed() (*RestartRequirement, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeoutValue())
 	defer cancel()
 	return restartRequirementUsingPendingRestart(ctx, p.localConnParams)
+}
+
+// GetStandbyStatus returns WAL receiver/replay state for standby instances.
+func (p *Manager) GetStandbyStatus() (*StandbyStatus, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeoutValue())
+	defer cancel()
+	return getStandbyStatus(ctx, p.localConnParams)
 }
 
 func ignoreClose(c io.Closer) {

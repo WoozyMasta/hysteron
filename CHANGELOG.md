@@ -114,6 +114,10 @@ The format is based on [Keep a Changelog][], and this project adheres to
   `hysteron_pg_running`, `hysteron_pg_in_recovery`,
   `hysteron_pg_timeline`, `hysteron_pg_server_version`,
   `hysteron_pg_pending_restart`, and `hysteron_pg_streaming`.
+* Add standby WAL parity telemetry from keeper:
+  `hysteron_pg_wal_receive_lsn_bytes`,
+  `hysteron_pg_wal_replay_lsn_bytes`,
+  and `hysteron_pg_replay_lag_seconds`.
 * Check or explicitly discard remaining command, PostgreSQL, and store cleanup
   errors so `errcheck` is clean.
 * Clean up initial style lint findings for whitespace, unconvert, gocritic,

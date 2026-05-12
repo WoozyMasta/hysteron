@@ -132,6 +132,9 @@ The format is based on [Keep a Changelog][], and this project adheres to
   `hysteron_keeper_pgrewind_duration_seconds`,
   `hysteron_keeper_bootstrap_total{mode=...,result=...}`,
   and `hysteron_keeper_bootstrap_duration_seconds{mode=...}`.
+* Add integration metric assertions for HA observability baselines:
+  sentinel failover counter increment, keeper pending-restart signal,
+  and keeper DCS degraded/recovery state transition.
 * Check or explicitly discard remaining command, PostgreSQL, and store cleanup
   errors so `errcheck` is clean.
 * Clean up initial style lint findings for whitespace, unconvert, gocritic,

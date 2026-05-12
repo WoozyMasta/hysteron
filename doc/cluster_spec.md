@@ -100,6 +100,21 @@ Some options in a running cluster specification can be changed to update the des
 | archiveRecoverySettings | archive recovery configuration                                                                                                                                  | no       | ArchiveRecoverySettings |         |
 | noStream                | archive-recovery-only mode marker. When `true`, standby logical-slot synchronization/advance paths are explicitly disabled (useful for no-stream topologies). | no       | bool                    | false   |
 
+### Member Replication Slot TTL Notes
+
+`memberReplicationSlotTTL` is a guarded cleanup policy, not a forced garbage
+collector.
+
+Practical behavior:
+
+* A slot is considered for cleanup only after TTL age has elapsed.
+* Even after TTL, cleanup requires safety conditions (`inactive` and no
+  `xmin`), so vacuum-horizon-sensitive slots are not dropped prematurely.
+* If the related DB/member is still part of active cluster topology, keeper can
+  keep the slot while waiting for consistent orphan tracking state.
+* In degraded/outage scenarios this policy intentionally prefers safety over
+  aggressive slot removal.
+
 #### ArchiveRecoverySettings
 
 | Name           | Description                                                                                                                                                                | Required | Type   | Default |

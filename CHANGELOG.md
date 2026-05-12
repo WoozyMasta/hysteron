@@ -345,6 +345,9 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Add integration coverage that `standbyConfig.noStream=true` suppresses
   standby logical-slot advance under logical-slot-failover gate (PG16+
   standby slot remains stable).
+* Clarify `memberReplicationSlotTTL` operational semantics in cluster-spec
+  docs: cleanup is age-gated and safety-guarded (`inactive`, no `xmin`), with
+  conservative behavior during degraded scenarios.
 
 ## v0.17.0
 

@@ -156,7 +156,9 @@ The format is based on [Keep a Changelog][], and this project adheres to
   tracking, and keeper TTL-aware guarded slot cleanup that requires orphan age
   threshold, inactivity, and no `xmin`.
 * Add integration coverage for new slot policies and rewind behavior,
-  including `TestAdditionalReplicationSlots`, `TestMemberReplicationSlotTTLGuardsXmin`,
+  including `TestAdditionalReplicationSlots`,
+  `TestMemberReplicationSlotTTLGuardsXmin`,
+  `TestMemberReplicationSlotTTLCleansRemovedMemberDBSlot`,
   and `TestTimelineForkPgrewind`.
 * Start `managed logical slots` MVP with a new cluster-spec contract
   `managedLogicalReplicationSlots` and strict validation for slot names,

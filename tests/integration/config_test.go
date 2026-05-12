@@ -1031,6 +1031,120 @@ func TestMemberReplicationSlotTTLGuardsXmin(t *testing.T) {
 	}
 }
 
+func TestMemberReplicationSlotTTLCleansRemovedMemberDBSlot(t *testing.T) {
+	t.Parallel()
+
+	dir, err := os.MkdirTemp("", "")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	clusterName := uuid.NewString()
+	initialClusterSpec := &cluster.ClusterSpec{
+		InitMode:                  cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
+		SleepInterval:             &cluster.Duration{Duration: 2 * time.Second},
+		RequestTimeout:            &cluster.Duration{Duration: 1 * time.Second},
+		FailInterval:              &cluster.Duration{Duration: 15 * time.Second},
+		ConvergenceTimeout:        &cluster.Duration{Duration: 30 * time.Second},
+		DeadKeeperRemovalInterval: &cluster.Duration{Duration: 8 * time.Second},
+		MaxStandbysPerSender:      cluster.Uint16P(1),
+		MemberReplicationSlotTTL:  &cluster.Duration{Duration: 8 * time.Second},
+		PGParameters:              defaultPGParameters,
+	}
+
+	tks, tss, tp, tstore := setupServersCustom(t, clusterName, dir, 2, 1, initialClusterSpec)
+	defer shutdown(tks, tss, tp, tstore)
+
+	storeEndpoints := fmt.Sprintf("%s:%s", tstore.listenAddress, tstore.port)
+	storePath := filepath.Join(common.StorePrefix, clusterName)
+	sm := store.NewKVBackedStore(tstore.store, storePath)
+
+	master, standbys := waitMasterStandbysReady(t, sm, tks)
+	oldStandby := standbys[0]
+
+	cd, _, err := sm.GetClusterData(context.TODO())
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	var oldStandbyDBUID string
+	for _, db := range cd.DBs {
+		if db.Spec.KeeperUID == oldStandby.uid {
+			oldStandbyDBUID = db.UID
+			break
+		}
+	}
+	if oldStandbyDBUID == "" {
+		t.Fatal("old standby db uid not found")
+	}
+
+	if err := waitHysteronReplicationSlots(master, []string{oldStandbyDBUID}, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	// Add spare keeper that can take over standby assignment after old standby stops.
+	spare, err := NewTestKeeper(
+		t,
+		dir,
+		clusterName,
+		pgSUUsername,
+		pgSUPassword,
+		pgReplUsername,
+		pgReplPassword,
+		tstore.storeBackend,
+		storeEndpoints,
+	)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	tks[spare.uid] = spare
+	if err := spare.Start(); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	if err := WaitClusterDataKeepers([]string{master.uid, oldStandby.uid, spare.uid}, sm, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	t.Logf("stopping old standby keeper: %s", oldStandby.uid)
+	oldStandby.Stop()
+
+	waitKeeperReady(t, sm, spare)
+	if err := spare.WaitDBRole(common.RoleStandby, nil, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	if err := WaitClusterDataKeepers([]string{master.uid, spare.uid}, sm, 60*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	cd, _, err = sm.GetClusterData(context.TODO())
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	var newStandbyDBUID string
+	for _, db := range cd.DBs {
+		if db.Spec.KeeperUID == spare.uid {
+			newStandbyDBUID = db.UID
+			break
+		}
+	}
+	if newStandbyDBUID == "" {
+		t.Fatal("new standby db uid not found")
+	}
+
+	// Old slot can survive briefly while orphan tracking starts.
+	if err := waitHysteronReplicationSlots(master, []string{oldStandbyDBUID, newStandbyDBUID}, 20*time.Second); err != nil {
+		t.Fatalf("unexpected err while waiting dual slots: %v", err)
+	}
+
+	// After TTL elapses, old slot must be removed while the new standby slot remains.
+	if err := waitHysteronReplicationSlots(master, []string{newStandbyDBUID}, 120*time.Second); err != nil {
+		t.Fatalf("expected old member slot cleanup after db removal, got err: %v", err)
+	}
+}
+
 func TestAutomaticPgRestart(t *testing.T) {
 	t.Parallel()
 

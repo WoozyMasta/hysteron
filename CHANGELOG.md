@@ -222,6 +222,9 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Add opt-in long-run integration soak coverage for logical-slot failover
   cycles (`TestLogicalSlotFailoverGateSoakFailoverCycles`) with configurable
   cycle count via `HYSTERON_INTEGRATION_SOAK_FAILOVER_CYCLES`.
+* Forward soak-control environment variables through integration compose
+  runner so opt-in soak tests can be executed via `make integration-compose`
+  without local runner workarounds.
 * Add integration coverage for gate-disabled managed logical slot behavior:
   with `managedLogicalReplicationSlots` configured and
   `enableLogicalSlotFailover` disabled, slots remain master-only before

@@ -218,6 +218,49 @@ var (
 			Help: "Total keeper transitions out of failsafe active state",
 		},
 	)
+	basebackupTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "hysteron_keeper_basebackup_total",
+			Help: "Total basebackup resync operations by result",
+		},
+		[]string{"result"},
+	)
+	basebackupDurationSeconds = prometheus.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "hysteron_keeper_basebackup_duration_seconds",
+			Help:    "Duration of basebackup resync operations",
+			Buckets: prometheus.DefBuckets,
+		},
+	)
+	pgrewindTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "hysteron_keeper_pgrewind_total",
+			Help: "Total pg_rewind operations by result",
+		},
+		[]string{"result"},
+	)
+	pgrewindDurationSeconds = prometheus.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "hysteron_keeper_pgrewind_duration_seconds",
+			Help:    "Duration of pg_rewind operations",
+			Buckets: prometheus.DefBuckets,
+		},
+	)
+	bootstrapTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "hysteron_keeper_bootstrap_total",
+			Help: "Total keeper bootstrap operations by mode and result",
+		},
+		[]string{"mode", "result"},
+	)
+	bootstrapDurationSeconds = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "hysteron_keeper_bootstrap_duration_seconds",
+			Help:    "Duration of keeper bootstrap operations by mode",
+			Buckets: prometheus.DefBuckets,
+		},
+		[]string{"mode"},
+	)
 )
 
 // setRole is a helper that controls the targetRole metric by setting only one of the
@@ -271,4 +314,10 @@ func init() {
 	failsafeStateGauge.WithLabelValues("expired").Set(0)
 	prometheus.MustRegister(failsafeEntersTotal)
 	prometheus.MustRegister(failsafeExitsTotal)
+	prometheus.MustRegister(basebackupTotal)
+	prometheus.MustRegister(basebackupDurationSeconds)
+	prometheus.MustRegister(pgrewindTotal)
+	prometheus.MustRegister(pgrewindDurationSeconds)
+	prometheus.MustRegister(bootstrapTotal)
+	prometheus.MustRegister(bootstrapDurationSeconds)
 }

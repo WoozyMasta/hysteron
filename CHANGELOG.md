@@ -122,6 +122,13 @@ The format is based on [Keep a Changelog][], and this project adheres to
   `hysteron_proxy_active_connections{mode=...}` and
   `hysteron_proxy_connect_errors_total{mode=...,reason=...}`,
   wired from TCP proxy runtime connection hooks.
+* Add keeper lifecycle operation telemetry for resync/bootstrap flows:
+  `hysteron_keeper_basebackup_total{result=...}`,
+  `hysteron_keeper_basebackup_duration_seconds`,
+  `hysteron_keeper_pgrewind_total{result=...}`,
+  `hysteron_keeper_pgrewind_duration_seconds`,
+  `hysteron_keeper_bootstrap_total{mode=...,result=...}`,
+  and `hysteron_keeper_bootstrap_duration_seconds{mode=...}`.
 * Check or explicitly discard remaining command, PostgreSQL, and store cleanup
   errors so `errcheck` is clean.
 * Clean up initial style lint findings for whitespace, unconvert, gocritic,

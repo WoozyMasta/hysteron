@@ -1525,13 +1525,18 @@ func (p *PostgresKeeper) resync(
 			Str(slog.FieldDBUID, masterDB.UID).
 			Str(slog.FieldKeeperUID, followedDB.Spec.KeeperUID).
 			Msg("attempting pg_rewind against current primary to sync data directory")
+		pgrewindStart := time.Now()
 		if err := pgm.SyncFromFollowedPGRewind(connParams, p.pgSUPassword); err != nil {
+			pgrewindDurationSeconds.Observe(time.Since(pgrewindStart).Seconds())
+			pgrewindTotal.WithLabelValues("error").Inc()
 			// log pg_rewind error and fallback to pg_basebackup
 			p.baseLog().
 				Error().
 				Err(err).
 				Msg("error syncing with pg_rewind")
 		} else {
+			pgrewindDurationSeconds.Observe(time.Since(pgrewindStart).Seconds())
+			pgrewindTotal.WithLabelValues("success").Inc()
 			pgm.SetRecoveryOptions(p.createRecoveryOptions(pg.RecoveryModeStandby, standbySettings, nil, nil))
 			return nil
 		}
@@ -1566,9 +1571,14 @@ func (p *PostgresKeeper) resync(
 			Msg("starting base backup / clone from followed PostgreSQL instance")
 	}
 
+	basebackupStart := time.Now()
 	if err := pgm.SyncFromFollowed(replConnParams, replSlot); err != nil {
+		basebackupDurationSeconds.Observe(time.Since(basebackupStart).Seconds())
+		basebackupTotal.WithLabelValues("error").Inc()
 		return fmt.Errorf("sync error: %v", err)
 	}
+	basebackupDurationSeconds.Observe(time.Since(basebackupStart).Seconds())
+	basebackupTotal.WithLabelValues("success").Inc()
 	p.baseLog().
 		Info().
 		Str(slog.FieldDBUID, followedDB.UID).
@@ -2961,7 +2971,10 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 					Msg("failed to remove the postgres data dir")
 				return
 			}
+			bootstrapStart := time.Now()
 			if err = pgm.Init(initConfig); err != nil {
+				bootstrapDurationSeconds.WithLabelValues("new").Observe(time.Since(bootstrapStart).Seconds())
+				bootstrapTotal.WithLabelValues("new", "error").Inc()
 				reconcileErrorsTotal.WithLabelValues(reconcilePhase, "init_postgres").Inc()
 				p.baseLog().
 					Error().
@@ -2969,6 +2982,8 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 					Msg("failed to initialize postgres database cluster")
 				return
 			}
+			bootstrapDurationSeconds.WithLabelValues("new").Observe(time.Since(bootstrapStart).Seconds())
+			bootstrapTotal.WithLabelValues("new", "success").Inc()
 
 			if err = pgm.StartTmpMerged(); err != nil {
 				reconcileErrorsTotal.WithLabelValues(reconcilePhase, "start_tmp_merged").Inc()
@@ -3069,7 +3084,10 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 			p.baseLog().
 				Info().
 				Msg("running archive restore command from cluster specification")
+			bootstrapStart := time.Now()
 			if err = pgm.Restore(db.Spec.PITRConfig.DataRestoreCommand); err != nil {
+				bootstrapDurationSeconds.WithLabelValues("pitr").Observe(time.Since(bootstrapStart).Seconds())
+				bootstrapTotal.WithLabelValues("pitr", "error").Inc()
 				reconcileErrorsTotal.WithLabelValues(reconcilePhase, "restore_data").Inc()
 				p.baseLog().
 					Error().
@@ -3077,6 +3095,8 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 					Msg("failed to restore postgres database cluster")
 				return
 			}
+			bootstrapDurationSeconds.WithLabelValues("pitr").Observe(time.Since(bootstrapStart).Seconds())
+			bootstrapTotal.WithLabelValues("pitr", "success").Inc()
 
 			recoveryMode := pg.RecoveryModeRecovery
 			var standbySettings *cluster.StandbySettings

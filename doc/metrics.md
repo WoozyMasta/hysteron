@@ -75,6 +75,24 @@ Current values:
 * `dial`
 * `non_tcp_destination`
 
+### `hysteron_keeper_basebackup_total{result=...}`
+
+### `hysteron_keeper_pgrewind_total{result=...}`
+
+### `hysteron_keeper_bootstrap_total{result=...}`
+
+Current `result` values:
+
+* `success`
+* `error`
+
+### `hysteron_keeper_bootstrap_total{mode=...}`
+
+Current `mode` values:
+
+* `new`
+* `pitr`
+
 ## Compatibility policy
 
 This fork does not require strict backward compatibility for metric names.

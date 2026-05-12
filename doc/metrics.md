@@ -67,6 +67,14 @@ Current values:
 * `writable_proxy_runtime`
 * `read_only_proxy_runtime`
 
+### `hysteron_proxy_connect_errors_total{reason=...}`
+
+Current values:
+
+* `no_destination`
+* `dial`
+* `non_tcp_destination`
+
 ## Compatibility policy
 
 This fork does not require strict backward compatibility for metric names.

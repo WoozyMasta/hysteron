@@ -243,6 +243,12 @@ func (l *proxyListener) start() error {
 		KeepAliveInterval: time.Duration(
 			cfg.KeepAlive.Interval,
 		) * time.Second,
+		OnActiveConnectionsDelta: func(delta int) {
+			activeConnectionsGauge.WithLabelValues(string(l.mode)).Add(float64(delta))
+		},
+		OnConnectError: func(reason string) {
+			connectErrorsTotal.WithLabelValues(string(l.mode), reason).Inc()
+		},
 	})
 
 	l.tcpProxy = pp

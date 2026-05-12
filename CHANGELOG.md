@@ -118,6 +118,10 @@ The format is based on [Keep a Changelog][], and this project adheres to
   `hysteron_pg_wal_receive_lsn_bytes`,
   `hysteron_pg_wal_replay_lsn_bytes`,
   and `hysteron_pg_replay_lag_seconds`.
+* Add proxy data-path telemetry:
+  `hysteron_proxy_active_connections{mode=...}` and
+  `hysteron_proxy_connect_errors_total{mode=...,reason=...}`,
+  wired from TCP proxy runtime connection hooks.
 * Check or explicitly discard remaining command, PostgreSQL, and store cleanup
   errors so `errcheck` is clean.
 * Clean up initial style lint findings for whitespace, unconvert, gocritic,

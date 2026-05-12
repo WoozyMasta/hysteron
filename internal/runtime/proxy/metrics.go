@@ -57,6 +57,20 @@ var (
 			Help: "Total number of read-only routing fallbacks to primary",
 		},
 	)
+	activeConnectionsGauge = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "hysteron_proxy_active_connections",
+			Help: "Current number of active proxied client connections by mode",
+		},
+		[]string{"mode"},
+	)
+	connectErrorsTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "hysteron_proxy_connect_errors_total",
+			Help: "Total proxy destination connect/setup errors by mode and reason",
+		},
+		[]string{"mode", "reason"},
+	)
 )
 
 func init() {
@@ -66,9 +80,13 @@ func init() {
 	prometheus.MustRegister(routeStateGauge)
 	prometheus.MustRegister(readOnlyDestinationsGauge)
 	prometheus.MustRegister(readOnlyFallbacksTotal)
+	prometheus.MustRegister(activeConnectionsGauge)
+	prometheus.MustRegister(connectErrorsTotal)
 
 	routeStateGauge.WithLabelValues(string(proxyModeWritable), "enabled").Set(0)
 	routeStateGauge.WithLabelValues(string(proxyModeWritable), "disabled").Set(1)
 	routeStateGauge.WithLabelValues(string(proxyModeReadOnly), "enabled").Set(0)
 	routeStateGauge.WithLabelValues(string(proxyModeReadOnly), "disabled").Set(1)
+	activeConnectionsGauge.WithLabelValues(string(proxyModeWritable)).Set(0)
+	activeConnectionsGauge.WithLabelValues(string(proxyModeReadOnly)).Set(0)
 }

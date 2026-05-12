@@ -46,6 +46,11 @@ type Options struct {
 	KeepAliveCount int
 	// KeepAliveInterval sets interval between keepalive probes.
 	KeepAliveInterval time.Duration
+	// OnActiveConnectionsDelta, when set, is called with +1 when a proxied
+	// connection becomes active and -1 when it ends.
+	OnActiveConnectionsDelta func(delta int)
+	// OnConnectError, when set, is called on connection setup failures.
+	OnConnectError func(reason string)
 }
 
 // Proxy forwards TCP connections from a listener to current destinations.
@@ -186,6 +191,9 @@ func (p *Proxy) proxyConn(src *net.TCPConn) {
 	}()
 
 	if dest == nil {
+		if p.options.OnConnectError != nil {
+			p.options.OnConnectError("no_destination")
+		}
 		return
 	}
 
@@ -203,6 +211,9 @@ func (p *Proxy) proxyConn(src *net.TCPConn) {
 	var dialer net.Dialer
 	destConn, err := dialer.DialContext(ctx, "tcp", dest.addr.String())
 	if err != nil {
+		if p.options.OnConnectError != nil {
+			p.options.OnConnectError("dial")
+		}
 		log.Debug().
 			Err(err).
 			Stringer("destination_addr", dest.addr).
@@ -213,10 +224,17 @@ func (p *Proxy) proxyConn(src *net.TCPConn) {
 	dst, ok := destConn.(*net.TCPConn)
 	if !ok {
 		_ = destConn.Close()
+		if p.options.OnConnectError != nil {
+			p.options.OnConnectError("non_tcp_destination")
+		}
 		log.Error().
 			Str("destination_type", fmt.Sprintf("%T", destConn)).
 			Msg("destination connection is not TCP")
 		return
+	}
+	if p.options.OnActiveConnectionsDelta != nil {
+		p.options.OnActiveConnectionsDelta(1)
+		defer p.options.OnActiveConnectionsDelta(-1)
 	}
 	defer func() {
 		log.Debug().

@@ -56,6 +56,21 @@ var (
 		},
 		[]string{"cluster_name", "stage"},
 	)
+	failoversTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "hysteron_sentinel_failovers_total",
+			Help: "Total number of master transitions decided by sentinel",
+		},
+		[]string{"cluster_name", "reason"},
+	)
+	failoverDurationSeconds = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "hysteron_sentinel_failover_duration_seconds",
+			Help:    "Observed duration from master degradation/start marker to master transition",
+			Buckets: prometheus.DefBuckets,
+		},
+		[]string{"cluster_name", "reason"},
+	)
 )
 
 // Register the static methods on the default Prometheus registry automatically
@@ -65,4 +80,6 @@ func init() {
 	prometheus.MustRegister(checkDurationSeconds)
 	prometheus.MustRegister(leaderElectionsTotal)
 	prometheus.MustRegister(checkErrorsTotal)
+	prometheus.MustRegister(failoversTotal)
+	prometheus.MustRegister(failoverDurationSeconds)
 }

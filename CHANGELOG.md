@@ -102,6 +102,9 @@ The format is based on [Keep a Changelog][], and this project adheres to
   election reset events.
 * Extend proxy check error stage telemetry to cover timeout/check-loop/runtime
   listener failures, and document controlled metric label vocabularies.
+* Add sentinel master transition telemetry:
+  `hysteron_sentinel_failovers_total{reason=...}` and
+  `hysteron_sentinel_failover_duration_seconds{reason=...}`.
 * Check or explicitly discard remaining command, PostgreSQL, and store cleanup
   errors so `errcheck` is clean.
 * Clean up initial style lint findings for whitespace, unconvert, gocritic,

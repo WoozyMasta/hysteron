@@ -2762,6 +2762,38 @@ func (s *Sentinel) clusterSentinelCheck(pctx context.Context) {
 		s.log.Error().Err(err).Msg("failed to update cluster data")
 		return
 	}
+	if newcd != nil && cd != nil {
+		prevMasterUID := cd.Cluster.Status.Master
+		nextMasterUID := newcd.Cluster.Status.Master
+		if prevMasterUID != nextMasterUID {
+			reason := "master_changed"
+			switch {
+			case prevMasterUID == "" && nextMasterUID != "":
+				reason = "master_assigned"
+			case prevMasterUID != "" && nextMasterUID == "":
+				reason = "master_cleared"
+			case prevMasterUID != "":
+				if prevMaster, ok := cd.DBs[prevMasterUID]; ok && !prevMaster.Status.Healthy {
+					reason = "failed_master"
+				}
+			}
+			failoversTotal.WithLabelValues(s.clusterName, reason).Inc()
+
+			var duration time.Duration
+			if prevMasterUID != "" {
+				if ts, ok := s.dbErrorTimers[prevMasterUID]; ok && ts > 0 {
+					duration = timer.Since(ts)
+				} else if prevMaster, ok := cd.DBs[prevMasterUID]; ok &&
+					!prevMaster.ChangeTime.IsZero() {
+					duration = time.Since(prevMaster.ChangeTime)
+				}
+			}
+			if duration > 0 {
+				failoverDurationSeconds.WithLabelValues(s.clusterName, reason).
+					Observe(duration.Seconds())
+			}
+		}
+	}
 	s.log.Debug().
 		Fields(cluster.LogSummaryClusterData(newcd)).
 		Msg("cluster data after sentinel failover and convergence logic")

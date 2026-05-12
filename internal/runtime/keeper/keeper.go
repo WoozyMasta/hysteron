@@ -1447,10 +1447,6 @@ func (p *PostgresKeeper) Start(ctx context.Context) {
 	updatePGStateTimerCh := time.NewTimer(0).C
 	updateKeeperInfoTimerCh := time.NewTimer(0).C
 	for {
-		// The sleepInterval can be updated during normal execution. Ensure we regularly
-		// refresh the metric to account for those changes.
-		sleepInterval.Set(float64(p.sleepInterval / time.Second))
-
 		select {
 		case <-ctx.Done():
 			p.baseLog().Debug().Msg("shutting down keeper")
@@ -4142,7 +4138,6 @@ func sigHandler(sigs chan os.Signal, cancel context.CancelFunc) {
 	).Debug().
 		Str("signal", s.String()).
 		Msg("shutdown signal received")
-	shutdownSeconds.SetToCurrentTime()
 	cancel()
 }
 

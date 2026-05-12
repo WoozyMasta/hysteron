@@ -139,18 +139,6 @@ var (
 			Help: "Last time keeper successfully read cluster data from DCS as unix epoch seconds",
 		},
 	)
-	sleepInterval = prometheus.NewGauge(
-		prometheus.GaugeOpts{
-			Name: "hysteron_keeper_sleep_interval",
-			Help: "Seconds to sleep between sync loops",
-		},
-	)
-	shutdownSeconds = prometheus.NewGauge(
-		prometheus.GaugeOpts{
-			Name: "hysteron_keeper_shutdown_seconds",
-			Help: "Shutdown time (received termination signal) since unix epoch in seconds",
-		},
-	)
 	logicalSlotStandbyAdvanceAttemptsTotal = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Name: "hysteron_keeper_logical_slot_standby_advance_attempts_total",
@@ -297,8 +285,6 @@ func init() {
 	prometheus.MustRegister(reconcileErrorsTotal)
 	prometheus.MustRegister(dcsDegradedGauge)
 	prometheus.MustRegister(dcsLastSuccessSeconds)
-	prometheus.MustRegister(sleepInterval)
-	prometheus.MustRegister(shutdownSeconds)
 	prometheus.MustRegister(logicalSlotStandbyAdvanceAttemptsTotal)
 	prometheus.MustRegister(logicalSlotStandbyAdvanceSuccessTotal)
 	prometheus.MustRegister(logicalSlotStandbyAdvanceFailuresTotal)

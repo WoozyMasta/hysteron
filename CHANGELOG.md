@@ -135,6 +135,9 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Add integration metric assertions for HA observability baselines:
   sentinel failover counter increment, keeper pending-restart signal,
   and keeper DCS degraded/recovery state transition.
+* Remove low-value keeper config/lifecycle echo gauges
+  `hysteron_keeper_sleep_interval` and
+  `hysteron_keeper_shutdown_seconds` from the default metric set.
 * Check or explicitly discard remaining command, PostgreSQL, and store cleanup
   errors so `errcheck` is clean.
 * Clean up initial style lint findings for whitespace, unconvert, gocritic,

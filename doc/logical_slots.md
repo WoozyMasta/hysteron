@@ -140,3 +140,40 @@ Suggested initial alerts (tune for your load profile):
 * `pending_slots > 0` for 10 minutes.
 * Increase in `failures_total` over 10 minutes above a small threshold
   (for example `> 10`) with no matching growth in `success_total`.
+
+Prometheus examples:
+
+```promql
+# Warning: retries stuck for 10 minutes
+max_over_time(hysteron_keeper_logical_slot_standby_advance_retry_slots[10m]) > 0
+```
+
+```promql
+# Warning: backlog persists for 10 minutes
+max_over_time(hysteron_keeper_logical_slot_standby_advance_pending_slots[10m]) > 0
+```
+
+```promql
+# Critical: failures grow while no success is observed
+(
+  increase(hysteron_keeper_logical_slot_standby_advance_failures_total[10m]) > 10
+)
+and
+(
+  increase(hysteron_keeper_logical_slot_standby_advance_success_total[10m]) == 0
+)
+```
+
+```promql
+# Warning: frequent active conflicts (slot is busy)
+increase(hysteron_keeper_logical_slot_standby_advance_active_conflicts_total[10m]) > 20
+```
+
+Runbook quick checks:
+
+* confirm `enableLogicalSlotFailover` and `managedLogicalReplicationSlots`
+  in current cluster spec;
+* check keeper logs for `SQLSTATE 55006` frequency and prolonged retry loops;
+* verify standby replay health (`pg_last_wal_replay_lsn`, replay lag) on the
+  target standby;
+* check for long-running transactions/consumers pinning slot activity.

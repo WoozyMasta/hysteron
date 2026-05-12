@@ -93,6 +93,10 @@ The format is based on [Keep a Changelog][], and this project adheres to
   `hysteron_proxy_route_state{mode=...,state=...}`,
   `hysteron_proxy_read_only_destinations`,
   and `hysteron_proxy_read_only_fallbacks_total`.
+* Add shared store (DCS) operation telemetry:
+  `hysteron_dcs_operation_duration_seconds{backend,operation}` and
+  `hysteron_dcs_operation_errors_total{backend,operation,code}`,
+  wired into high-level KV-backed and Kubernetes-backed store operations.
 * Check or explicitly discard remaining command, PostgreSQL, and store cleanup
   errors so `errcheck` is clean.
 * Clean up initial style lint findings for whitespace, unconvert, gocritic,

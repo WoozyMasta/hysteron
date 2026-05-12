@@ -148,14 +148,25 @@ func (s *KubeStore) patchKubeStatusAnnotation(ctx context.Context, annotationDat
 
 // AtomicPutClusterData stores cluster data with optimistic concurrency.
 func (s *KubeStore) AtomicPutClusterData(ctx context.Context, cd *cluster.ClusterData, previous *KVPair) (*KVPair, error) {
+	start := time.Now()
+	var opErr error
+	defer func() {
+		observeDCSOperation(start, "kubernetes", "atomic_put_cluster_data", opErr)
+	}()
+
 	cdj, err := json.Marshal(cd)
 	if err != nil {
+		opErr = err
 		return nil, err
 	}
 	if s.resourceKind == "secret" {
-		return s.atomicPutSecretClusterData(ctx, cdj, previous)
+		pair, err := s.atomicPutSecretClusterData(ctx, cdj, previous)
+		opErr = err
+		return pair, err
 	}
-	return s.atomicPutConfigMapClusterData(ctx, cdj, previous)
+	pair, err := s.atomicPutConfigMapClusterData(ctx, cdj, previous)
+	opErr = err
+	return pair, err
 }
 
 func (s *KubeStore) atomicPutConfigMapClusterData(ctx context.Context, cdj []byte, previous *KVPair) (*KVPair, error) {
@@ -282,14 +293,23 @@ func (s *KubeStore) atomicPutSecretClusterData(ctx context.Context, cdj []byte, 
 
 // PutClusterData stores cluster data without concurrency checks.
 func (s *KubeStore) PutClusterData(ctx context.Context, cd *cluster.ClusterData) error {
+	start := time.Now()
+	var opErr error
+	defer func() {
+		observeDCSOperation(start, "kubernetes", "put_cluster_data", opErr)
+	}()
+
 	cdj, err := json.Marshal(cd)
 	if err != nil {
+		opErr = err
 		return err
 	}
 	if s.resourceKind == "secret" {
-		return s.putSecretClusterData(ctx, cdj)
+		opErr = s.putSecretClusterData(ctx, cdj)
+		return opErr
 	}
-	return s.putConfigMapClusterData(ctx, cdj)
+	opErr = s.putConfigMapClusterData(ctx, cdj)
+	return opErr
 }
 
 func (s *KubeStore) putConfigMapClusterData(ctx context.Context, cdj []byte) error {
@@ -367,10 +387,20 @@ func (s *KubeStore) putSecretClusterData(ctx context.Context, cdj []byte) error 
 
 // GetClusterData loads cluster data from Kubernetes.
 func (s *KubeStore) GetClusterData(ctx context.Context) (*cluster.ClusterData, *KVPair, error) {
+	start := time.Now()
+	var opErr error
+	defer func() {
+		observeDCSOperation(start, "kubernetes", "get_cluster_data", opErr)
+	}()
+
 	if s.resourceKind == "secret" {
-		return s.getSecretClusterData(ctx)
+		cd, pair, err := s.getSecretClusterData(ctx)
+		opErr = err
+		return cd, pair, err
 	}
-	return s.getConfigMapClusterData(ctx)
+	cd, pair, err := s.getConfigMapClusterData(ctx)
+	opErr = err
+	return cd, pair, err
 }
 
 func (s *KubeStore) getConfigMapClusterData(ctx context.Context) (*cluster.ClusterData, *KVPair, error) {
@@ -419,15 +449,29 @@ func (s *KubeStore) getSecretClusterData(ctx context.Context) (*cluster.ClusterD
 
 // SetKeeperInfo publishes keeper info.
 func (s *KubeStore) SetKeeperInfo(ctx context.Context, _ string, ms *cluster.KeeperInfo, _ time.Duration) error {
+	start := time.Now()
+	var opErr error
+	defer func() {
+		observeDCSOperation(start, "kubernetes", "set_keeper_info", opErr)
+	}()
+
 	msj, err := json.Marshal(ms)
 	if err != nil {
+		opErr = err
 		return err
 	}
-	return s.patchKubeStatusAnnotation(ctx, msj)
+	opErr = s.patchKubeStatusAnnotation(ctx, msj)
+	return opErr
 }
 
 // GetKeepersInfo lists published keeper info.
 func (s *KubeStore) GetKeepersInfo(ctx context.Context) (cluster.KeepersInfo, error) {
+	start := time.Now()
+	var opErr error
+	defer func() {
+		observeDCSOperation(start, "kubernetes", "get_keepers_info", opErr)
+	}()
+
 	keepers := cluster.KeepersInfo{}
 
 	podsClient := s.client.CoreV1().Pods(s.namespace)
@@ -437,6 +481,7 @@ func (s *KubeStore) GetKeepersInfo(ctx context.Context) (cluster.KeepersInfo, er
 	}
 	result, err := podsClient.List(ctx, listOpts)
 	if err != nil {
+		opErr = err
 		return nil, fmt.Errorf("failed to get latest version of pod: %v", err)
 	}
 
@@ -446,6 +491,7 @@ func (s *KubeStore) GetKeepersInfo(ctx context.Context) (cluster.KeepersInfo, er
 		if kij, ok := pod.Annotations[k8sutil.KubeStatusAnnnotation]; ok {
 			err = json.Unmarshal([]byte(kij), &ki)
 			if err != nil {
+				opErr = err
 				return nil, err
 			}
 			keepers[ki.UID] = &ki
@@ -456,15 +502,29 @@ func (s *KubeStore) GetKeepersInfo(ctx context.Context) (cluster.KeepersInfo, er
 
 // SetSentinelInfo publishes sentinel info.
 func (s *KubeStore) SetSentinelInfo(ctx context.Context, si *cluster.SentinelInfo, _ time.Duration) error {
+	start := time.Now()
+	var opErr error
+	defer func() {
+		observeDCSOperation(start, "kubernetes", "set_sentinel_info", opErr)
+	}()
+
 	sij, err := json.Marshal(si)
 	if err != nil {
+		opErr = err
 		return err
 	}
-	return s.patchKubeStatusAnnotation(ctx, sij)
+	opErr = s.patchKubeStatusAnnotation(ctx, sij)
+	return opErr
 }
 
 // GetSentinelsInfo lists published sentinel info.
 func (s *KubeStore) GetSentinelsInfo(ctx context.Context) (cluster.SentinelsInfo, error) {
+	start := time.Now()
+	var opErr error
+	defer func() {
+		observeDCSOperation(start, "kubernetes", "get_sentinels_info", opErr)
+	}()
+
 	ssi := cluster.SentinelsInfo{}
 
 	podsClient := s.client.CoreV1().Pods(s.namespace)
@@ -474,6 +534,7 @@ func (s *KubeStore) GetSentinelsInfo(ctx context.Context) (cluster.SentinelsInfo
 	}
 	result, err := podsClient.List(ctx, listOpts)
 	if err != nil {
+		opErr = err
 		return nil, fmt.Errorf("failed to get latest version of pod: %v", err)
 	}
 
@@ -483,6 +544,7 @@ func (s *KubeStore) GetSentinelsInfo(ctx context.Context) (cluster.SentinelsInfo
 		if sij, ok := pod.Annotations[k8sutil.KubeStatusAnnnotation]; ok {
 			err = json.Unmarshal([]byte(sij), &si)
 			if err != nil {
+				opErr = err
 				return nil, err
 			}
 		}
@@ -493,15 +555,29 @@ func (s *KubeStore) GetSentinelsInfo(ctx context.Context) (cluster.SentinelsInfo
 
 // SetProxyInfo publishes proxy info.
 func (s *KubeStore) SetProxyInfo(ctx context.Context, pi *cluster.ProxyInfo, _ time.Duration) error {
+	start := time.Now()
+	var opErr error
+	defer func() {
+		observeDCSOperation(start, "kubernetes", "set_proxy_info", opErr)
+	}()
+
 	pij, err := json.Marshal(pi)
 	if err != nil {
+		opErr = err
 		return err
 	}
-	return s.patchKubeStatusAnnotation(ctx, pij)
+	opErr = s.patchKubeStatusAnnotation(ctx, pij)
+	return opErr
 }
 
 // GetProxiesInfo lists published proxy info.
 func (s *KubeStore) GetProxiesInfo(ctx context.Context) (cluster.ProxiesInfo, error) {
+	start := time.Now()
+	var opErr error
+	defer func() {
+		observeDCSOperation(start, "kubernetes", "get_proxies_info", opErr)
+	}()
+
 	psi := cluster.ProxiesInfo{}
 
 	podsClient := s.client.CoreV1().Pods(s.namespace)
@@ -511,6 +587,7 @@ func (s *KubeStore) GetProxiesInfo(ctx context.Context) (cluster.ProxiesInfo, er
 	}
 	result, err := podsClient.List(ctx, listOpts)
 	if err != nil {
+		opErr = err
 		return nil, fmt.Errorf("failed to get latest version of pod: %v", err)
 	}
 
@@ -520,6 +597,7 @@ func (s *KubeStore) GetProxiesInfo(ctx context.Context) (cluster.ProxiesInfo, er
 		if pij, ok := pod.Annotations[k8sutil.KubeStatusAnnnotation]; ok {
 			err = json.Unmarshal([]byte(pij), &pi)
 			if err != nil {
+				opErr = err
 				return nil, err
 			}
 			psi[pi.UID] = &pi

@@ -183,20 +183,34 @@ func NewKVStore(cfg Config) (KVStore, error) {
 type KVBackedStore struct {
 	store       KVStore
 	clusterPath string
+	backend     string
 }
 
 // NewKVBackedStore creates a Store backed by a KVStore.
 func NewKVBackedStore(kvStore KVStore, path string) *KVBackedStore {
+	backend := "kv"
+	switch kvStore.(type) {
+	case *etcdV3Store:
+		backend = "etcdv3"
+	}
 	return &KVBackedStore{
 		clusterPath: path,
 		store:       kvStore,
+		backend:     backend,
 	}
 }
 
 // AtomicPutClusterData stores cluster data with optimistic concurrency.
 func (s *KVBackedStore) AtomicPutClusterData(ctx context.Context, cd *cluster.ClusterData, previous *KVPair) (*KVPair, error) {
+	start := time.Now()
+	var opErr error
+	defer func() {
+		observeDCSOperation(start, s.backend, "atomic_put_cluster_data", opErr)
+	}()
+
 	cdj, err := json.Marshal(cd)
 	if err != nil {
+		opErr = err
 		return nil, err
 	}
 	path := filepath.Join(s.clusterPath, clusterDataFile)
@@ -208,31 +222,49 @@ func (s *KVBackedStore) AtomicPutClusterData(ctx context.Context, cd *cluster.Cl
 			LastIndex: previous.LastIndex,
 		}
 	}
-	return s.store.AtomicPut(ctx, path, cdj, prev, nil)
+	pair, err := s.store.AtomicPut(ctx, path, cdj, prev, nil)
+	opErr = err
+	return pair, err
 }
 
 // PutClusterData stores cluster data without concurrency checks.
 func (s *KVBackedStore) PutClusterData(ctx context.Context, cd *cluster.ClusterData) error {
+	start := time.Now()
+	var opErr error
+	defer func() {
+		observeDCSOperation(start, s.backend, "put_cluster_data", opErr)
+	}()
+
 	cdj, err := json.Marshal(cd)
 	if err != nil {
+		opErr = err
 		return err
 	}
 	path := filepath.Join(s.clusterPath, clusterDataFile)
-	return s.store.Put(ctx, path, cdj, nil)
+	opErr = s.store.Put(ctx, path, cdj, nil)
+	return opErr
 }
 
 // GetClusterData loads cluster data and the backing kv pair metadata.
 func (s *KVBackedStore) GetClusterData(ctx context.Context) (*cluster.ClusterData, *KVPair, error) {
+	start := time.Now()
+	var opErr error
+	defer func() {
+		observeDCSOperation(start, s.backend, "get_cluster_data", opErr)
+	}()
+
 	var cd *cluster.ClusterData
 	path := filepath.Join(s.clusterPath, clusterDataFile)
 	pair, err := s.store.Get(ctx, path)
 	if err != nil {
+		opErr = err
 		if err != ErrKeyNotFound {
 			return nil, nil, err
 		}
 		return nil, nil, nil
 	}
 	if err := json.Unmarshal(pair.Value, &cd); err != nil {
+		opErr = err
 		return nil, nil, err
 	}
 	return cd, pair, nil
@@ -240,21 +272,36 @@ func (s *KVBackedStore) GetClusterData(ctx context.Context) (*cluster.ClusterDat
 
 // SetKeeperInfo stores one keeper info record.
 func (s *KVBackedStore) SetKeeperInfo(ctx context.Context, id string, ms *cluster.KeeperInfo, ttl time.Duration) error {
+	start := time.Now()
+	var opErr error
+	defer func() {
+		observeDCSOperation(start, s.backend, "set_keeper_info", opErr)
+	}()
+
 	msj, err := json.Marshal(ms)
 	if err != nil {
+		opErr = err
 		return err
 	}
 	if ttl < MinTTL {
 		ttl = MinTTL
 	}
-	return s.store.Put(ctx, filepath.Join(s.clusterPath, keepersInfoDir, id), msj, &WriteOptions{TTL: ttl})
+	opErr = s.store.Put(ctx, filepath.Join(s.clusterPath, keepersInfoDir, id), msj, &WriteOptions{TTL: ttl})
+	return opErr
 }
 
 // GetKeepersInfo lists all keeper info records.
 func (s *KVBackedStore) GetKeepersInfo(ctx context.Context) (cluster.KeepersInfo, error) {
+	start := time.Now()
+	var opErr error
+	defer func() {
+		observeDCSOperation(start, s.backend, "get_keepers_info", opErr)
+	}()
+
 	keepers := cluster.KeepersInfo{}
 	pairs, err := s.store.List(ctx, filepath.Join(s.clusterPath, keepersInfoDir))
 	if err != nil {
+		opErr = err
 		if err != ErrKeyNotFound {
 			return nil, err
 		}
@@ -264,6 +311,7 @@ func (s *KVBackedStore) GetKeepersInfo(ctx context.Context) (cluster.KeepersInfo
 		var ki cluster.KeeperInfo
 		err = json.Unmarshal(pair.Value, &ki)
 		if err != nil {
+			opErr = err
 			return nil, err
 		}
 		keepers[ki.UID] = &ki
@@ -273,21 +321,36 @@ func (s *KVBackedStore) GetKeepersInfo(ctx context.Context) (cluster.KeepersInfo
 
 // SetSentinelInfo stores one sentinel info record.
 func (s *KVBackedStore) SetSentinelInfo(ctx context.Context, si *cluster.SentinelInfo, ttl time.Duration) error {
+	start := time.Now()
+	var opErr error
+	defer func() {
+		observeDCSOperation(start, s.backend, "set_sentinel_info", opErr)
+	}()
+
 	sij, err := json.Marshal(si)
 	if err != nil {
+		opErr = err
 		return err
 	}
 	if ttl < MinTTL {
 		ttl = MinTTL
 	}
-	return s.store.Put(ctx, filepath.Join(s.clusterPath, sentinelsInfoDir, si.UID), sij, &WriteOptions{TTL: ttl})
+	opErr = s.store.Put(ctx, filepath.Join(s.clusterPath, sentinelsInfoDir, si.UID), sij, &WriteOptions{TTL: ttl})
+	return opErr
 }
 
 // GetSentinelsInfo lists all sentinel info records.
 func (s *KVBackedStore) GetSentinelsInfo(ctx context.Context) (cluster.SentinelsInfo, error) {
+	start := time.Now()
+	var opErr error
+	defer func() {
+		observeDCSOperation(start, s.backend, "get_sentinels_info", opErr)
+	}()
+
 	ssi := cluster.SentinelsInfo{}
 	pairs, err := s.store.List(ctx, filepath.Join(s.clusterPath, sentinelsInfoDir))
 	if err != nil {
+		opErr = err
 		if err != ErrKeyNotFound {
 			return nil, err
 		}
@@ -297,6 +360,7 @@ func (s *KVBackedStore) GetSentinelsInfo(ctx context.Context) (cluster.Sentinels
 		var si cluster.SentinelInfo
 		err = json.Unmarshal(pair.Value, &si)
 		if err != nil {
+			opErr = err
 			return nil, err
 		}
 		ssi = append(ssi, &si)
@@ -306,21 +370,36 @@ func (s *KVBackedStore) GetSentinelsInfo(ctx context.Context) (cluster.Sentinels
 
 // SetProxyInfo stores one proxy info record.
 func (s *KVBackedStore) SetProxyInfo(ctx context.Context, pi *cluster.ProxyInfo, ttl time.Duration) error {
+	start := time.Now()
+	var opErr error
+	defer func() {
+		observeDCSOperation(start, s.backend, "set_proxy_info", opErr)
+	}()
+
 	pij, err := json.Marshal(pi)
 	if err != nil {
+		opErr = err
 		return err
 	}
 	if ttl < MinTTL {
 		ttl = MinTTL
 	}
-	return s.store.Put(ctx, filepath.Join(s.clusterPath, proxiesInfoDir, pi.UID), pij, &WriteOptions{TTL: ttl})
+	opErr = s.store.Put(ctx, filepath.Join(s.clusterPath, proxiesInfoDir, pi.UID), pij, &WriteOptions{TTL: ttl})
+	return opErr
 }
 
 // GetProxiesInfo lists all proxy info records.
 func (s *KVBackedStore) GetProxiesInfo(ctx context.Context) (cluster.ProxiesInfo, error) {
+	start := time.Now()
+	var opErr error
+	defer func() {
+		observeDCSOperation(start, s.backend, "get_proxies_info", opErr)
+	}()
+
 	psi := cluster.ProxiesInfo{}
 	pairs, err := s.store.List(ctx, filepath.Join(s.clusterPath, proxiesInfoDir))
 	if err != nil {
+		opErr = err
 		if err != ErrKeyNotFound {
 			return nil, err
 		}
@@ -330,6 +409,7 @@ func (s *KVBackedStore) GetProxiesInfo(ctx context.Context) (cluster.ProxiesInfo
 		var pi cluster.ProxyInfo
 		err = json.Unmarshal(pair.Value, &pi)
 		if err != nil {
+			opErr = err
 			return nil, err
 		}
 		psi[pi.UID] = &pi

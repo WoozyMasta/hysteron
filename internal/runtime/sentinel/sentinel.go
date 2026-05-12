@@ -2620,12 +2620,18 @@ func (s *Sentinel) leaderInfo() (bool, uint) {
 }
 
 func (s *Sentinel) clusterSentinelCheck(pctx context.Context) {
+	start := time.Now()
+	defer func() {
+		checkDurationSeconds.WithLabelValues(s.clusterName).Observe(time.Since(start).Seconds())
+	}()
+
 	s.updateMutex.Lock()
 	defer s.updateMutex.Unlock()
 	e := s.e
 
 	cd, prevCDPair, err := e.GetClusterData(pctx)
 	if err != nil {
+		checkErrorsTotal.WithLabelValues(s.clusterName, "get_cluster_data").Inc()
 		if !s.dcsDegradedSeen {
 			s.log.Warn().Err(err).Msg("detected DCS degraded condition")
 		}
@@ -2639,12 +2645,14 @@ func (s *Sentinel) clusterSentinelCheck(pctx context.Context) {
 	s.dcsDegradedSeen = false
 	if cd != nil {
 		if cd.FormatVersion != cluster.CurrentCDFormatVersion {
+			checkErrorsTotal.WithLabelValues(s.clusterName, "cluster_data_format").Inc()
 			s.log.Error().
 				Uint64("format_version", cd.FormatVersion).
 				Msg("unsupported cluster data format version")
 			return
 		}
 		if err = cd.Cluster.Spec.Validate(); err != nil {
+			checkErrorsTotal.WithLabelValues(s.clusterName, "cluster_data_validate").Inc()
 			s.log.Error().Err(err).Msg("cluster data validation failed")
 			return
 		}
@@ -2672,18 +2680,21 @@ func (s *Sentinel) clusterSentinelCheck(pctx context.Context) {
 			Fields(cluster.LogSummaryClusterData(newcd)).
 			Msg("cluster data to persist on first cluster initialization")
 		if _, err = e.AtomicPutClusterData(pctx, newcd, nil); err != nil {
+			checkErrorsTotal.WithLabelValues(s.clusterName, "init_put_cluster_data").Inc()
 			s.log.Error().Err(err).Msg("error saving cluster data")
 		}
 		return
 	}
 
 	if err = s.setSentinelInfo(pctx, 2*s.sleepInterval); err != nil {
+		checkErrorsTotal.WithLabelValues(s.clusterName, "set_sentinel_info").Inc()
 		s.log.Error().Err(err).Msg("cannot update sentinel info")
 		return
 	}
 
 	keepersInfo, err := s.e.GetKeepersInfo(pctx)
 	if err != nil {
+		checkErrorsTotal.WithLabelValues(s.clusterName, "get_keepers_info").Inc()
 		s.log.Error().Err(err).Msg("cannot get keepers info")
 		return
 	}
@@ -2693,6 +2704,7 @@ func (s *Sentinel) clusterSentinelCheck(pctx context.Context) {
 
 	proxiesInfo, err := s.e.GetProxiesInfo(pctx)
 	if err != nil {
+		checkErrorsTotal.WithLabelValues(s.clusterName, "get_proxies_info").Inc()
 		s.log.Error().Err(err).Msg("failed to get proxies info")
 		return
 	}
@@ -2729,6 +2741,7 @@ func (s *Sentinel) clusterSentinelCheck(pctx context.Context) {
 		firstRun,
 	)
 	if err != nil {
+		checkErrorsTotal.WithLabelValues(s.clusterName, "update_keepers_status").Inc()
 		s.log.Error().Err(err).Msg("failed to update keeper status")
 		return
 	}
@@ -2738,12 +2751,14 @@ func (s *Sentinel) clusterSentinelCheck(pctx context.Context) {
 
 	activeProxiesInfos, err := s.activeProxiesInfos(proxiesInfo)
 	if err != nil {
+		checkErrorsTotal.WithLabelValues(s.clusterName, "active_proxies_info").Inc()
 		s.log.Error().Err(err).Msg("failed to compute active proxy info")
 		return
 	}
 
 	newcd, err = s.updateCluster(newcd, activeProxiesInfos)
 	if err != nil {
+		checkErrorsTotal.WithLabelValues(s.clusterName, "update_cluster").Inc()
 		s.log.Error().Err(err).Msg("failed to update cluster data")
 		return
 	}
@@ -2754,12 +2769,14 @@ func (s *Sentinel) clusterSentinelCheck(pctx context.Context) {
 	if newcd != nil {
 		s.updateChangeTimes(cd, newcd)
 		if _, err := e.AtomicPutClusterData(pctx, newcd, prevCDPair); err != nil {
+			checkErrorsTotal.WithLabelValues(s.clusterName, "put_cluster_data").Inc()
 			s.log.Error().Err(err).Msg("error saving cluster data")
 			return
 		}
 	}
 	if s.kubeServicePublisher != nil {
 		if err := s.kubeServicePublisher.Publish(pctx, newcd); err != nil {
+			checkErrorsTotal.WithLabelValues(s.clusterName, "kube_service_publish").Inc()
 			s.log.Error().Err(err).Msg("failed to publish Kubernetes Services")
 			return
 		}

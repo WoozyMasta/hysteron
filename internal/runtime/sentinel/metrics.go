@@ -34,6 +34,14 @@ var (
 		},
 		[]string{"cluster_name"},
 	)
+	checkDurationSeconds = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "hysteron_sentinel_check_duration_seconds",
+			Help:    "Duration of sentinel cluster reconciliation checks",
+			Buckets: prometheus.DefBuckets,
+		},
+		[]string{"cluster_name"},
+	)
 	leaderElectionsTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "hysteron_sentinel_leader_elections_total",
@@ -41,11 +49,20 @@ var (
 		},
 		[]string{"cluster_name"},
 	)
+	checkErrorsTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "hysteron_sentinel_check_errors_total",
+			Help: "Total number of sentinel reconciliation check errors by stage",
+		},
+		[]string{"cluster_name", "stage"},
+	)
 )
 
 // Register the static methods on the default Prometheus registry automatically
 func init() {
 	prometheus.MustRegister(lastCheckSuccessSeconds)
 	prometheus.MustRegister(isLeaderGauge)
+	prometheus.MustRegister(checkDurationSeconds)
 	prometheus.MustRegister(leaderElectionsTotal)
+	prometheus.MustRegister(checkErrorsTotal)
 }

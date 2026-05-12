@@ -58,6 +58,33 @@ var (
 			Help: "Last time we successfully synced our keeper",
 		},
 	)
+	reconcileDurationSeconds = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "hysteron_keeper_reconcile_duration_seconds",
+			Help:    "Duration of keeper reconcile phases",
+			Buckets: prometheus.DefBuckets,
+		},
+		[]string{"phase"},
+	)
+	reconcileErrorsTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "hysteron_keeper_reconcile_errors_total",
+			Help: "Total number of keeper reconcile errors by phase and reason",
+		},
+		[]string{"phase", "reason"},
+	)
+	dcsDegradedGauge = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "hysteron_keeper_dcs_degraded",
+			Help: "Set to 1 when keeper cannot read cluster data from DCS, 0 when recovered",
+		},
+	)
+	dcsLastSuccessSeconds = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "hysteron_keeper_dcs_last_success_seconds",
+			Help: "Last time keeper successfully read cluster data from DCS as unix epoch seconds",
+		},
+	)
 	sleepInterval = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "hysteron_keeper_sleep_interval",
@@ -160,6 +187,10 @@ func init() {
 	prometheus.MustRegister(needsReloadGauge)
 	prometheus.MustRegister(needsRestartGauge)
 	prometheus.MustRegister(lastSyncSuccessSeconds)
+	prometheus.MustRegister(reconcileDurationSeconds)
+	prometheus.MustRegister(reconcileErrorsTotal)
+	prometheus.MustRegister(dcsDegradedGauge)
+	prometheus.MustRegister(dcsLastSuccessSeconds)
 	prometheus.MustRegister(sleepInterval)
 	prometheus.MustRegister(shutdownSeconds)
 	prometheus.MustRegister(logicalSlotStandbyAdvanceAttemptsTotal)

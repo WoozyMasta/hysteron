@@ -75,6 +75,14 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Replace `hysteron_sentinel_leader_count` with
   `hysteron_sentinel_leader_elections_total` to model leader elections as
   a monotonic counter.
+* Add sentinel reconciliation check observability metrics:
+  `hysteron_sentinel_check_duration_seconds` (histogram) and
+  `hysteron_sentinel_check_errors_total{stage=...}` (counter).
+* Add keeper reconciliation and DCS-health observability metrics:
+  `hysteron_keeper_reconcile_duration_seconds{phase=...}`,
+  `hysteron_keeper_reconcile_errors_total{phase=...,reason=...}`,
+  `hysteron_keeper_dcs_degraded`, and
+  `hysteron_keeper_dcs_last_success_seconds`.
 * Check or explicitly discard remaining command, PostgreSQL, and store cleanup
   errors so `errcheck` is clean.
 * Clean up initial style lint findings for whitespace, unconvert, gocritic,

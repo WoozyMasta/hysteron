@@ -1265,6 +1265,7 @@ func (p *PostgresKeeper) applyFailsafeRuntimeConfig(spec *cluster.ClusterSpec) {
 }
 
 func (p *PostgresKeeper) handleDCSDegraded(now time.Time, cause error) {
+	dcsDegradedGauge.Set(1)
 	if !p.dcsDegraded {
 		p.dcsDegraded = true
 		p.dcsDegradedSince = now
@@ -1286,11 +1287,15 @@ func (p *PostgresKeeper) handleDCSDegraded(now time.Time, cause error) {
 
 func (p *PostgresKeeper) handleDCSRecovered() {
 	if !p.dcsDegraded {
+		dcsDegradedGauge.Set(0)
+		dcsLastSuccessSeconds.SetToCurrentTime()
 		return
 	}
 	p.dcsDegraded = false
 	duration := time.Since(p.dcsDegradedSince)
 	p.dcsDegradedSince = time.Time{}
+	dcsDegradedGauge.Set(0)
+	dcsLastSuccessSeconds.SetToCurrentTime()
 	p.baseLog().Info().
 		Dur("dcs_degraded_duration", duration).
 		Bool("failsafe_enabled", p.failsafeEnabled).
@@ -2671,11 +2676,18 @@ func (p *PostgresKeeper) refreshReplicationSlots(
 }
 
 func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
+	start := time.Now()
+	const reconcilePhase = "postgres_keeper_sm"
+	defer func() {
+		reconcileDurationSeconds.WithLabelValues(reconcilePhase).Observe(time.Since(start).Seconds())
+	}()
+
 	e := p.e
 	pgm := p.pgm
 
 	cd, _, err := e.GetClusterData(pctx)
 	if err != nil {
+		reconcileErrorsTotal.WithLabelValues(reconcilePhase, "get_cluster_data").Inc()
 		p.handleDCSDegraded(time.Now(), err)
 		p.baseLog().
 			Error().
@@ -2697,6 +2709,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 		return
 	}
 	if cd.FormatVersion != cluster.CurrentCDFormatVersion {
+		reconcileErrorsTotal.WithLabelValues(reconcilePhase, "unsupported_clusterdata_format").Inc()
 		p.baseLog().
 			Error().
 			Uint64("version", cd.FormatVersion).
@@ -2704,6 +2717,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 		return
 	}
 	if err = cd.Cluster.Spec.Validate(); err != nil {
+		reconcileErrorsTotal.WithLabelValues(reconcilePhase, "invalid_cluster_spec").Inc()
 		p.baseLog().
 			Error().
 			Err(err).

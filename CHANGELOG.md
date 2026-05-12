@@ -342,6 +342,9 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Add explicit standby `noStream` contract propagation and disable standby
   logical-slot sync/advance path under logical-slot-failover gate when
   `noStream=true`, clarifying archive-recovery-only topology behavior.
+* Add integration coverage that `standbyConfig.noStream=true` suppresses
+  standby logical-slot advance under logical-slot-failover gate (PG16+
+  standby slot remains stable).
 
 ## v0.17.0
 

@@ -23,13 +23,29 @@ func LogSummaryClusterSpec(s *ClusterSpec) map[string]any {
 		return map[string]any{"cluster_spec": nil}
 	}
 	d := s.WithDefaults()
+	initMode := ""
+	if d.InitMode != nil {
+		initMode = string(*d.InitMode)
+	}
+	role := ""
+	if d.Role != nil {
+		role = string(*d.Role)
+	}
+	syncRepl := false
+	if d.SynchronousReplication != nil {
+		syncRepl = *d.SynchronousReplication
+	}
+	usePgRewind := false
+	if d.UsePgrewind != nil {
+		usePgRewind = *d.UsePgrewind
+	}
 	out := map[string]any{
-		"init_mode":                  string(*d.InitMode),
-		"role":                       string(*d.Role),
+		"init_mode":                  initMode,
+		"role":                       role,
 		"pg_parameter_count":         len(d.PGParameters),
 		"pg_hba_rule_count":          len(d.PGHBA),
-		"synchronous_replication":    *d.SynchronousReplication,
-		"use_pg_rewind":              *d.UsePgrewind,
+		"synchronous_replication":    syncRepl,
+		"use_pg_rewind":              usePgRewind,
 		"additional_repl_slot_count": len(d.AdditionalMasterReplicationSlots),
 	}
 	if d.NewConfig != nil {

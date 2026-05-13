@@ -68,6 +68,7 @@ type config struct {
 	InitialClusterSpecFile string                       `short:"f" long:"initial-cluster-spec" env:"INITIAL_CLUSTER_SPEC" description:"a file providing the initial cluster specification, used only at cluster initialization, ignored if cluster is already initialized"`
 	ClusterSpecFiles       []string                     `long:"cluster-spec" env:"CLUSTER_SPEC" description:"per-cluster initial cluster specification override as <cluster-name>=<path>; can be repeated"`
 	KubeService            kubeServicePublishingOptions `group:"Kubernetes Service Publishing"`
+	Web                    webOptions                   `group:"Web" namespace:"web" env-namespace:"WEB"`
 	runtimecommon.CommonConfig
 }
 
@@ -2535,6 +2536,9 @@ func NewSentinel(
 				err,
 			)
 		}
+		if initialClusterSpec == nil {
+			return nil, errors.New("provided initial cluster spec is empty")
+		}
 		logger.Debug().
 			Fields(cluster.LogSummaryClusterSpec(initialClusterSpec)).
 			Msg("initial cluster specification loaded from file")
@@ -2863,7 +2867,14 @@ func clusterSpecFiles(defaultSpec string, overrides []string, clusterNames []str
 	return specs, nil
 }
 
-func runSentinelCluster(ctx context.Context, uid string, cfg *config, clusterName, initialSpecFile string) {
+func runSentinelCluster(
+	ctx context.Context,
+	uid string,
+	cfg *config,
+	clusterName,
+	initialSpecFile string,
+	webRegistry *sentinelWebRegistry,
+) {
 	logger := slog.WithComponent("sentinel").With().
 		Str(slog.FieldClusterName, clusterName).
 		Logger()
@@ -2889,6 +2900,9 @@ func runSentinelCluster(ctx context.Context, uid string, cfg *config, clusterNam
 			backoff = nextSentinelRetryBackoff(backoff, maxBackoff)
 			continue
 		}
+		if webRegistry != nil {
+			webRegistry.Set(clusterName, s)
+		}
 
 		runtimecommon.SetMetricsForCluster(clusterName, "sentinel")
 		if err := runSentinelOnce(ctx, s); err != nil {
@@ -2901,6 +2915,9 @@ func runSentinelCluster(ctx context.Context, uid string, cfg *config, clusterNam
 			}
 			backoff = nextSentinelRetryBackoff(backoff, maxBackoff)
 			continue
+		}
+		if webRegistry != nil {
+			webRegistry.Delete(clusterName)
 		}
 		return
 	}
@@ -3011,11 +3028,29 @@ func runSentinel() error {
 			}
 		}()
 	}
+	webRegistry := newSentinelWebRegistry(uid)
+	if cfg.Web.ListenAddress != "" {
+		webServer := newWebServer(&cfg, clusterNames, webRegistry)
+		go func() {
+			err := webServer.ListenAndServe()
+			if err != nil && !errors.Is(err, http.ErrServerClosed) {
+				log.Error().Err(err).Msg("web http server error")
+				cancel()
+			}
+		}()
+	}
 
 	var wg sync.WaitGroup
 	for _, clusterName := range clusterNames {
 		wg.Go(func() {
-			runSentinelCluster(ctx, uid, &cfg, clusterName, specFiles[clusterName])
+			runSentinelCluster(
+				ctx,
+				uid,
+				&cfg,
+				clusterName,
+				specFiles[clusterName],
+				webRegistry,
+			)
 		})
 	}
 
@@ -3034,6 +3069,9 @@ func checkSentinelConfig(cfg *config) error {
 		cfg.KubeService.ServiceName == cfg.KubeService.ReadOnlyServiceName &&
 		cfg.KubeService.ServicePort == cfg.KubeService.ReadOnlyServicePort {
 		return errors.New("kubernetes writable and read-only services cannot use the same name and port")
+	}
+	if err := validateWebConfig(cfg); err != nil {
+		return err
 	}
 	return nil
 }

@@ -33,6 +33,30 @@ func (c *runtimeCommand) Execute(_ []string) error {
 	return nil
 }
 
+// Execute stores proxy runtime command context for backend leaf execution.
+func (c *proxyRuntimeCommand) Execute(_ []string) error {
+	c.Etcd.Common = c.Common
+	c.Etcd.Proxy = c.Proxy
+	c.Etcd.Component = c.Component
+	c.Kubernetes.Common = c.Common
+	c.Kubernetes.Proxy = c.Proxy
+	c.Kubernetes.Component = c.Component
+	return nil
+}
+
+// Execute stores sentinel runtime command context for backend leaf execution.
+func (c *sentinelRuntimeCommand) Execute(_ []string) error {
+	c.Etcd.Common = c.Common
+	c.Etcd.Sentinel = c.Sentinel
+	c.Etcd.Web = c.Web
+	c.Etcd.Component = c.Component
+	c.Kubernetes.Common = c.Common
+	c.Kubernetes.Sentinel = c.Sentinel
+	c.Kubernetes.Web = c.Web
+	c.Kubernetes.Component = c.Component
+	return nil
+}
+
 // Execute runs `hysteron <component> etcd`.
 func (c *runtimeEtcdCommand) Execute(args []string) error {
 	if c.Component == "" {
@@ -56,6 +80,64 @@ func (c *runtimeKubernetesCommand) Execute(args []string) error {
 		Backend:      "kubernetes",
 		Component:    c.Component,
 		ExtraArgs:    args,
+	})
+}
+
+// Execute runs `hysteron proxy etcd`.
+func (c *proxyRuntimeEtcdCommand) Execute(args []string) error {
+	if c.Component == "" {
+		return ErrRuntimeCommandContextMissing
+	}
+	return app.RunRuntime(app.RuntimeTarget{
+		CommonConfig: runtimeEtcdConfig(c.Common, c.Etcd),
+		Backend:      "etcd",
+		Component:    c.Component,
+		ExtraArgs:    append(proxyRuntimeExtraArgs(c.Proxy), args...),
+	})
+}
+
+// Execute runs `hysteron proxy kubernetes`.
+func (c *proxyRuntimeKubernetesCommand) Execute(args []string) error {
+	if c.Component == "" {
+		return ErrRuntimeCommandContextMissing
+	}
+	return app.RunRuntime(app.RuntimeTarget{
+		CommonConfig: runtimeKubernetesConfig(c.Common, c.K8s),
+		Backend:      "kubernetes",
+		Component:    c.Component,
+		ExtraArgs:    append(proxyRuntimeExtraArgs(c.Proxy), args...),
+	})
+}
+
+// Execute runs `hysteron sentinel etcd`.
+func (c *sentinelRuntimeEtcdCommand) Execute(args []string) error {
+	if c.Component == "" {
+		return ErrRuntimeCommandContextMissing
+	}
+	return app.RunRuntime(app.RuntimeTarget{
+		CommonConfig: runtimeEtcdConfig(c.Common, c.Etcd),
+		Backend:      "etcd",
+		Component:    c.Component,
+		ExtraArgs: append(
+			sentinelRuntimeExtraArgs(c.Sentinel),
+			append(sentinelWebExtraArgs(c.Web), args...)...,
+		),
+	})
+}
+
+// Execute runs `hysteron sentinel kubernetes`.
+func (c *sentinelRuntimeKubernetesCommand) Execute(args []string) error {
+	if c.Component == "" {
+		return ErrRuntimeCommandContextMissing
+	}
+	return app.RunRuntime(app.RuntimeTarget{
+		CommonConfig: runtimeKubernetesConfig(c.Common, c.K8s),
+		Backend:      "kubernetes",
+		Component:    c.Component,
+		ExtraArgs: append(
+			sentinelRuntimeExtraArgs(c.Sentinel),
+			append(sentinelWebExtraArgs(c.Web), args...)...,
+		),
 	})
 }
 
@@ -165,6 +247,60 @@ func (c *failoverForceCommand) Execute(_ []string) error {
 
 func commandContext() context.Context {
 	return context.Background()
+}
+
+func sentinelWebExtraArgs(web sentinelWebOptions) []string {
+	args := []string{
+		"--web-base-path", web.BasePath,
+		"--web-read-timeout", web.ReadTimeout.String(),
+		"--web-write-timeout", web.WriteTimeout.String(),
+	}
+	if web.ListenAddress != "" {
+		args = append(args, "--web-listen-address", web.ListenAddress)
+	}
+	if web.AuthUsername != "" {
+		args = append(args, "--web-auth-username", web.AuthUsername)
+	}
+	if web.AuthPassword != "" {
+		args = append(args, "--web-auth-password", web.AuthPassword)
+	}
+	if web.AllowUnsafeAdminWithoutAuth {
+		args = append(args, "--web-allow-unsafe-admin-without-auth")
+	}
+	return args
+}
+
+func sentinelRuntimeExtraArgs(opts sentinelRuntimeOptions) []string {
+	args := []string{}
+	if opts.InitialClusterSpecFile != "" {
+		args = append(args, "--initial-cluster-spec", opts.InitialClusterSpecFile)
+	}
+	for _, spec := range opts.ClusterSpecFiles {
+		if spec != "" {
+			args = append(args, "--cluster-spec", spec)
+		}
+	}
+	return args
+}
+
+func proxyRuntimeExtraArgs(opts proxyRuntimeOptions) []string {
+	args := []string{}
+	if opts.ListenAddress != "" {
+		args = append(args, "--listen-address", opts.ListenAddress)
+	}
+	if opts.Port != "" {
+		args = append(args, "--port", opts.Port)
+	}
+	if opts.DisableWritableListener {
+		args = append(args, "--disable-writable-listener")
+	}
+	if opts.ReadOnlyListenAddress != "" {
+		args = append(args, "--read-only-listen-address", opts.ReadOnlyListenAddress)
+	}
+	if opts.ReadOnlyPort != "" {
+		args = append(args, "--read-only-port", opts.ReadOnlyPort)
+	}
+	return args
 }
 
 func readDataInput(file string) ([]byte, error) {

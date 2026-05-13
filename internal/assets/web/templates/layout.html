@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hysteron Status</title>
+  <link rel="stylesheet" href="{{ .BasePath }}/static/css/main.css">
+  <script defer src="{{ .BasePath }}/static/js/main.js"></script>
+</head>
+<body data-base-path="{{ .BasePath }}">
+  <header class="topbar">
+    <div class="brand">
+      <span>Hysteron Status</span>
+    </div>
+    <div class="logo-center">
+      <img src="{{ .BasePath }}/static/img/hysteron.svg" alt="Hysteron logo">
+    </div>
+    <div class="controls">
+      <label for="refresh">Refresh:</label>
+      <select id="refresh">
+        <option value="off">off</option>
+        <option value="5">5s</option>
+        <option value="15">15s</option>
+        <option value="30">30s</option>
+        <option value="60">1m</option>
+        <option value="300">5m</option>
+      </select>
+      <button id="theme" type="button" title="Toggle theme" aria-label="Toggle theme">🌓</button>
+    </div>
+  </header>
+  <main class="page">
+    {{ template "content" . }}
+  </main>
+  <footer class="footer">
+    <span>Version: {{ .Build.Version }}</span>
+    <span>Commit: {{ .Build.Commit }}</span>
+    <span>Build: {{ .Build.Date }}</span>
+    <span>URL: <a href="{{ .Build.URL }}">{{ .Build.URL }}</a></span>
+  </footer>
+</body>
+</html>

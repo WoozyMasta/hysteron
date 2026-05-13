@@ -1,0 +1,22 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: hysteron-sentinel
+    static_configs:
+      - targets:
+          - sentinel1:9090
+          - sentinel2:9090
+  - job_name: hysteron-keeper
+    static_configs:
+      - targets:
+          - keeper1:9187
+          - keeper2:9187
+          - keeper3:9187
+  - job_name: hysteron-proxy
+    static_configs:
+      - targets:
+          - proxy1:9190
+          - proxy2:9190
+          - proxy3:9190

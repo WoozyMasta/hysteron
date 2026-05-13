@@ -17,12 +17,12 @@ package commands
 import "github.com/woozymasta/hysteron/internal/output"
 
 type rootCommand struct {
-	Keeper   runtimeCommand    `command:"keeper" command-group:"Runtime Commands" description:"Run keeper runtime components"`
-	Sentinel runtimeCommand    `command:"sentinel" command-group:"Runtime Commands" description:"Run sentinel runtime components"`
-	Proxy    runtimeCommand    `command:"proxy" command-group:"Runtime Commands" description:"Run proxy runtime components"`
-	Global   rootGlobalOptions `group:"Global"`
-	Failover failoverCommand   `command:"failover" command-group:"Management Commands" description:"Manage failover operations"`
-	Cluster  clusterCommand    `command:"cluster" command-group:"Management Commands" description:"Manage cluster control operations"`
+	Keeper   runtimeCommand         `command:"keeper" command-group:"Runtime Commands" description:"Run keeper runtime components"`
+	Sentinel sentinelRuntimeCommand `command:"sentinel" command-group:"Runtime Commands" description:"Run sentinel runtime components"`
+	Proxy    proxyRuntimeCommand    `command:"proxy" command-group:"Runtime Commands" description:"Run proxy runtime components"`
+	Global   rootGlobalOptions      `group:"Global"`
+	Failover failoverCommand        `command:"failover" command-group:"Management Commands" description:"Manage failover operations"`
+	Cluster  clusterCommand         `command:"cluster" command-group:"Management Commands" description:"Manage cluster control operations"`
 }
 
 type runtimeCommand struct {
@@ -30,6 +30,23 @@ type runtimeCommand struct {
 	Component  string                   `no-flag:"true"`
 	Common     runtimeCommonOptions     `group:"Common"`
 	Etcd       runtimeEtcdCommand       `command:"etcd" alias:"etcdv3" description:"Run component with etcd backend"`
+}
+
+type sentinelRuntimeCommand struct {
+	Kubernetes sentinelRuntimeKubernetesCommand `command:"kubernetes" alias:"k8s" description:"Run component with kubernetes backend"`
+	Component  string                           `no-flag:"true"`
+	Common     runtimeCommonOptions             `group:"Common"`
+	Sentinel   sentinelRuntimeOptions           `group:"Sentinel"`
+	Web        sentinelWebOptions               `group:"Web" namespace:"web" env-namespace:"WEB"`
+	Etcd       sentinelRuntimeEtcdCommand       `command:"etcd" alias:"etcdv3" description:"Run component with etcd backend"`
+}
+
+type proxyRuntimeCommand struct {
+	Kubernetes proxyRuntimeKubernetesCommand `command:"kubernetes" alias:"k8s" description:"Run component with kubernetes backend"`
+	Component  string                        `no-flag:"true"`
+	Common     runtimeCommonOptions          `group:"Common"`
+	Proxy      proxyRuntimeOptions           `group:"Proxy"`
+	Etcd       proxyRuntimeEtcdCommand       `command:"etcd" alias:"etcdv3" description:"Run component with etcd backend"`
 }
 
 type clusterCommand struct {
@@ -70,6 +87,36 @@ type runtimeKubernetesCommand struct {
 	K8s       k8sStoreOptions      `group:"Kubernetes" namespace:"k8s" env-namespace:"K8S"`
 	Component string               `no-flag:"true"`
 	Common    runtimeCommonOptions `no-flag:"true"`
+}
+
+type proxyRuntimeEtcdCommand struct {
+	Common    runtimeCommonOptions `no-flag:"true"`
+	Proxy     proxyRuntimeOptions  `no-flag:"true"`
+	Component string               `no-flag:"true"`
+	Etcd      runtimeEtcdOptions   `group:"Etcd" namespace:"etcd" env-namespace:"ETCD"`
+}
+
+type proxyRuntimeKubernetesCommand struct {
+	K8s       k8sStoreOptions      `group:"Kubernetes" namespace:"k8s" env-namespace:"K8S"`
+	Component string               `no-flag:"true"`
+	Common    runtimeCommonOptions `no-flag:"true"`
+	Proxy     proxyRuntimeOptions  `no-flag:"true"`
+}
+
+type sentinelRuntimeEtcdCommand struct {
+	Common    runtimeCommonOptions   `no-flag:"true"`
+	Sentinel  sentinelRuntimeOptions `no-flag:"true"`
+	Web       sentinelWebOptions     `no-flag:"true"`
+	Component string                 `no-flag:"true"`
+	Etcd      runtimeEtcdOptions     `group:"Etcd" namespace:"etcd" env-namespace:"ETCD"`
+}
+
+type sentinelRuntimeKubernetesCommand struct {
+	K8s       k8sStoreOptions        `group:"Kubernetes" namespace:"k8s" env-namespace:"K8S"`
+	Component string                 `no-flag:"true"`
+	Common    runtimeCommonOptions   `no-flag:"true"`
+	Sentinel  sentinelRuntimeOptions `no-flag:"true"`
+	Web       sentinelWebOptions     `no-flag:"true"`
 }
 
 type clusterInitializeCommand struct {

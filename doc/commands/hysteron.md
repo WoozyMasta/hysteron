@@ -71,7 +71,16 @@ Show help
 
 Show version information
 
-**Usage:** `hysteron [OPTIONS] version`
+**Usage:** `hysteron [OPTIONS] version [version-OPTIONS]`
+
+#### Show version information
+
+* `--short` -
+  Print version number only
+* `--commit` -
+  Print commit SHA only
+* `--json` -
+  Print version information as JSON
 
 #### Help Options
 
@@ -88,10 +97,9 @@ Generate shell completion
 
 #### Generate shell completion
 
-* `--shell SHELL` -
+* `--shell` -
   Shell completion format
   * Choices: `bash, zsh, pwsh`
-  * Value name: `SHELL`
 
 #### Help Options
 
@@ -629,6 +637,24 @@ Run proxy runtime components
   metrics listen address i.e "0.0.0.0:8080" (disabled by default)
   * Environment: `$HYSTERON_METRICS_LISTEN_ADDRESS`
 
+#### Proxy
+
+* `--listen-address` -
+  proxy listening address
+  * Environment: `$HYSTERON_LISTEN_ADDRESS`
+* `--port` -
+  proxy listening port
+  * Environment: `$HYSTERON_PORT`
+* `--disable-writable-listener` -
+  disable the writable proxy listener
+  * Environment: `$HYSTERON_DISABLE_WRITABLE_LISTENER`
+* `--read-only-listen-address` -
+  read-only proxy listening address
+  * Environment: `$HYSTERON_READ_ONLY_LISTEN_ADDRESS`
+* `--read-only-port` -
+  read-only proxy listening port
+  * Environment: `$HYSTERON_READ_ONLY_PORT`
+
 #### Help Options
 
 * `-h`, `--help` -
@@ -729,6 +755,46 @@ Run sentinel runtime components
 * `--metrics-listen-address` -
   metrics listen address i.e "0.0.0.0:8080" (disabled by default)
   * Environment: `$HYSTERON_METRICS_LISTEN_ADDRESS`
+
+#### Sentinel
+
+* `-f`, `--initial-cluster-spec` -
+  a file providing the initial cluster specification, used only at cluster
+  initialization, ignored if cluster is already initialized
+  * Environment: `$HYSTERON_INITIAL_CLUSTER_SPEC`
+* `--cluster-spec` -
+  per-cluster initial cluster specification override as <cluster-name>=<path>;
+  can be repeated
+  * Environment: `$HYSTERON_CLUSTER_SPEC`
+
+#### Web
+
+* `--web-listen-address` -
+  web status dashboard listen address, for example 0.0.0.0:8081 (disabled by
+  default)
+  * Environment: `$HYSTERON_WEB_LISTEN_ADDRESS`
+* `--web-base-path` -
+  base path prefix for web UI and API routes
+  * Defaults: `/`
+  * Environment: `$HYSTERON_WEB_BASE_PATH`
+* `--web-auth-username` -
+  optional HTTP Basic auth username for web endpoints
+  * Environment: `$HYSTERON_WEB_AUTH_USERNAME`
+* `--web-auth-password` -
+  optional HTTP Basic auth password for web endpoints
+  * Environment: `$HYSTERON_WEB_AUTH_PASSWORD`
+* `--web-read-timeout` -
+  maximum duration for reading the entire request, including the body
+  * Defaults: `5s`
+  * Environment: `$HYSTERON_WEB_READ_TIMEOUT`
+* `--web-write-timeout` -
+  maximum duration before timing out writes of the response
+  * Defaults: `10s`
+  * Environment: `$HYSTERON_WEB_WRITE_TIMEOUT`
+* `--web-allow-unsafe-admin-without-auth` -
+  allow admin API endpoints when web auth is disabled (unsafe; intended only for
+  controlled environments)
+  * Environment: `$HYSTERON_WEB_ALLOW_UNSAFE_ADMIN_WITHOUT_AUTH`
 
 #### Help Options
 

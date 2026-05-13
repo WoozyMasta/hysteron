@@ -1,0 +1,8 @@
+{
+  "initMode": "new",
+  "synchronousReplication": true,
+  "minSynchronousStandbys": 1,
+  "maxSynchronousStandbys": 1,
+  "maxStandbys": 2,
+  "maxStandbysPerSender": 2
+}

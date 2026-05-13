@@ -1,0 +1,231 @@
+x-hysteron-common: &hysteron-common
+  image: hysteron:latest
+  depends_on:
+    - etcd
+  restart: unless-stopped
+
+x-keeper-common: &keeper-common
+  image: hysteron-pg:17
+  depends_on:
+    - etcd
+  secrets:
+    - pg_su
+    - pg_repl
+  restart: unless-stopped
+
+services:
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.18
+    command: >
+      /usr/local/bin/etcd
+      --name etcd
+      --data-dir /etcd-data
+      --listen-client-urls http://0.0.0.0:2379
+      --advertise-client-urls http://etcd:2379
+      --listen-peer-urls http://0.0.0.0:2380
+      --initial-advertise-peer-urls http://etcd:2380
+      --initial-cluster etcd=http://etcd:2380
+      --initial-cluster-state new
+      --initial-cluster-token hysteron-demo
+      --auto-compaction-mode periodic
+      --auto-compaction-retention 1
+    ports:
+      - 2379:2379
+    volumes:
+      - etcd-data:/etcd-data
+
+  sentinel1:
+    <<: *hysteron-common
+    command: >
+      sentinel
+      --cluster-name demo
+      --cluster-name demo2
+      --metrics-listen-address 0.0.0.0:9090
+      --web-listen-address 0.0.0.0:8080
+      --web-auth-username hysteron
+      --web-auth-password hysteron
+      --initial-cluster-spec /etc/hysteron/cluster-spec.json
+      --cluster-spec demo2=/etc/hysteron/cluster-spec-demo2.json
+      etcd
+      --etcd-endpoints http://etcd:2379
+    volumes:
+      - ./cluster-spec.json:/etc/hysteron/cluster-spec.json:ro
+      - ./cluster-spec-demo2.json:/etc/hysteron/cluster-spec-demo2.json:ro
+    ports:
+      - 8080:8080
+
+  sentinel2:
+    <<: *hysteron-common
+    command: >
+      sentinel
+      --cluster-name demo
+      --cluster-name demo2
+      --metrics-listen-address 0.0.0.0:9090
+      --web-listen-address 0.0.0.0:8080
+      --web-auth-username hysteron
+      --web-auth-password hysteron
+      --initial-cluster-spec /etc/hysteron/cluster-spec.json
+      --cluster-spec demo2=/etc/hysteron/cluster-spec-demo2.json
+      etcd
+      --etcd-endpoints http://etcd:2379
+    volumes:
+      - ./cluster-spec.json:/etc/hysteron/cluster-spec.json:ro
+      - ./cluster-spec-demo2.json:/etc/hysteron/cluster-spec-demo2.json:ro
+    ports:
+      - 8081:8080
+
+  keeper1:
+    <<: *keeper-common
+    hostname: keeper1
+    command: >
+      keeper
+      --cluster-name demo
+      --metrics-listen-address 0.0.0.0:9187
+      etcd
+      --etcd-endpoints http://etcd:2379
+      --
+      --uid keeper1
+      --data-dir /var/lib/postgresql/data
+      --pg-listen-address keeper1
+      --pg-advertise-address keeper1
+      --pg-repl-username replication
+      --pg-repl-passwordfile /run/secrets/pg_repl
+      --pg-su-username postgres
+      --pg-su-passwordfile /run/secrets/pg_su
+    volumes:
+      - keeper1-data:/var/lib/postgresql/data
+
+  keeper2:
+    <<: *keeper-common
+    hostname: keeper2
+    command: >
+      keeper
+      --cluster-name demo
+      --metrics-listen-address 0.0.0.0:9187
+      etcd
+      --etcd-endpoints http://etcd:2379
+      --
+      --uid keeper2
+      --data-dir /var/lib/postgresql/data
+      --pg-listen-address keeper2
+      --pg-advertise-address keeper2
+      --pg-repl-username replication
+      --pg-repl-passwordfile /run/secrets/pg_repl
+      --pg-su-username postgres
+      --pg-su-passwordfile /run/secrets/pg_su
+    volumes:
+      - keeper2-data:/var/lib/postgresql/data
+
+  keeper3:
+    <<: *keeper-common
+    hostname: keeper3
+    command: >
+      keeper
+      --cluster-name demo2
+      --metrics-listen-address 0.0.0.0:9187
+      etcd
+      --etcd-endpoints http://etcd:2379
+      --
+      --uid keeper3
+      --data-dir /var/lib/postgresql/data
+      --pg-listen-address keeper3
+      --pg-advertise-address keeper3
+      --pg-repl-username replication
+      --pg-repl-passwordfile /run/secrets/pg_repl
+      --pg-su-username postgres
+      --pg-su-passwordfile /run/secrets/pg_su
+    volumes:
+      - keeper3-data:/var/lib/postgresql/data
+
+  proxy1:
+    <<: *hysteron-common
+    command: >
+      proxy
+      --listen-address 0.0.0.0
+      --port 5432
+      etcd
+      --cluster-name demo
+      --metrics-listen-address 0.0.0.0:9190
+      --etcd-endpoints http://etcd:2379
+    ports:
+      - 5432:5432
+
+  proxy2:
+    <<: *hysteron-common
+    command: >
+      proxy
+      --listen-address 0.0.0.0
+      --port 5432
+      --read-only-listen-address 0.0.0.0
+      --read-only-port 6432
+      etcd
+      --cluster-name demo
+      --metrics-listen-address 0.0.0.0:9190
+      --etcd-endpoints http://etcd:2379
+    ports:
+      - 5433:5432
+      - 5434:6432
+
+  proxy3:
+    <<: *hysteron-common
+    command: >
+      proxy
+      --listen-address 0.0.0.0
+      --port 5432
+      etcd
+      --cluster-name demo2
+      --metrics-listen-address 0.0.0.0:9190
+      --etcd-endpoints http://etcd:2379
+    ports:
+      - 5543:5432
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - 9090:9090
+    depends_on:
+      - sentinel1
+      - sentinel2
+      - keeper1
+      - keeper2
+      - keeper3
+      - proxy1
+      - proxy2
+      - proxy3
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - 3000:3000
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+secrets:
+  pg_su:
+    file: ./secrets/pg_su.txt
+  pg_repl:
+    file: ./secrets/pg_repl.txt
+
+volumes:
+  etcd-data:
+  keeper1-data:
+  keeper2-data:
+  keeper3-data:
+  prometheus-data:
+  grafana-data:

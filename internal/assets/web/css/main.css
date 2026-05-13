@@ -1,0 +1,146 @@
+:root {
+  --bg: #f5f7fb;
+  --fg: #18202a;
+  --muted: #5d6b7c;
+  --card: #ffffff;
+  --border: #d9e1ec;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f141b;
+    --fg: #e6edf3;
+    --muted: #9ab;
+    --card: #1a222d;
+    --border: #2b3644;
+  }
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f5f7fb;
+  --fg: #18202a;
+  --muted: #5d6b7c;
+  --card: #ffffff;
+  --border: #d9e1ec;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0f141b;
+  --fg: #e6edf3;
+  --muted: #9ab;
+  --card: #1a222d;
+  --border: #2b3644;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 14px/1.4 "Segoe UI", "Noto Sans", sans-serif;
+}
+
+.topbar {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--card);
+  gap: 8px;
+}
+
+.brand {
+  font-weight: 700;
+  justify-self: start;
+}
+
+.logo-center {
+  justify-self: center;
+}
+
+.logo-center img {
+  height: 42px;
+  width: auto;
+  display: block;
+}
+
+.controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--muted);
+  justify-self: end;
+}
+
+#theme {
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--fg);
+  border-radius: 6px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.page {
+  padding: 12px;
+  display: grid;
+  gap: 14px;
+}
+
+section {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+h2 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 6px 0 10px;
+  color: var(--muted);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+th,
+td {
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  padding: 6px 4px;
+}
+
+thead th {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.footer {
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  background: var(--card);
+  padding: 10px 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.footer a {
+  color: inherit;
+}

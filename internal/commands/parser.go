@@ -68,10 +68,10 @@ func newRootCommand() rootCommand {
 		Keeper: runtimeCommand{
 			Component: "keeper",
 		},
-		Sentinel: runtimeCommand{
+		Sentinel: sentinelRuntimeCommand{
 			Component: "sentinel",
 		},
-		Proxy: runtimeCommand{
+		Proxy: proxyRuntimeCommand{
 			Component: "proxy",
 		},
 	}

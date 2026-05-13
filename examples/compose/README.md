@@ -28,7 +28,7 @@ Run from repository root (`stolon`):
 # Build hysteron runtime image.
 docker build -f Dockerfile -t hysteron .
 # Build keeper image (PostgreSQL + hysteron keeper binary).
-docker build -f examples/compose-basic/Dockerfile \
+docker build -f examples/compose/Dockerfile \
   --build-arg HYSTERON_IMAGE=hysteron \
   --build-arg POSTGRES_VERSION=17 \
   -t hysteron-pg:17 .
@@ -37,7 +37,7 @@ docker build -f examples/compose-basic/Dockerfile \
 ## Start Stack
 
 ```bash
-cd examples/compose-basic
+cd examples/compose
 docker compose up -d
 ```
 
@@ -142,7 +142,7 @@ docker compose exec sentinel1 \
 Writable (must work for writes):
 
 ```bash
-docker run --rm --network compose-basic_default postgres:17 \
+docker run --rm --network compose_default postgres:17 \
   psql "postgresql://postgres:$(tr -d '\r\n' < secrets/pg_su.txt)@proxy-a-2:5432/postgres" \
   -c "create table if not exists smoke(id int primary key);" \
   -c "insert into smoke values (1) on conflict (id) do nothing;" \
@@ -152,7 +152,7 @@ docker run --rm --network compose-basic_default postgres:17 \
 Read-only listener (must reject writes):
 
 ```bash
-docker run --rm --network compose-basic_default postgres:17 \
+docker run --rm --network compose_default postgres:17 \
   psql "postgresql://postgres:$(tr -d '\r\n' < secrets/pg_su.txt)@proxy-a-2:6432/postgres" \
   -c "select pg_is_in_recovery(), now();" \
   -c "insert into smoke values (2);"
@@ -163,7 +163,7 @@ docker run --rm --network compose-basic_default postgres:17 \
 Initialize `pgbench` tables through writable proxy port (`5432`).
 
 ```bash
-docker run --rm --network compose-basic_default \
+docker run --rm --network compose_default \
   -e PGPASSWORD="$(tr -d '\r\n' < secrets/pg_su.txt)" \
   postgres:17 \
   pgbench -h proxy-a-2 -p 5432 -U postgres -d postgres -i -s 10
@@ -172,7 +172,7 @@ docker run --rm --network compose-basic_default \
 Run a read-only workload through read-only proxy port (`6432`).
 
 ```bash
-docker run --rm --network compose-basic_default \
+docker run --rm --network compose_default \
   -e PGPASSWORD="$(tr -d '\r\n' < secrets/pg_su.txt)" \
   postgres:17 \
   pgbench -h proxy-a-2 -p 6432 -U postgres -d postgres -T 15 -S

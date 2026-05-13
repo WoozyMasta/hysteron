@@ -31,7 +31,7 @@ The format is based on [Keep a Changelog][], and this project adheres to
   and primary fallback policy options.
 * Compose-based integration runners for PostgreSQL version matrix/smoke flows
   and richer integration diagnostics.
-* New `examples/compose-basic` topology with two clusters on shared sentinels
+* New `examples/compose` topology with two clusters on shared sentinels
   (cluster `a` sync, cluster `b` async), Prometheus/Grafana, and web UI.
 
 ### Changed

@@ -15,11 +15,11 @@
 package cluster
 
 import (
+	"maps"
+	"slices"
 	"time"
 
 	"github.com/woozymasta/hysteron/internal/common"
-
-	"github.com/mitchellh/copystructure"
 )
 
 // KeepersInfo maps keeper UID to published keeper info.
@@ -30,9 +30,11 @@ func (k KeepersInfo) DeepCopy() KeepersInfo {
 	if k == nil {
 		return nil
 	}
-	nk, err := copystructure.Copy(k)
-	common.MustNot(err, "keepers info deep copy")
-	return nk.(KeepersInfo)
+	nk := make(KeepersInfo, len(k))
+	for uid, info := range k {
+		nk[uid] = info.DeepCopy()
+	}
+	return nk
 }
 
 // KeeperInfo is the state published by one keeper.
@@ -61,9 +63,17 @@ func (k *KeeperInfo) DeepCopy() *KeeperInfo {
 	if k == nil {
 		return nil
 	}
-	nk, err := copystructure.Copy(k)
-	common.MustNot(err, "keeper info deep copy")
-	return nk.(*KeeperInfo)
+	nk := *k
+	nk.PostgresState = k.PostgresState.DeepCopy()
+	if k.CanBeMaster != nil {
+		v := *k.CanBeMaster
+		nk.CanBeMaster = &v
+	}
+	if k.CanBeSynchronousReplica != nil {
+		v := *k.CanBeSynchronousReplica
+		nk.CanBeSynchronousReplica = &v
+	}
+	return &nk
 }
 
 // PostgresTimelinesHistory is a list of PostgreSQL timeline history entries.
@@ -125,9 +135,21 @@ func (p *PostgresState) DeepCopy() *PostgresState {
 	if p == nil {
 		return nil
 	}
-	np, err := copystructure.Copy(p)
-	common.MustNot(err, "postgres state deep copy")
-	return np.(*PostgresState)
+	np := *p
+	np.PGParameters = maps.Clone(p.PGParameters)
+	np.SynchronousStandbys = slices.Clone(p.SynchronousStandbys)
+	np.ManagedLogicalSlots = maps.Clone(p.ManagedLogicalSlots)
+	if p.TimelinesHistory != nil {
+		np.TimelinesHistory = make(PostgresTimelinesHistory, len(p.TimelinesHistory))
+		for i, h := range p.TimelinesHistory {
+			if h == nil {
+				continue
+			}
+			hCopy := *h
+			np.TimelinesHistory[i] = &hCopy
+		}
+	}
+	return &np
 }
 
 // SentinelsInfo is a sortable list of sentinel info records.
@@ -169,9 +191,16 @@ func (p ProxiesInfo) DeepCopy() ProxiesInfo {
 	if p == nil {
 		return nil
 	}
-	np, err := copystructure.Copy(p)
-	common.MustNot(err, "proxies info deep copy")
-	return np.(ProxiesInfo)
+	np := make(ProxiesInfo, len(p))
+	for uid, info := range p {
+		if info == nil {
+			np[uid] = nil
+			continue
+		}
+		infoCopy := *info
+		np[uid] = &infoCopy
+	}
+	return np
 }
 
 // ToSlice returns proxy infos as a sortable slice.

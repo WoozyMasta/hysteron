@@ -64,6 +64,9 @@ The format is based on [Keep a Changelog][], and this project adheres to
   required env/tool prerequisites are missing.
 * Use `github.com/google/uuid` for project UUID generation and remove the
   direct `github.com/gofrs/uuid` dependency.
+* Replace `github.com/mitchellh/copystructure` deep copies with explicit
+  typed `DeepCopy` implementations in cluster, keeper, sentinel, and
+  PostgreSQL code paths, and remove the `copystructure` dependency.
 * Add an explicit Docker Compose integration-test runner for PostgreSQL major
   version smoke checks.
 * Add a strict PostgreSQL major-version support check with an explicit

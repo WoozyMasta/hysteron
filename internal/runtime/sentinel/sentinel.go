@@ -44,7 +44,6 @@ import (
 	slicesutil "github.com/woozymasta/hysteron/internal/utils/slices"
 	"github.com/woozymasta/hysteron/internal/utils/timer"
 
-	"github.com/mitchellh/copystructure"
 	"github.com/rs/zerolog"
 	"github.com/woozymasta/flags"
 )
@@ -2375,18 +2374,15 @@ func (k KeeperInfoHistories) DeepCopy() (KeeperInfoHistories, error) {
 	if k == nil {
 		return nil, nil
 	}
-	nk, err := copystructure.Copy(k)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"deep copy keeper info histories: %w",
-			err,
-		)
-	}
-	out := nk.(KeeperInfoHistories)
-	if !reflect.DeepEqual(k, out) {
-		return nil, errors.New(
-			"deep copy keeper info histories: result not equal to source",
-		)
+	out := make(KeeperInfoHistories, len(k))
+	for uid, history := range k {
+		if history == nil {
+			out[uid] = nil
+			continue
+		}
+		hCopy := *history
+		hCopy.KeeperInfo = history.KeeperInfo.DeepCopy()
+		out[uid] = &hCopy
 	}
 	return out, nil
 }
@@ -2415,18 +2411,18 @@ func (p ProxyInfoHistories) DeepCopy() (ProxyInfoHistories, error) {
 	if p == nil {
 		return nil, nil
 	}
-	np, err := copystructure.Copy(p)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"deep copy proxy info histories: %w",
-			err,
-		)
-	}
-	out := np.(ProxyInfoHistories)
-	if !reflect.DeepEqual(p, out) {
-		return nil, errors.New(
-			"deep copy proxy info histories: result not equal to source",
-		)
+	out := make(ProxyInfoHistories, len(p))
+	for uid, history := range p {
+		if history == nil {
+			out[uid] = nil
+			continue
+		}
+		hCopy := *history
+		if history.ProxyInfo != nil {
+			piCopy := *history.ProxyInfo
+			hCopy.ProxyInfo = &piCopy
+		}
+		out[uid] = &hCopy
 	}
 	return out, nil
 }

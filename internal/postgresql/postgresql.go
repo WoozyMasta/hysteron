@@ -35,7 +35,6 @@ import (
 	slog "github.com/woozymasta/hysteron/internal/log"
 	"github.com/woozymasta/hysteron/internal/utils/fs"
 
-	"github.com/mitchellh/copystructure"
 	"github.com/rs/zerolog"
 )
 
@@ -160,9 +159,17 @@ func NewRecoveryOptions() *RecoveryOptions {
 
 // DeepCopy returns an independent copy of recovery options.
 func (r *RecoveryOptions) DeepCopy() *RecoveryOptions {
-	nr, err := copystructure.Copy(r)
-	common.MustNot(err, "recovery options deep copy")
-	return nr.(*RecoveryOptions)
+	if r == nil {
+		return nil
+	}
+	nr := *r
+	if r.RecoveryParameters != nil {
+		nr.RecoveryParameters = make(common.Parameters, len(r.RecoveryParameters))
+		for k, v := range r.RecoveryParameters {
+			nr.RecoveryParameters[k] = v
+		}
+	}
+	return &nr
 }
 
 // SystemData contains PostgreSQL system identifier and position data.
@@ -270,11 +277,14 @@ func (p *Manager) CurHba() []string {
 
 // UpdateCurParameters snapshots desired parameters as current parameters.
 func (p *Manager) UpdateCurParameters() error {
-	n, err := copystructure.Copy(p.parameters)
-	if err != nil {
-		return fmt.Errorf("snapshot pg parameters: %w", err)
+	if p.parameters == nil {
+		p.curParameters = nil
+		return nil
 	}
-	p.curParameters = n.(common.Parameters)
+	p.curParameters = make(common.Parameters, len(p.parameters))
+	for k, v := range p.parameters {
+		p.curParameters[k] = v
+	}
 	return nil
 }
 
@@ -285,11 +295,11 @@ func (p *Manager) UpdateCurRecoveryOptions() {
 
 // UpdateCurHba snapshots desired pg_hba entries.
 func (p *Manager) UpdateCurHba() error {
-	n, err := copystructure.Copy(p.hba)
-	if err != nil {
-		return fmt.Errorf("snapshot pg_hba: %w", err)
+	if p.hba == nil {
+		p.curHba = nil
+		return nil
 	}
-	p.curHba = n.([]string)
+	p.curHba = append([]string(nil), p.hba...)
 	return nil
 }
 

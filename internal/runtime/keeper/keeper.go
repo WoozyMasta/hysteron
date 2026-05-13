@@ -39,7 +39,6 @@ import (
 	"unicode"
 
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/mitchellh/copystructure"
 	"github.com/woozymasta/hysteron/internal/cluster"
 	"github.com/woozymasta/hysteron/internal/common"
 	stconfig "github.com/woozymasta/hysteron/internal/config"
@@ -104,9 +103,14 @@ func (s *DBLocalState) DeepCopy() *DBLocalState {
 	if s == nil {
 		return nil
 	}
-	ns, err := copystructure.Copy(s)
-	common.MustNot(err, "keeper DBLocalState deep copy failed")
-	return ns.(*DBLocalState)
+	ns := *s
+	if s.InitPGParameters != nil {
+		ns.InitPGParameters = make(common.Parameters, len(s.InitPGParameters))
+		for k, v := range s.InitPGParameters {
+			ns.InitPGParameters[k] = v
+		}
+	}
+	return &ns
 }
 
 type config struct {

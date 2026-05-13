@@ -24,7 +24,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mitchellh/copystructure"
 	"github.com/woozymasta/hysteron/internal/common"
 	util "github.com/woozymasta/hysteron/internal/postgresql"
 )
@@ -467,20 +466,6 @@ type Cluster struct {
 	UID        string        `json:"uid,omitempty"`
 	Status     ClusterStatus `json:"status,omitzero"`
 	Generation int64         `json:"generation,omitempty"`
-}
-
-// DeepCopy returns an independent copy of the cluster.
-func (c *Cluster) DeepCopy() *Cluster {
-	nc, err := copystructure.Copy(c)
-	common.MustNot(err, "cluster deep copy")
-	return nc.(*Cluster)
-}
-
-// DeepCopy returns an independent copy of the cluster spec.
-func (c *ClusterSpec) DeepCopy() *ClusterSpec {
-	nc, err := copystructure.Copy(c)
-	common.MustNot(err, "cluster spec deep copy")
-	return nc.(*ClusterSpec)
 }
 
 // DefSpec returns a new ClusterSpec with unspecified values populated with
@@ -1166,13 +1151,6 @@ func NewClusterData(c *Cluster) *ClusterData {
 		DBs:           make(DBs),
 		Proxy:         &Proxy{},
 	}
-}
-
-// DeepCopy returns an independent copy of cluster data.
-func (c *ClusterData) DeepCopy() *ClusterData {
-	nc, err := copystructure.Copy(c)
-	common.MustNot(err, "cluster data deep copy")
-	return nc.(*ClusterData)
 }
 
 // FindDB returns the db assigned to keeper, if any.

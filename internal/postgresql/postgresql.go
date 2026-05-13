@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -165,9 +166,7 @@ func (r *RecoveryOptions) DeepCopy() *RecoveryOptions {
 	nr := *r
 	if r.RecoveryParameters != nil {
 		nr.RecoveryParameters = make(common.Parameters, len(r.RecoveryParameters))
-		for k, v := range r.RecoveryParameters {
-			nr.RecoveryParameters[k] = v
-		}
+		maps.Copy(nr.RecoveryParameters, r.RecoveryParameters)
 	}
 	return &nr
 }
@@ -282,9 +281,7 @@ func (p *Manager) UpdateCurParameters() error {
 		return nil
 	}
 	p.curParameters = make(common.Parameters, len(p.parameters))
-	for k, v := range p.parameters {
-		p.curParameters[k] = v
-	}
+	maps.Copy(p.curParameters, p.parameters)
 	return nil
 }
 

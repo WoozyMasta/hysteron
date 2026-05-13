@@ -106,9 +106,7 @@ func (s *DBLocalState) DeepCopy() *DBLocalState {
 	ns := *s
 	if s.InitPGParameters != nil {
 		ns.InitPGParameters = make(common.Parameters, len(s.InitPGParameters))
-		for k, v := range s.InitPGParameters {
-			ns.InitPGParameters[k] = v
-		}
+		maps.Copy(ns.InitPGParameters, s.InitPGParameters)
 	}
 	return &ns
 }

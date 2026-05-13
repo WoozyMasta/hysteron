@@ -277,6 +277,11 @@ Initialize a new cluster
 * `-v`, `--version` -
   Show version information
 
+#### Arguments
+
+* `spec`
+  * Description: cluster spec content provided directly as argument
+
 ### cluster keeper
 
 Manage keeper records in cluster data
@@ -416,6 +421,11 @@ Replace or patch the current cluster specification
 * `-v`, `--version` -
   Show version information
 
+#### Arguments
+
+* `spec`
+  * Description: cluster spec content provided directly as argument
+
 ### failover
 
 Manage failover operations
@@ -536,6 +546,94 @@ Run keeper runtime components
   metrics listen address i.e "0.0.0.0:8080" (disabled by default)
   * Environment: `$HYSTERON_METRICS_LISTEN_ADDRESS`
 
+#### Keeper
+
+* `--can-be-master` -
+  allow keeper to be elected as master
+  * Environment: `$HYSTERON_CAN_BE_MASTER`
+* `--can-be-synchronous-replica` -
+  allow keeper to be chosen as synchronous replica
+  * Environment: `$HYSTERON_CAN_BE_SYNCHRONOUS_REPLICA`
+* `-i`, `--uid` -
+  keeper uid (must be unique in the cluster and can contain only lower-case
+  letters, numbers and the underscore character). If not provided a random uid
+  will be generated.
+  * Environment: `$HYSTERON_UID`
+* `-d`, `--data-dir` -
+  data directory
+  * Environment: `$HYSTERON_DATA_DIR`
+* `--disable-data-dir-locking` -
+  disable locking on data dir. Warning! It'll cause data corruptions if two
+  keepers are concurrently running with the same data dir.
+  * Environment: `$HYSTERON_DISABLE_DATA_DIR_LOCKING`
+* `--allow-newer-postgres-version` -
+  allow running with PostgreSQL major versions newer than the highest
+  default-supported major. Older-than-supported versions are always rejected.
+  * Environment: `$HYSTERON_ALLOW_NEWER_POSTGRES_VERSION`
+
+#### PostgreSQL
+
+* `--pg-listen-address` -
+  postgresql instance listening address, local address used for the postgres
+  instance. For all network interface, you can set the value to '*'.
+  * Environment: `$HYSTERON_PG_LISTEN_ADDRESS`
+* `--pg-advertise-address` -
+  postgresql instance address from outside. Use it to expose ip different than
+  local ip with a NAT networking config
+  * Environment: `$HYSTERON_PG_ADVERTISE_ADDRESS`
+* `-p`, `--pg-port` -
+  postgresql instance listening port
+  * Defaults: `5432`
+  * Environment: `$HYSTERON_PG_PORT`
+* `--pg-advertise-port` -
+  postgresql instance port from outside. Use it to expose port different than
+  local port with a PAT networking config
+  * Environment: `$HYSTERON_PG_ADVERTISE_PORT`
+* `--pg-bin-path` -
+  absolute path to postgresql binaries. If empty they will be searched in the
+  current PATH
+  * Environment: `$HYSTERON_PG_BIN_PATH`
+
+#### PostgreSQL Replication User
+
+* `--pg-repl-auth-method` -
+  postgres replication user auth method
+  * Defaults: `md5`
+  * Environment: `$HYSTERON_PG_REPL_AUTH_METHOD`
+  * Choices: `md5, trust`
+* `--pg-repl-username` -
+  postgres replication user name. Required. It'll be created on db
+  initialization. Must be the same for all keepers.
+  * Environment: `$HYSTERON_PG_REPL_USERNAME`
+* `--pg-repl-password` -
+  postgres replication user password. Mutually exclusive with
+  --pg-repl-passwordfile. Must be the same for all keepers.
+  * Environment: `$HYSTERON_PG_REPL_PASSWORD`
+* `--pg-repl-passwordfile` -
+  postgres replication user password file. Mutually exclusive with
+  --pg-repl-password. Must be the same for all keepers.
+  * Environment: `$HYSTERON_PG_REPL_PASSWORDFILE`
+
+#### PostgreSQL Superuser
+
+* `--pg-su-auth-method` -
+  postgres superuser auth method
+  * Defaults: `md5`
+  * Environment: `$HYSTERON_PG_SU_AUTH_METHOD`
+  * Choices: `md5, trust`
+* `--pg-su-username` -
+  postgres superuser user name. Defaults to the effective user running keeper.
+  Must be the same for all keepers.
+  * Environment: `$HYSTERON_PG_SU_USERNAME`
+* `--pg-su-password` -
+  postgres superuser password. Mutually exclusive with --pg-su-passwordfile.
+  Must be the same for all keepers.
+  * Environment: `$HYSTERON_PG_SU_PASSWORD`
+* `--pg-su-passwordfile` -
+  postgres superuser password file. Mutually exclusive with --pg-su-password.
+  Must be the same for all keepers.
+  * Environment: `$HYSTERON_PG_SU_PASSWORDFILE`
+
 #### Help Options
 
 * `-h`, `--help` -
@@ -645,15 +743,15 @@ Run proxy runtime components
 * `--port` -
   proxy listening port
   * Environment: `$HYSTERON_PORT`
-* `--disable-writable-listener` -
-  disable the writable proxy listener
-  * Environment: `$HYSTERON_DISABLE_WRITABLE_LISTENER`
 * `--read-only-listen-address` -
   read-only proxy listening address
   * Environment: `$HYSTERON_READ_ONLY_LISTEN_ADDRESS`
 * `--read-only-port` -
   read-only proxy listening port
   * Environment: `$HYSTERON_READ_ONLY_PORT`
+* `--disable-writable-listener` -
+  disable the writable proxy listener
+  * Environment: `$HYSTERON_DISABLE_WRITABLE_LISTENER`
 
 #### Help Options
 

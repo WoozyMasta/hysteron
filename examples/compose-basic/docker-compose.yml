@@ -1,9 +1,11 @@
+﻿# Common runtime image settings for hysteron components.
 x-hysteron-common: &hysteron-common
   image: hysteron:latest
   depends_on:
     - etcd
   restart: unless-stopped
 
+# Common keeper image/settings (PostgreSQL + keeper runtime).
 x-keeper-common: &keeper-common
   image: hysteron-pg:17
   depends_on:
@@ -13,7 +15,32 @@ x-keeper-common: &keeper-common
     - pg_repl
   restart: unless-stopped
 
+# Shared DCS connectivity for all hysteron runtime containers.
+x-runtime-env: &runtime-env
+  HYSTERON_ETCD_ENDPOINTS: http://etcd:2379
+
+# Shared sentinel runtime options.
+x-sentinel-env: &sentinel-env
+  HYSTERON_METRICS_LISTEN_ADDRESS: 0.0.0.0:9090
+  HYSTERON_WEB_LISTEN_ADDRESS: 0.0.0.0:8080
+  HYSTERON_WEB_AUTH_USERNAME: hysteron
+  HYSTERON_WEB_AUTH_PASSWORD: hysteron
+
+# Shared keeper runtime options.
+x-keeper-env: &keeper-env
+  HYSTERON_DATA_DIR: /var/lib/postgresql/data
+  HYSTERON_METRICS_LISTEN_ADDRESS: 0.0.0.0:9187
+  HYSTERON_PG_REPL_USERNAME: replication
+  HYSTERON_PG_REPL_PASSWORDFILE: /run/secrets/pg_repl
+  HYSTERON_PG_SU_USERNAME: postgres
+  HYSTERON_PG_SU_PASSWORDFILE: /run/secrets/pg_su
+
+# Shared proxy runtime options.
+x-proxy-env: &proxy-env
+  HYSTERON_METRICS_LISTEN_ADDRESS: 0.0.0.0:9190
+
 services:
+  # Single-node etcd for local demo only.
   etcd:
     image: quay.io/coreos/etcd:v3.5.18
     command: >
@@ -34,148 +61,152 @@ services:
     volumes:
       - etcd-data:/etcd-data
 
+  # Sentinel node 1: manages both clusters (a and b), hosts web dashboard.
   sentinel1:
     <<: *hysteron-common
+    environment:
+      <<: [*runtime-env, *sentinel-env]
     command: >
       sentinel
-      --cluster-name demo
-      --cluster-name demo2
-      --metrics-listen-address 0.0.0.0:9090
-      --web-listen-address 0.0.0.0:8080
-      --web-auth-username hysteron
-      --web-auth-password hysteron
-      --initial-cluster-spec /etc/hysteron/cluster-spec.json
-      --cluster-spec demo2=/etc/hysteron/cluster-spec-demo2.json
+      --cluster-name a
+      --cluster-name b
+      --initial-cluster-spec /etc/hysteron/cluster-spec-a.json
+      --cluster-spec b=/etc/hysteron/cluster-spec-b.json
       etcd
-      --etcd-endpoints http://etcd:2379
     volumes:
-      - ./cluster-spec.json:/etc/hysteron/cluster-spec.json:ro
-      - ./cluster-spec-demo2.json:/etc/hysteron/cluster-spec-demo2.json:ro
+      - ./cluster-spec-a.json:/etc/hysteron/cluster-spec-a.json:ro
+      - ./cluster-spec-b.json:/etc/hysteron/cluster-spec-b.json:ro
     ports:
       - 8080:8080
 
+  # Sentinel node 2: same role as sentinel1 for HA quorum.
   sentinel2:
     <<: *hysteron-common
+    environment:
+      <<: [*runtime-env, *sentinel-env]
     command: >
       sentinel
-      --cluster-name demo
-      --cluster-name demo2
-      --metrics-listen-address 0.0.0.0:9090
-      --web-listen-address 0.0.0.0:8080
-      --web-auth-username hysteron
-      --web-auth-password hysteron
-      --initial-cluster-spec /etc/hysteron/cluster-spec.json
-      --cluster-spec demo2=/etc/hysteron/cluster-spec-demo2.json
+      --cluster-name a
+      --cluster-name b
+      --initial-cluster-spec /etc/hysteron/cluster-spec-a.json
+      --cluster-spec b=/etc/hysteron/cluster-spec-b.json
       etcd
-      --etcd-endpoints http://etcd:2379
     volumes:
-      - ./cluster-spec.json:/etc/hysteron/cluster-spec.json:ro
-      - ./cluster-spec-demo2.json:/etc/hysteron/cluster-spec-demo2.json:ro
+      - ./cluster-spec-a.json:/etc/hysteron/cluster-spec-a.json:ro
+      - ./cluster-spec-b.json:/etc/hysteron/cluster-spec-b.json:ro
     ports:
       - 8081:8080
 
-  keeper1:
+  # Cluster A keeper 1: synchronous replication cluster.
+  keeper-a-1:
     <<: *keeper-common
-    hostname: keeper1
+    hostname: keeper-a-1
+    environment:
+      <<: [*runtime-env, *keeper-env]
     command: >
       keeper
-      --uid keeper1
-      --data-dir /var/lib/postgresql/data
-      --pg-listen-address keeper1
-      --pg-advertise-address keeper1
-      --pg-repl-username replication
-      --pg-repl-passwordfile /run/secrets/pg_repl
-      --pg-su-username postgres
-      --pg-su-passwordfile /run/secrets/pg_su
-      --cluster-name demo
-      --metrics-listen-address 0.0.0.0:9187
+      --uid keeper_a_1
+      --cluster-name a
+      --pg-listen-address keeper-a-1
+      --pg-advertise-address keeper-a-1
       etcd
-      --etcd-endpoints http://etcd:2379
     volumes:
-      - keeper1-data:/var/lib/postgresql/data
+      - keeper-a-1-data:/var/lib/postgresql/data
 
-  keeper2:
+  # Cluster A keeper 2: synchronous standby candidate.
+  keeper-a-2:
     <<: *keeper-common
-    hostname: keeper2
+    hostname: keeper-a-2
+    environment:
+      <<: [*runtime-env, *keeper-env]
     command: >
       keeper
-      --uid keeper2
-      --data-dir /var/lib/postgresql/data
-      --pg-listen-address keeper2
-      --pg-advertise-address keeper2
-      --pg-repl-username replication
-      --pg-repl-passwordfile /run/secrets/pg_repl
-      --pg-su-username postgres
-      --pg-su-passwordfile /run/secrets/pg_su
-      --cluster-name demo
-      --metrics-listen-address 0.0.0.0:9187
+      --uid keeper_a_2
+      --cluster-name a
+      --pg-listen-address keeper-a-2
+      --pg-advertise-address keeper-a-2
       etcd
-      --etcd-endpoints http://etcd:2379
     volumes:
-      - keeper2-data:/var/lib/postgresql/data
+      - keeper-a-2-data:/var/lib/postgresql/data
 
-  keeper3:
+  # Cluster B keeper 1: asynchronous replication cluster.
+  keeper-b-1:
     <<: *keeper-common
-    hostname: keeper3
+    hostname: keeper-b-1
+    environment:
+      <<: [*runtime-env, *keeper-env]
     command: >
       keeper
-      --uid keeper3
-      --data-dir /var/lib/postgresql/data
-      --pg-listen-address keeper3
-      --pg-advertise-address keeper3
-      --pg-repl-username replication
-      --pg-repl-passwordfile /run/secrets/pg_repl
-      --pg-su-username postgres
-      --pg-su-passwordfile /run/secrets/pg_su
-      --cluster-name demo2
-      --metrics-listen-address 0.0.0.0:9187
+      --uid keeper_b_1
+      --cluster-name b
+      --pg-listen-address keeper-b-1
+      --pg-advertise-address keeper-b-1
       etcd
-      --etcd-endpoints http://etcd:2379
     volumes:
-      - keeper3-data:/var/lib/postgresql/data
+      - keeper-b-1-data:/var/lib/postgresql/data
 
-  proxy1:
+  # Cluster B keeper 2: asynchronous standby.
+  keeper-b-2:
+    <<: *keeper-common
+    hostname: keeper-b-2
+    environment:
+      <<: [*runtime-env, *keeper-env]
+    command: >
+      keeper
+      --uid keeper_b_2
+      --cluster-name b
+      --pg-listen-address keeper-b-2
+      --pg-advertise-address keeper-b-2
+      etcd
+    volumes:
+      - keeper-b-2-data:/var/lib/postgresql/data
+
+  # Cluster A proxy 1: writable endpoint.
+  proxy-a-1:
     <<: *hysteron-common
+    environment:
+      <<: [*runtime-env, *proxy-env]
     command: >
       proxy
+      --cluster-name a
       --listen-address 0.0.0.0
       --port 5432
       etcd
-      --cluster-name demo
-      --metrics-listen-address 0.0.0.0:9190
-      --etcd-endpoints http://etcd:2379
     ports:
       - 5432:5432
 
-  proxy2:
+  # Cluster A proxy 2: writable endpoint + dedicated read-only port.
+  proxy-a-2:
     <<: *hysteron-common
+    environment:
+      <<: [*runtime-env, *proxy-env]
     command: >
       proxy
+      --cluster-name a
       --listen-address 0.0.0.0
       --port 5432
       --read-only-listen-address 0.0.0.0
       --read-only-port 6432
       etcd
-      --cluster-name demo
-      --metrics-listen-address 0.0.0.0:9190
-      --etcd-endpoints http://etcd:2379
     ports:
       - 5433:5432
       - 5434:6432
 
-  proxy3:
+  # Cluster B proxy 1: writable endpoint only.
+  proxy-b-1:
     <<: *hysteron-common
+    environment:
+      <<: [*runtime-env, *proxy-env]
     command: >
       proxy
+      --cluster-name b
       --listen-address 0.0.0.0
       --port 5432
       etcd
-      --cluster-name demo2
-      --metrics-listen-address 0.0.0.0:9190
-      --etcd-endpoints http://etcd:2379
     ports:
       - 5543:5432
 
+  # Metrics collection for all hysteron components.
   prometheus:
     image: prom/prometheus:v2.55.1
     command:
@@ -189,14 +220,16 @@ services:
     depends_on:
       - sentinel1
       - sentinel2
-      - keeper1
-      - keeper2
-      - keeper3
-      - proxy1
-      - proxy2
-      - proxy3
+      - keeper-a-1
+      - keeper-a-2
+      - keeper-b-1
+      - keeper-b-2
+      - proxy-a-1
+      - proxy-a-2
+      - proxy-b-1
     restart: unless-stopped
 
+  # Visualization layer with pre-provisioned datasource/dashboard.
   grafana:
     image: grafana/grafana:11.2.0
     environment:
@@ -213,16 +246,19 @@ services:
       - prometheus
     restart: unless-stopped
 
+# Demo secrets (local files) used by keepers.
 secrets:
   pg_su:
     file: ./secrets/pg_su.txt
   pg_repl:
     file: ./secrets/pg_repl.txt
 
+# Persistent volumes for etcd, keepers, and observability stack.
 volumes:
   etcd-data:
-  keeper1-data:
-  keeper2-data:
-  keeper3-data:
+  keeper-a-1-data:
+  keeper-a-2-data:
+  keeper-b-1-data:
+  keeper-b-2-data:
   prometheus-data:
   grafana-data:

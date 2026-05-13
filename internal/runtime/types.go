@@ -21,5 +21,73 @@ type Target struct {
 	CommonConfig *stconfig.CommonConfig
 	Backend      string
 	Component    string
+	Sentinel     *SentinelOptions
+	Proxy        *ProxyOptions
+	Keeper       *KeeperOptions
 	ExtraArgs    []string
+}
+
+// SentinelOptions configures sentinel runtime options from unified CLI.
+type SentinelOptions struct {
+	InitialClusterSpecFile string
+	ClusterSpecFiles       []string
+
+	WebListenAddress               string
+	WebBasePath                    string
+	WebAuthUsername                string
+	WebAuthPassword                string
+	WebReadTimeout                 string
+	WebWriteTimeout                string
+	WebAllowUnsafeAdminWithoutAuth bool
+}
+
+// ProxyOptions configures proxy runtime options from unified CLI.
+type ProxyOptions struct {
+	ListenAddress string
+	Port          string
+
+	DisableWritableListener bool
+
+	ReadOnlyListenAddress string
+	ReadOnlyPort          string
+}
+
+// KeeperOptions configures keeper runtime options from unified CLI.
+type KeeperOptions struct {
+	UID     string
+	DataDir string
+
+	CanBeMaster             bool
+	CanBeSynchronousReplica bool
+	DisableDataDirLocking   bool
+	AllowNewerPG            bool
+
+	PG KeeperPostgresOptions
+}
+
+// KeeperPostgresOptions contains keeper-managed PostgreSQL settings.
+type KeeperPostgresOptions struct {
+	ListenAddress    string
+	AdvertiseAddress string
+	Port             string
+	AdvertisePort    string
+	BinPath          string
+	Repl             KeeperPostgresReplOptions
+	SU               KeeperPostgresSUOptions
+}
+
+// KeeperPostgresReplOptions configures replication user settings.
+type KeeperPostgresReplOptions struct {
+	AuthMethod   string
+	Username     string
+	Password     string
+	PasswordFile string
+}
+
+// KeeperPostgresSUOptions configures superuser settings.
+type KeeperPostgresSUOptions struct {
+	AuthMethod   string
+	Username     string
+	Password     string
+	PasswordFile string
 }

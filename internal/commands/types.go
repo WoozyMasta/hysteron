@@ -17,7 +17,7 @@ package commands
 import "github.com/woozymasta/hysteron/internal/output"
 
 type rootCommand struct {
-	Keeper   runtimeCommand         `command:"keeper" command-group:"Runtime Commands" description:"Run keeper runtime components"`
+	Keeper   keeperRuntimeCommand   `command:"keeper" command-group:"Runtime Commands" description:"Run keeper runtime components"`
 	Sentinel sentinelRuntimeCommand `command:"sentinel" command-group:"Runtime Commands" description:"Run sentinel runtime components"`
 	Proxy    proxyRuntimeCommand    `command:"proxy" command-group:"Runtime Commands" description:"Run proxy runtime components"`
 	Global   rootGlobalOptions      `group:"Global"`
@@ -30,6 +30,14 @@ type runtimeCommand struct {
 	Component  string                   `no-flag:"true"`
 	Common     runtimeCommonOptions     `group:"Common"`
 	Etcd       runtimeEtcdCommand       `command:"etcd" alias:"etcdv3" description:"Run component with etcd backend"`
+}
+
+type keeperRuntimeCommand struct {
+	Kubernetes keeperRuntimeKubernetesCommand `command:"kubernetes" alias:"k8s" description:"Run component with kubernetes backend"`
+	Component  string                         `no-flag:"true"`
+	Common     runtimeCommonOptions           `group:"Common"`
+	Keeper     keeperRuntimeOptions           `group:"Keeper"`
+	Etcd       keeperRuntimeEtcdCommand       `command:"etcd" alias:"etcdv3" description:"Run component with etcd backend"`
 }
 
 type sentinelRuntimeCommand struct {
@@ -94,6 +102,20 @@ type proxyRuntimeEtcdCommand struct {
 	Proxy     proxyRuntimeOptions  `no-flag:"true"`
 	Component string               `no-flag:"true"`
 	Etcd      runtimeEtcdOptions   `group:"Etcd" namespace:"etcd" env-namespace:"ETCD"`
+}
+
+type keeperRuntimeEtcdCommand struct {
+	Common    runtimeCommonOptions `no-flag:"true"`
+	Keeper    keeperRuntimeOptions `no-flag:"true"`
+	Component string               `no-flag:"true"`
+	Etcd      runtimeEtcdOptions   `group:"Etcd" namespace:"etcd" env-namespace:"ETCD"`
+}
+
+type keeperRuntimeKubernetesCommand struct {
+	K8s       k8sStoreOptions      `group:"Kubernetes" namespace:"k8s" env-namespace:"K8S"`
+	Component string               `no-flag:"true"`
+	Common    runtimeCommonOptions `no-flag:"true"`
+	Keeper    keeperRuntimeOptions `no-flag:"true"`
 }
 
 type proxyRuntimeKubernetesCommand struct {

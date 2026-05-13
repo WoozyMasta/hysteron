@@ -65,7 +65,7 @@ func mustConfigureParser(err error) {
 
 func newRootCommand() rootCommand {
 	return rootCommand{
-		Keeper: runtimeCommand{
+		Keeper: keeperRuntimeCommand{
 			Component: "keeper",
 		},
 		Sentinel: sentinelRuntimeCommand{

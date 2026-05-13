@@ -4155,6 +4155,77 @@ func Run(commonConfig stconfig.CommonConfig, args []string) error {
 	return runKeeper(parser)
 }
 
+// RunPostgresReplOptions configures postgres replication user in RunWithOptions.
+type RunPostgresReplOptions struct {
+	AuthMethod   string
+	Username     string
+	Password     string
+	PasswordFile string
+}
+
+// RunPostgresSUOptions configures postgres superuser in RunWithOptions.
+type RunPostgresSUOptions struct {
+	AuthMethod   string
+	Username     string
+	Password     string
+	PasswordFile string
+}
+
+// RunPostgresOptions configures postgres runtime fields in RunWithOptions.
+type RunPostgresOptions struct {
+	ListenAddress    string
+	AdvertiseAddress string
+	Port             string
+	AdvertisePort    string
+	BinPath          string
+	Repl             RunPostgresReplOptions
+	SU               RunPostgresSUOptions
+}
+
+// RunOptions provides typed keeper runtime options for unified CLI.
+type RunOptions struct {
+	UID     string
+	DataDir string
+
+	CanBeMaster             bool
+	CanBeSynchronousReplica bool
+	DisableDataDirLocking   bool
+	AllowNewerPG            bool
+
+	PG RunPostgresOptions
+}
+
+// RunWithOptions executes keeper runtime without re-parsing component flags.
+func RunWithOptions(commonConfig stconfig.CommonConfig, opts RunOptions) error {
+	cfg = config{
+		CanBeMaster:             opts.CanBeMaster,
+		CanBeSynchronousReplica: opts.CanBeSynchronousReplica,
+	}
+	cfg.CommonConfig = runtimecommon.FromConfigCommon(commonConfig)
+	cfg.UID = opts.UID
+	cfg.DataDir = opts.DataDir
+	cfg.DisableDataDirLocking = opts.DisableDataDirLocking
+	cfg.AllowNewerPG = opts.AllowNewerPG
+
+	cfg.PG.ListenAddress = opts.PG.ListenAddress
+	cfg.PG.AdvertiseAddress = opts.PG.AdvertiseAddress
+	cfg.PG.Port = opts.PG.Port
+	cfg.PG.AdvertisePort = opts.PG.AdvertisePort
+	cfg.PG.BinPath = opts.PG.BinPath
+
+	cfg.PG.Repl.AuthMethod = opts.PG.Repl.AuthMethod
+	cfg.PG.Repl.Username = opts.PG.Repl.Username
+	cfg.PG.Repl.Password = opts.PG.Repl.Password
+	cfg.PG.Repl.PasswordFile = opts.PG.Repl.PasswordFile
+
+	cfg.PG.SU.AuthMethod = opts.PG.SU.AuthMethod
+	cfg.PG.SU.Username = opts.PG.SU.Username
+	cfg.PG.SU.Password = opts.PG.SU.Password
+	cfg.PG.SU.PasswordFile = opts.PG.SU.PasswordFile
+
+	return runKeeper(nil)
+}
+
 func runKeeper(parser *flags.Parser) error {
 	closer, err := runtimecommon.InitLogging(&cfg.CommonConfig)
 	if err != nil {

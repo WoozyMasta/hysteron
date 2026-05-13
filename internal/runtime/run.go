@@ -28,10 +28,12 @@ func Run(target Target) error {
 	if target.CommonConfig == nil {
 		return ErrCommonConfigRequired
 	}
+
 	backend, err := normalizeBackend(target.Backend)
 	if err != nil {
 		return err
 	}
+
 	if target.CommonConfig.Store.Backend != "" {
 		flagBackendInput := target.CommonConfig.Store.Backend
 		flagBackend, err := normalizeBackend(stconfig.NormalizeStoreBackend(flagBackendInput))
@@ -50,11 +52,65 @@ func Run(target Target) error {
 
 	switch target.Component {
 	case "sentinel":
-		return sentinelcmd.Run(*target.CommonConfig, target.ExtraArgs)
+		if target.Sentinel == nil {
+			return sentinelcmd.Run(*target.CommonConfig, target.ExtraArgs)
+		}
+		return sentinelcmd.RunWithOptions(*target.CommonConfig, sentinelcmd.RunOptions{
+			InitialClusterSpecFile:         target.Sentinel.InitialClusterSpecFile,
+			ClusterSpecFiles:               target.Sentinel.ClusterSpecFiles,
+			WebListenAddress:               target.Sentinel.WebListenAddress,
+			WebBasePath:                    target.Sentinel.WebBasePath,
+			WebAuthUsername:                target.Sentinel.WebAuthUsername,
+			WebAuthPassword:                target.Sentinel.WebAuthPassword,
+			WebReadTimeout:                 target.Sentinel.WebReadTimeout,
+			WebWriteTimeout:                target.Sentinel.WebWriteTimeout,
+			WebAllowUnsafeAdminWithoutAuth: target.Sentinel.WebAllowUnsafeAdminWithoutAuth,
+		})
+
 	case "proxy":
-		return proxycmd.Run(*target.CommonConfig, target.ExtraArgs)
+		if target.Proxy == nil {
+			return proxycmd.Run(*target.CommonConfig, target.ExtraArgs)
+		}
+		return proxycmd.RunWithOptions(*target.CommonConfig, proxycmd.RunOptions{
+			ListenAddress:           target.Proxy.ListenAddress,
+			Port:                    target.Proxy.Port,
+			DisableWritableListener: target.Proxy.DisableWritableListener,
+			ReadOnlyListenAddress:   target.Proxy.ReadOnlyListenAddress,
+			ReadOnlyPort:            target.Proxy.ReadOnlyPort,
+		})
+
 	case "keeper":
+		if target.Keeper != nil {
+			return keepercmd.RunWithOptions(*target.CommonConfig, keepercmd.RunOptions{
+				UID:                     target.Keeper.UID,
+				DataDir:                 target.Keeper.DataDir,
+				CanBeMaster:             target.Keeper.CanBeMaster,
+				CanBeSynchronousReplica: target.Keeper.CanBeSynchronousReplica,
+				DisableDataDirLocking:   target.Keeper.DisableDataDirLocking,
+				AllowNewerPG:            target.Keeper.AllowNewerPG,
+				PG: keepercmd.RunPostgresOptions{
+					ListenAddress:    target.Keeper.PG.ListenAddress,
+					AdvertiseAddress: target.Keeper.PG.AdvertiseAddress,
+					Port:             target.Keeper.PG.Port,
+					AdvertisePort:    target.Keeper.PG.AdvertisePort,
+					BinPath:          target.Keeper.PG.BinPath,
+					Repl: keepercmd.RunPostgresReplOptions{
+						AuthMethod:   target.Keeper.PG.Repl.AuthMethod,
+						Username:     target.Keeper.PG.Repl.Username,
+						Password:     target.Keeper.PG.Repl.Password,
+						PasswordFile: target.Keeper.PG.Repl.PasswordFile,
+					},
+					SU: keepercmd.RunPostgresSUOptions{
+						AuthMethod:   target.Keeper.PG.SU.AuthMethod,
+						Username:     target.Keeper.PG.SU.Username,
+						Password:     target.Keeper.PG.SU.Password,
+						PasswordFile: target.Keeper.PG.SU.PasswordFile,
+					},
+				},
+			})
+		}
 		return keepercmd.Run(*target.CommonConfig, target.ExtraArgs)
+
 	default:
 		return fmt.Errorf("unsupported runtime component %q", target.Component)
 	}

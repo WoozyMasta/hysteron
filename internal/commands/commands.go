@@ -22,6 +22,7 @@ import (
 
 	"github.com/woozymasta/hysteron/internal/app"
 	"github.com/woozymasta/hysteron/internal/output"
+	"github.com/woozymasta/hysteron/internal/runtime"
 )
 
 // Execute stores runtime command context for backend leaf execution.
@@ -29,6 +30,17 @@ func (c *runtimeCommand) Execute(_ []string) error {
 	c.Etcd.Common = c.Common
 	c.Etcd.Component = c.Component
 	c.Kubernetes.Common = c.Common
+	c.Kubernetes.Component = c.Component
+	return nil
+}
+
+// Execute stores keeper runtime command context for backend leaf execution.
+func (c *keeperRuntimeCommand) Execute(_ []string) error {
+	c.Etcd.Common = c.Common
+	c.Etcd.Keeper = c.Keeper
+	c.Etcd.Component = c.Component
+	c.Kubernetes.Common = c.Common
+	c.Kubernetes.Keeper = c.Keeper
 	c.Kubernetes.Component = c.Component
 	return nil
 }
@@ -83,8 +95,11 @@ func (c *runtimeKubernetesCommand) Execute(args []string) error {
 	})
 }
 
-// Execute runs `hysteron proxy etcd`.
-func (c *proxyRuntimeEtcdCommand) Execute(args []string) error {
+// Execute runs `hysteron keeper etcd`.
+func (c *keeperRuntimeEtcdCommand) Execute(args []string) error {
+	if len(args) > 0 {
+		return ErrTooManyCommandArguments
+	}
 	if c.Component == "" {
 		return ErrRuntimeCommandContextMissing
 	}
@@ -92,12 +107,108 @@ func (c *proxyRuntimeEtcdCommand) Execute(args []string) error {
 		CommonConfig: runtimeEtcdConfig(c.Common, c.Etcd),
 		Backend:      "etcd",
 		Component:    c.Component,
-		ExtraArgs:    append(proxyRuntimeExtraArgs(c.Proxy), args...),
+		Keeper: &runtime.KeeperOptions{
+			UID:                     c.Keeper.UID,
+			DataDir:                 c.Keeper.DataDir,
+			CanBeMaster:             boolValueOrDefault(c.Keeper.CanBeMaster, true),
+			CanBeSynchronousReplica: boolValueOrDefault(c.Keeper.CanBeSynchronousReplica, true),
+			DisableDataDirLocking:   c.Keeper.DisableDataDirLocking,
+			AllowNewerPG:            c.Keeper.AllowNewerPG,
+			PG: runtime.KeeperPostgresOptions{
+				ListenAddress:    c.Keeper.PG.ListenAddress,
+				AdvertiseAddress: c.Keeper.PG.AdvertiseAddress,
+				Port:             c.Keeper.PG.Port,
+				AdvertisePort:    c.Keeper.PG.AdvertisePort,
+				BinPath:          c.Keeper.PG.BinPath,
+				Repl: runtime.KeeperPostgresReplOptions{
+					AuthMethod:   c.Keeper.PG.Repl.AuthMethod,
+					Username:     c.Keeper.PG.Repl.Username,
+					Password:     c.Keeper.PG.Repl.Password,
+					PasswordFile: c.Keeper.PG.Repl.PasswordFile,
+				},
+				SU: runtime.KeeperPostgresSUOptions{
+					AuthMethod:   c.Keeper.PG.SU.AuthMethod,
+					Username:     c.Keeper.PG.SU.Username,
+					Password:     c.Keeper.PG.SU.Password,
+					PasswordFile: c.Keeper.PG.SU.PasswordFile,
+				},
+			},
+		},
+		ExtraArgs: args,
+	})
+}
+
+// Execute runs `hysteron keeper kubernetes`.
+func (c *keeperRuntimeKubernetesCommand) Execute(args []string) error {
+	if len(args) > 0 {
+		return ErrTooManyCommandArguments
+	}
+	if c.Component == "" {
+		return ErrRuntimeCommandContextMissing
+	}
+	return app.RunRuntime(app.RuntimeTarget{
+		CommonConfig: runtimeKubernetesConfig(c.Common, c.K8s),
+		Backend:      "kubernetes",
+		Component:    c.Component,
+		Keeper: &runtime.KeeperOptions{
+			UID:                     c.Keeper.UID,
+			DataDir:                 c.Keeper.DataDir,
+			CanBeMaster:             boolValueOrDefault(c.Keeper.CanBeMaster, true),
+			CanBeSynchronousReplica: boolValueOrDefault(c.Keeper.CanBeSynchronousReplica, true),
+			DisableDataDirLocking:   c.Keeper.DisableDataDirLocking,
+			AllowNewerPG:            c.Keeper.AllowNewerPG,
+			PG: runtime.KeeperPostgresOptions{
+				ListenAddress:    c.Keeper.PG.ListenAddress,
+				AdvertiseAddress: c.Keeper.PG.AdvertiseAddress,
+				Port:             c.Keeper.PG.Port,
+				AdvertisePort:    c.Keeper.PG.AdvertisePort,
+				BinPath:          c.Keeper.PG.BinPath,
+				Repl: runtime.KeeperPostgresReplOptions{
+					AuthMethod:   c.Keeper.PG.Repl.AuthMethod,
+					Username:     c.Keeper.PG.Repl.Username,
+					Password:     c.Keeper.PG.Repl.Password,
+					PasswordFile: c.Keeper.PG.Repl.PasswordFile,
+				},
+				SU: runtime.KeeperPostgresSUOptions{
+					AuthMethod:   c.Keeper.PG.SU.AuthMethod,
+					Username:     c.Keeper.PG.SU.Username,
+					Password:     c.Keeper.PG.SU.Password,
+					PasswordFile: c.Keeper.PG.SU.PasswordFile,
+				},
+			},
+		},
+		ExtraArgs: args,
+	})
+}
+
+// Execute runs `hysteron proxy etcd`.
+func (c *proxyRuntimeEtcdCommand) Execute(args []string) error {
+	if len(args) > 0 {
+		return ErrTooManyCommandArguments
+	}
+	if c.Component == "" {
+		return ErrRuntimeCommandContextMissing
+	}
+	return app.RunRuntime(app.RuntimeTarget{
+		CommonConfig: runtimeEtcdConfig(c.Common, c.Etcd),
+		Backend:      "etcd",
+		Component:    c.Component,
+		Proxy: &runtime.ProxyOptions{
+			ListenAddress:           c.Proxy.ListenAddress,
+			Port:                    c.Proxy.Port,
+			DisableWritableListener: c.Proxy.DisableWritableListener,
+			ReadOnlyListenAddress:   c.Proxy.ReadOnlyListenAddress,
+			ReadOnlyPort:            c.Proxy.ReadOnlyPort,
+		},
+		ExtraArgs: args,
 	})
 }
 
 // Execute runs `hysteron proxy kubernetes`.
 func (c *proxyRuntimeKubernetesCommand) Execute(args []string) error {
+	if len(args) > 0 {
+		return ErrTooManyCommandArguments
+	}
 	if c.Component == "" {
 		return ErrRuntimeCommandContextMissing
 	}
@@ -105,12 +216,22 @@ func (c *proxyRuntimeKubernetesCommand) Execute(args []string) error {
 		CommonConfig: runtimeKubernetesConfig(c.Common, c.K8s),
 		Backend:      "kubernetes",
 		Component:    c.Component,
-		ExtraArgs:    append(proxyRuntimeExtraArgs(c.Proxy), args...),
+		Proxy: &runtime.ProxyOptions{
+			ListenAddress:           c.Proxy.ListenAddress,
+			Port:                    c.Proxy.Port,
+			DisableWritableListener: c.Proxy.DisableWritableListener,
+			ReadOnlyListenAddress:   c.Proxy.ReadOnlyListenAddress,
+			ReadOnlyPort:            c.Proxy.ReadOnlyPort,
+		},
+		ExtraArgs: args,
 	})
 }
 
 // Execute runs `hysteron sentinel etcd`.
 func (c *sentinelRuntimeEtcdCommand) Execute(args []string) error {
+	if len(args) > 0 {
+		return ErrTooManyCommandArguments
+	}
 	if c.Component == "" {
 		return ErrRuntimeCommandContextMissing
 	}
@@ -118,15 +239,26 @@ func (c *sentinelRuntimeEtcdCommand) Execute(args []string) error {
 		CommonConfig: runtimeEtcdConfig(c.Common, c.Etcd),
 		Backend:      "etcd",
 		Component:    c.Component,
-		ExtraArgs: append(
-			sentinelRuntimeExtraArgs(c.Sentinel),
-			append(sentinelWebExtraArgs(c.Web), args...)...,
-		),
+		Sentinel: &runtime.SentinelOptions{
+			InitialClusterSpecFile:         c.Sentinel.InitialClusterSpecFile,
+			ClusterSpecFiles:               c.Sentinel.ClusterSpecFiles,
+			WebListenAddress:               c.Web.ListenAddress,
+			WebBasePath:                    c.Web.BasePath,
+			WebAuthUsername:                c.Web.AuthUsername,
+			WebAuthPassword:                c.Web.AuthPassword,
+			WebReadTimeout:                 c.Web.ReadTimeout.String(),
+			WebWriteTimeout:                c.Web.WriteTimeout.String(),
+			WebAllowUnsafeAdminWithoutAuth: c.Web.AllowUnsafeAdminWithoutAuth,
+		},
+		ExtraArgs: args,
 	})
 }
 
 // Execute runs `hysteron sentinel kubernetes`.
 func (c *sentinelRuntimeKubernetesCommand) Execute(args []string) error {
+	if len(args) > 0 {
+		return ErrTooManyCommandArguments
+	}
 	if c.Component == "" {
 		return ErrRuntimeCommandContextMissing
 	}
@@ -134,10 +266,18 @@ func (c *sentinelRuntimeKubernetesCommand) Execute(args []string) error {
 		CommonConfig: runtimeKubernetesConfig(c.Common, c.K8s),
 		Backend:      "kubernetes",
 		Component:    c.Component,
-		ExtraArgs: append(
-			sentinelRuntimeExtraArgs(c.Sentinel),
-			append(sentinelWebExtraArgs(c.Web), args...)...,
-		),
+		Sentinel: &runtime.SentinelOptions{
+			InitialClusterSpecFile:         c.Sentinel.InitialClusterSpecFile,
+			ClusterSpecFiles:               c.Sentinel.ClusterSpecFiles,
+			WebListenAddress:               c.Web.ListenAddress,
+			WebBasePath:                    c.Web.BasePath,
+			WebAuthUsername:                c.Web.AuthUsername,
+			WebAuthPassword:                c.Web.AuthPassword,
+			WebReadTimeout:                 c.Web.ReadTimeout.String(),
+			WebWriteTimeout:                c.Web.WriteTimeout.String(),
+			WebAllowUnsafeAdminWithoutAuth: c.Web.AllowUnsafeAdminWithoutAuth,
+		},
+		ExtraArgs: args,
 	})
 }
 
@@ -249,60 +389,6 @@ func commandContext() context.Context {
 	return context.Background()
 }
 
-func sentinelWebExtraArgs(web sentinelWebOptions) []string {
-	args := []string{
-		"--web-base-path", web.BasePath,
-		"--web-read-timeout", web.ReadTimeout.String(),
-		"--web-write-timeout", web.WriteTimeout.String(),
-	}
-	if web.ListenAddress != "" {
-		args = append(args, "--web-listen-address", web.ListenAddress)
-	}
-	if web.AuthUsername != "" {
-		args = append(args, "--web-auth-username", web.AuthUsername)
-	}
-	if web.AuthPassword != "" {
-		args = append(args, "--web-auth-password", web.AuthPassword)
-	}
-	if web.AllowUnsafeAdminWithoutAuth {
-		args = append(args, "--web-allow-unsafe-admin-without-auth")
-	}
-	return args
-}
-
-func sentinelRuntimeExtraArgs(opts sentinelRuntimeOptions) []string {
-	args := []string{}
-	if opts.InitialClusterSpecFile != "" {
-		args = append(args, "--initial-cluster-spec", opts.InitialClusterSpecFile)
-	}
-	for _, spec := range opts.ClusterSpecFiles {
-		if spec != "" {
-			args = append(args, "--cluster-spec", spec)
-		}
-	}
-	return args
-}
-
-func proxyRuntimeExtraArgs(opts proxyRuntimeOptions) []string {
-	args := []string{}
-	if opts.ListenAddress != "" {
-		args = append(args, "--listen-address", opts.ListenAddress)
-	}
-	if opts.Port != "" {
-		args = append(args, "--port", opts.Port)
-	}
-	if opts.DisableWritableListener {
-		args = append(args, "--disable-writable-listener")
-	}
-	if opts.ReadOnlyListenAddress != "" {
-		args = append(args, "--read-only-listen-address", opts.ReadOnlyListenAddress)
-	}
-	if opts.ReadOnlyPort != "" {
-		args = append(args, "--read-only-port", opts.ReadOnlyPort)
-	}
-	return args
-}
-
 func readDataInput(file string) ([]byte, error) {
 	if file == "" || file == "-" {
 		return io.ReadAll(os.Stdin)
@@ -331,4 +417,11 @@ func readDataInputFromFileOrArg(file string, args []string) ([]byte, error) {
 		return []byte(args[0]), nil
 	}
 	return readDataInput(file)
+}
+
+func boolValueOrDefault(value *bool, def bool) bool {
+	if value == nil {
+		return def
+	}
+	return *value
 }

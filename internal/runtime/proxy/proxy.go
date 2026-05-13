@@ -705,6 +705,29 @@ func Run(commonConfig stconfig.CommonConfig, args []string) error {
 	return runProxy()
 }
 
+// RunOptions provides typed proxy runtime options for unified CLI.
+type RunOptions struct {
+	ListenAddress string
+	Port          string
+
+	DisableWritableListener bool
+
+	ReadOnlyListenAddress string
+	ReadOnlyPort          string
+}
+
+// RunWithOptions executes proxy runtime without re-parsing component flags.
+func RunWithOptions(commonConfig stconfig.CommonConfig, opts RunOptions) error {
+	cfg = config{StopListening: true}
+	cfg.CommonConfig = runtimecommon.FromConfigCommon(commonConfig)
+	cfg.Writable.ListenAddress = opts.ListenAddress
+	cfg.Writable.Port = opts.Port
+	cfg.Writable.DisableListener = opts.DisableWritableListener
+	cfg.ReadOnly.ListenAddress = opts.ReadOnlyListenAddress
+	cfg.ReadOnly.Port = opts.ReadOnlyPort
+	return runProxy()
+}
+
 func runProxy() error {
 	closer, err := runtimecommon.InitLogging(&cfg.CommonConfig)
 	if err != nil {

@@ -2979,6 +2979,48 @@ func Run(commonConfig stconfig.CommonConfig, args []string) error {
 	return runSentinel()
 }
 
+// RunOptions provides typed sentinel runtime options for unified CLI.
+type RunOptions struct {
+	InitialClusterSpecFile string
+	ClusterSpecFiles       []string
+
+	WebListenAddress               string
+	WebBasePath                    string
+	WebAuthUsername                string
+	WebAuthPassword                string
+	WebReadTimeout                 string
+	WebWriteTimeout                string
+	WebAllowUnsafeAdminWithoutAuth bool
+}
+
+// RunWithOptions executes sentinel runtime without re-parsing component flags.
+func RunWithOptions(commonConfig stconfig.CommonConfig, opts RunOptions) error {
+	cfg = config{}
+	cfg.CommonConfig = runtimecommon.FromConfigCommon(commonConfig)
+	cfg.InitialClusterSpecFile = opts.InitialClusterSpecFile
+	cfg.ClusterSpecFiles = append([]string(nil), opts.ClusterSpecFiles...)
+	cfg.Web.ListenAddress = opts.WebListenAddress
+	cfg.Web.BasePath = opts.WebBasePath
+	cfg.Web.AuthUsername = opts.WebAuthUsername
+	cfg.Web.AuthPassword = opts.WebAuthPassword
+	if opts.WebReadTimeout != "" {
+		d, err := time.ParseDuration(opts.WebReadTimeout)
+		if err != nil {
+			return fmt.Errorf("invalid web read timeout: %w", err)
+		}
+		cfg.Web.ReadTimeout = d
+	}
+	if opts.WebWriteTimeout != "" {
+		d, err := time.ParseDuration(opts.WebWriteTimeout)
+		if err != nil {
+			return fmt.Errorf("invalid web write timeout: %w", err)
+		}
+		cfg.Web.WriteTimeout = d
+	}
+	cfg.Web.AllowUnsafeAdminWithoutAuth = opts.WebAllowUnsafeAdminWithoutAuth
+	return runSentinel()
+}
+
 func runSentinel() error {
 	closer, err := runtimecommon.InitLogging(&cfg.CommonConfig)
 	if err != nil {

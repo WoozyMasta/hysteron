@@ -67,39 +67,43 @@ func TestProxyWithoutClusterNameFails(t *testing.T) {
 	}
 }
 
-func TestRuntimeCommandPassthroughArgsToComponentParser(t *testing.T) {
+func TestKeeperUnknownFlagFails(t *testing.T) {
 	parser := newTestParser()
 	_, err := parser.ParseArgs([]string{
 		"keeper", "etcd",
+		"--data-dir", t.TempDir(),
+		"--pg-listen-address", "127.0.0.1",
+		"--pg-repl-username", "repl",
+		"--pg-repl-password", "replpw",
+		"--pg-su-password", "supw",
 		"--cluster-name", "test",
 		"--etcd-endpoints", "127.0.0.1:2379",
-		"--",
 		"--not-real-keeper-flag",
 	})
 	if err == nil {
-		t.Fatal("expected keeper passthrough parse error")
+		t.Fatal("expected unknown keeper flag error")
 	}
-	if !strings.Contains(err.Error(), "unknown flag `not-real-keeper-flag`") {
+	if !strings.Contains(err.Error(), "unknown flag") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
-func TestRuntimeCommandPassthroughKnownKeeperFlag(t *testing.T) {
+func TestKeeperRunsWithoutPassthroughSeparator(t *testing.T) {
 	parser := newTestParser()
 	_, err := parser.ParseArgs([]string{
 		"keeper", "etcd",
+		"--data-dir", t.TempDir(),
+		"--pg-listen-address", "127.0.0.1",
+		"--pg-repl-username", "repl",
+		"--pg-repl-password", "replpw",
+		"--pg-su-password", "supw",
 		"--cluster-name", "test",
 		"--etcd-endpoints", "127.0.0.1:2379",
-		"--",
-		"--data-dir", t.TempDir(),
 	})
-	if err == nil {
-		t.Fatal("expected keeper validation error")
+	if err != nil && strings.Contains(err.Error(), "unknown flag") {
+		t.Fatalf("unexpected keeper flag parse failure: %v", err)
 	}
-	if strings.Contains(err.Error(), "unknown flag") {
-		t.Fatalf("unexpected passthrough parsing failure: %v", err)
-	}
-	if !strings.Contains(err.Error(), "postgresql listen address is required") {
+	if err != nil && !strings.Contains(err.Error(), "failed to get postgres binary version") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

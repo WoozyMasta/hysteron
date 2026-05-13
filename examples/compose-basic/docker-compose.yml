@@ -79,11 +79,6 @@ services:
     hostname: keeper1
     command: >
       keeper
-      --cluster-name demo
-      --metrics-listen-address 0.0.0.0:9187
-      etcd
-      --etcd-endpoints http://etcd:2379
-      --
       --uid keeper1
       --data-dir /var/lib/postgresql/data
       --pg-listen-address keeper1
@@ -92,6 +87,10 @@ services:
       --pg-repl-passwordfile /run/secrets/pg_repl
       --pg-su-username postgres
       --pg-su-passwordfile /run/secrets/pg_su
+      --cluster-name demo
+      --metrics-listen-address 0.0.0.0:9187
+      etcd
+      --etcd-endpoints http://etcd:2379
     volumes:
       - keeper1-data:/var/lib/postgresql/data
 
@@ -100,11 +99,6 @@ services:
     hostname: keeper2
     command: >
       keeper
-      --cluster-name demo
-      --metrics-listen-address 0.0.0.0:9187
-      etcd
-      --etcd-endpoints http://etcd:2379
-      --
       --uid keeper2
       --data-dir /var/lib/postgresql/data
       --pg-listen-address keeper2
@@ -113,6 +107,10 @@ services:
       --pg-repl-passwordfile /run/secrets/pg_repl
       --pg-su-username postgres
       --pg-su-passwordfile /run/secrets/pg_su
+      --cluster-name demo
+      --metrics-listen-address 0.0.0.0:9187
+      etcd
+      --etcd-endpoints http://etcd:2379
     volumes:
       - keeper2-data:/var/lib/postgresql/data
 
@@ -121,11 +119,6 @@ services:
     hostname: keeper3
     command: >
       keeper
-      --cluster-name demo2
-      --metrics-listen-address 0.0.0.0:9187
-      etcd
-      --etcd-endpoints http://etcd:2379
-      --
       --uid keeper3
       --data-dir /var/lib/postgresql/data
       --pg-listen-address keeper3
@@ -134,6 +127,10 @@ services:
       --pg-repl-passwordfile /run/secrets/pg_repl
       --pg-su-username postgres
       --pg-su-passwordfile /run/secrets/pg_su
+      --cluster-name demo2
+      --metrics-listen-address 0.0.0.0:9187
+      etcd
+      --etcd-endpoints http://etcd:2379
     volumes:
       - keeper3-data:/var/lib/postgresql/data
 

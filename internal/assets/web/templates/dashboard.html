@@ -91,7 +91,6 @@
           <th title="DB health status">Healthy</th>
           <th title="Current WAL position">XLog Pos</th>
           <th title="Estimated lag from current primary in bytes">Lag Bytes</th>
-          <th title="Database listen address">Address</th>
         </tr>
       </thead>
       <tbody>
@@ -104,11 +103,10 @@
           <td>{{ .Healthy }}</td>
           <td>{{ .XLogPos }}</td>
           <td>{{ .LagBytes }}</td>
-          <td>{{ .Address }}</td>
         </tr>
         {{ else }}
         <tr>
-          <td colspan="8">no database rows</td>
+          <td colspan="7">no database rows</td>
         </tr>
         {{ end }}
       </tbody>
@@ -131,7 +129,7 @@
         <tr>
           <td>{{ .UID }}</td>
           <td>{{ .Mode }}</td>
-          <td>{{ .Listeners }}</td>
+          <td>{{ if .RWAddress }}<span class="listener-pill {{ if .RWActive }}up{{ else }}down{{ end }}">RW <span class="mono">{{ .RWAddress }}</span></span>{{ end }} {{ if .ROAddress }}<span class="listener-pill {{ if .ROActive }}up{{ else }}down{{ end }}">RO <span class="mono">{{ .ROAddress }}</span></span>{{ end }}{{ if and (eq .RWAddress "") (eq .ROAddress "") }}-{{ end }}</td>
           <td>{{ .Seen }}</td>
           <td>{{ .Enabled }}</td>
           <td>{{ .Generation }}</td>

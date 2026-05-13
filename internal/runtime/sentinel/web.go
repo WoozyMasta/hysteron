@@ -141,7 +141,6 @@ type webDBRow struct {
 	PGVersion string `json:"pg_version"`
 	Role      string `json:"role"`
 	LagBytes  string `json:"lag_bytes"`
-	Address   string `json:"address"`
 	XLogPos   uint64 `json:"xlog_pos"`
 	Healthy   bool   `json:"healthy"`
 }
@@ -149,7 +148,10 @@ type webDBRow struct {
 type webProxyRow struct {
 	UID          string `json:"uid"`
 	Mode         string `json:"mode"`
-	Listeners    string `json:"listeners"`
+	RWAddress    string `json:"rw_address"`
+	RWActive     bool   `json:"rw_active"`
+	ROAddress    string `json:"ro_address"`
+	ROActive     bool   `json:"ro_active"`
 	ProxyTimeout string `json:"proxy_timeout"`
 	Generation   int64  `json:"generation"`
 	Seen         bool   `json:"seen"`
@@ -410,7 +412,6 @@ func collectWebSnapshot(
 					Healthy:   db.Status.Healthy,
 					XLogPos:   db.Status.XLogPos,
 					LagBytes:  lagBytes,
-					Address:   db.Status.ListenAddress + ":" + db.Status.Port,
 				})
 			}
 			slices.SortFunc(rows, func(a, b webDBRow) int {
@@ -443,7 +444,7 @@ func collectWebSnapshot(
 					row.Generation = pi.Generation
 					row.ProxyTimeout = pi.ProxyTimeout.String()
 					row.Mode = webProxyMode(pi.Listeners)
-					row.Listeners = webProxyListeners(pi.Listeners)
+					row.RWAddress, row.RWActive, row.ROAddress, row.ROActive = webProxyEndpoints(pi.Listeners)
 				}
 				proxyRows = append(proxyRows, row)
 			}
@@ -492,30 +493,22 @@ func webProxyMode(listeners []cluster.ProxyListenerInfo) string {
 	}
 }
 
-func webProxyListeners(listeners []cluster.ProxyListenerInfo) string {
-	if len(listeners) == 0 {
-		return "-"
-	}
-	out := make([]string, 0, len(listeners))
+func webProxyEndpoints(listeners []cluster.ProxyListenerInfo) (rwAddr string, rwActive bool, roAddr string, roActive bool) {
 	for _, l := range listeners {
 		if strings.TrimSpace(l.Address) == "" || strings.TrimSpace(l.Port) == "" {
 			continue
 		}
-		mode := l.Mode
-		if mode == "" {
-			mode = "unknown"
+		address := l.Address + ":" + l.Port
+		switch l.Mode {
+		case "writable":
+			rwAddr = address
+			rwActive = l.Active
+		case "read-only":
+			roAddr = address
+			roActive = l.Active
 		}
-		status := "down"
-		if l.Active {
-			status = "up"
-		}
-		out = append(out, mode+"="+l.Address+":"+l.Port+"("+status+")")
 	}
-	if len(out) == 0 {
-		return "-"
-	}
-	slices.Sort(out)
-	return strings.Join(out, ", ")
+	return rwAddr, rwActive, roAddr, roActive
 }
 
 func uniqueSortedStrings(values []string) []string {

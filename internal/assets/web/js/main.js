@@ -177,7 +177,7 @@
 
   function renderDBs(rows) {
     if (!rows || rows.length === 0) {
-      return '<tr><td colspan="8">no database rows</td></tr>';
+      return '<tr><td colspan="7">no database rows</td></tr>';
     }
     return rows.map(function (row) {
       var lagValue = Number(row.lag_bytes);
@@ -197,9 +197,21 @@
         "<td>" + boolBadge(row.healthy) + "</td>" +
         "<td>" + mono(row.xlog_pos) + "</td>" +
         "<td>" + lag + "</td>" +
-        "<td>" + mono(row.address) + "</td>" +
-        "</tr>" + detailRow(8);
+        "</tr>" + detailRow(7);
     }).join("");
+  }
+
+  function listenerPill(label, address, active) {
+    if (!address) return "";
+    var cls = active ? "up" : "down";
+    return '<span class="listener-pill ' + cls + '">' + esc(label) + " " + mono(address) + "</span>";
+  }
+
+  function renderProxyListeners(row) {
+    var rw = listenerPill("RW", row.rw_address, row.rw_active);
+    var ro = listenerPill("RO", row.ro_address, row.ro_active);
+    var out = [rw, ro].filter(Boolean).join(" ");
+    return out || "-";
   }
 
   function renderProxies(rows) {
@@ -210,7 +222,7 @@
       return "<tr>" +
         "<td>" + detailToggle("proxy", row.uid, row) + " " + mono(row.uid) + "</td>" +
         "<td>" + mono(row.mode || "-") + "</td>" +
-        "<td>" + mono(row.listeners || "-") + "</td>" +
+        "<td>" + renderProxyListeners(row) + "</td>" +
         "<td>" + boolBadge(row.seen) + "</td>" +
         "<td>" + boolBadge(row.enabled) + "</td>" +
         "<td>" + mono(row.generation) + "</td>" +
@@ -257,7 +269,6 @@
         '<th title="DB health status">Healthy</th>' +
         '<th title="Current WAL position">XLog Pos</th>' +
         '<th title="Estimated lag from current primary in bytes">Lag Bytes</th>' +
-        '<th title="Database listen address">Address</th>' +
         "</tr></thead><tbody>" + renderDBs(cluster.db_rows) + "</tbody></table>" +
         "<h3>Proxies</h3>" +
         "<table><thead><tr>" +

@@ -184,7 +184,7 @@ docker run --rm --network compose_default \
 ```bash
 docker compose down
 # or with full cleanup
-docker compose down --volumes --remove-orphans --rmi
+docker compose down --volumes --remove-orphans --rmi local
 ```
 
 ## Notes

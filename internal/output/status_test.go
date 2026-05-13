@@ -73,10 +73,10 @@ func TestWriteStatusPlain(t *testing.T) {
 		t.Fatalf("write status: %v", err)
 	}
 	out := b.String()
-	if !strings.Contains(out, "== Cluster ==") {
+	if !strings.Contains(out, " Cluster ") {
 		t.Fatalf("expected cluster section, got %q", out)
 	}
-	if !strings.Contains(out, "== Keeper Tree ==") {
+	if !strings.Contains(out, " Keeper Tree ") {
 		t.Fatalf("expected keeper tree section, got %q", out)
 	}
 	if !strings.Contains(out, "keeper-1 (master)") {
@@ -84,6 +84,9 @@ func TestWriteStatusPlain(t *testing.T) {
 	}
 	if !strings.Contains(out, "write+read") {
 		t.Fatalf("expected proxy mode in output, got %q", out)
+	}
+	if !strings.Contains(out, "ROWS") {
+		t.Fatalf("expected footer rows, got %q", out)
 	}
 }
 

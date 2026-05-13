@@ -48,8 +48,13 @@ type ProxyStatus struct {
 type KeeperStatus struct {
 	UID                 string `json:"uid"`
 	ListenAddress       string `json:"listen_address"`
+	DBUID               string `json:"db_uid"`
+	Role                string `json:"role"`
+	PGVersion           string `json:"pg_version"`
 	Healthy             bool   `json:"healthy"`
 	PgHealthy           bool   `json:"pg_healthy"`
+	CanBeMaster         bool   `json:"can_be_master"`
+	CanBeSyncReplica    bool   `json:"can_be_sync_replica"`
 	PgWantedGeneration  int64  `json:"pg_wanted_generation"`
 	PgCurrentGeneration int64  `json:"pg_current_generation"`
 }
@@ -58,5 +63,13 @@ type KeeperStatus struct {
 type ClusterStatus struct {
 	MasterKeeperUID string `json:"master_keeper_uid"`
 	MasterDBUID     string `json:"master_db_uid"`
+	Phase           string `json:"phase"`
+	Generation      int64  `json:"generation"`
+	FormatVersion   uint64 `json:"format_version"`
+	KeepersTotal    int    `json:"keepers_total"`
+	KeepersHealthy  int    `json:"keepers_healthy"`
+	DBsTotal        int    `json:"dbs_total"`
+	DBsHealthy      int    `json:"dbs_healthy"`
+	ProxiesSeen     int    `json:"proxies_seen"`
 	Available       bool   `json:"available"`
 }

@@ -17,6 +17,7 @@ package output
 import (
 	"fmt"
 	"io"
+	"strconv"
 
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/woozymasta/hysteron/internal/app"
@@ -37,117 +38,107 @@ func WriteStatus(w io.Writer, format Format, status app.Status) error {
 }
 
 func writeStatusTable(w io.Writer, status app.Status) error {
-	if err := writeSectionTitle(w, "Cluster"); err != nil {
-		return err
-	}
-	clusterTable := table.NewWriter()
-	clusterTable.SetOutputMirror(w)
+	clusterTable := newStatusTable(w, "Cluster")
 	clusterTable.AppendHeader(table.Row{"Field", "Value"})
 	clusterTable.AppendRows([]table.Row{
 		{"Available", status.Cluster.Available},
+		{"Phase", valueOrDash(status.Cluster.Phase)},
+		{"Generation", status.Cluster.Generation},
+		{"Format Version", status.Cluster.FormatVersion},
 		{"Master Keeper", valueOrDash(status.Cluster.MasterKeeperUID)},
 		{"Master DB", valueOrDash(status.Cluster.MasterDBUID)},
+		{"Keepers", fmt.Sprintf("%d/%d", status.Cluster.KeepersHealthy, status.Cluster.KeepersTotal)},
+		{"DBs", fmt.Sprintf("%d/%d", status.Cluster.DBsHealthy, status.Cluster.DBsTotal)},
+		{"Proxies Seen", status.Cluster.ProxiesSeen},
 	})
+	clusterTable.AppendFooter(table.Row{"Rows", 9})
 	clusterTable.Render()
 
 	if err := writeLine(w, ""); err != nil {
 		return err
 	}
-	if err := writeSectionTitle(w, "Sentinels"); err != nil {
-		return err
+	sentinelTable := newStatusTable(w, "Sentinels")
+	sentinelTable.AppendHeader(table.Row{"UID", "Leader"})
+	for _, sentinel := range status.Sentinels {
+		sentinelTable.AppendRow(table.Row{sentinel.UID, sentinel.Leader})
 	}
-	if len(status.Sentinels) == 0 {
-		if err := writeLine(w, "No active sentinels"); err != nil {
-			return err
-		}
-	} else {
-		t := table.NewWriter()
-		t.SetOutputMirror(w)
-		t.AppendHeader(table.Row{"UID", "Leader"})
-		for _, sentinel := range status.Sentinels {
-			t.AppendRow(table.Row{sentinel.UID, sentinel.Leader})
-		}
-		t.Render()
-	}
+	sentinelTable.AppendFooter(table.Row{"Rows", len(status.Sentinels)})
+	sentinelTable.Render()
 
 	if err := writeLine(w, ""); err != nil {
 		return err
 	}
-	if err := writeSectionTitle(w, "Proxies"); err != nil {
-		return err
-	}
-	if len(status.Proxies) == 0 {
-		if err := writeLine(w, "No active proxies"); err != nil {
-			return err
-		}
-	} else {
-		t := table.NewWriter()
-		t.SetOutputMirror(w)
-		t.AppendHeader(table.Row{"UID", "Mode", "Listeners", "Generation"})
-		for _, proxy := range status.Proxies {
-			t.AppendRow(table.Row{
-				proxy.UID,
-				valueOrDash(proxy.Mode),
-				valueOrDash(proxy.Listeners),
-				proxy.Generation,
-			})
-		}
-		t.Render()
-	}
-
-	if err := writeLine(w, ""); err != nil {
-		return err
-	}
-	if err := writeSectionTitle(w, "Keepers"); err != nil {
-		return err
-	}
-	if len(status.Keepers) == 0 {
-		if err := writeLine(w, "No keepers available"); err != nil {
-			return err
-		}
-	} else {
-		t := table.NewWriter()
-		t.SetOutputMirror(w)
-		t.AppendHeader(table.Row{
-			"UID",
-			"Healthy",
-			"PG Listen Address",
-			"PG Healthy",
-			"PG Wanted Generation",
-			"PG Current Generation",
+	proxyTable := newStatusTable(w, "Proxies")
+	proxyTable.AppendHeader(table.Row{"UID", "Mode", "Listeners", "Generation"})
+	for _, proxy := range status.Proxies {
+		proxyTable.AppendRow(table.Row{
+			proxy.UID,
+			valueOrDash(proxy.Mode),
+			valueOrDash(proxy.Listeners),
+			proxy.Generation,
 		})
-		for _, keeper := range status.Keepers {
-			t.AppendRow(table.Row{
-				keeper.UID,
-				keeper.Healthy,
-				keeper.ListenAddress,
-				keeper.PgHealthy,
-				keeper.PgWantedGeneration,
-				keeper.PgCurrentGeneration,
-			})
-		}
-		t.Render()
 	}
+	proxyTable.AppendFooter(table.Row{"Rows", "", "", len(status.Proxies)})
+	proxyTable.Render()
+
+	if err := writeLine(w, ""); err != nil {
+		return err
+	}
+	keeperTable := newStatusTable(w, "Keepers")
+	keeperTable.AppendHeader(table.Row{
+		"UID",
+		"DB UID",
+		"Role",
+		"PG Version",
+		"Healthy",
+		"Can Be Master",
+		"Can Be Sync Replica",
+		"PG Listen Address",
+		"PG Healthy",
+		"PG Wanted Generation",
+		"PG Current Generation",
+	})
+	for _, keeper := range status.Keepers {
+		keeperTable.AppendRow(table.Row{
+			keeper.UID,
+			valueOrDash(keeper.DBUID),
+			valueOrDash(keeper.Role),
+			valueOrDash(keeper.PGVersion),
+			keeper.Healthy,
+			keeper.CanBeMaster,
+			keeper.CanBeSyncReplica,
+			keeper.ListenAddress,
+			keeper.PgHealthy,
+			keeper.PgWantedGeneration,
+			keeper.PgCurrentGeneration,
+		})
+	}
+	keeperTable.AppendFooter(table.Row{
+		"Rows", "", "", "", "", "", "", "", "", len(status.Keepers),
+	})
+	keeperTable.Render()
 
 	if len(status.KeeperTree) > 0 {
 		if err := writeLine(w, ""); err != nil {
 			return err
 		}
-		if err := writeSectionTitle(w, "Keeper Tree"); err != nil {
-			return err
-		}
+		treeTable := newStatusTable(w, "Keeper Tree")
+		treeTable.AppendHeader(table.Row{"Line"})
 		for _, line := range status.KeeperTree {
-			if err := writeLine(w, line); err != nil {
-				return err
-			}
+			treeTable.AppendRow(table.Row{line})
 		}
+		treeTable.AppendFooter(table.Row{"Rows: " + strconv.Itoa(len(status.KeeperTree))})
+		treeTable.Render()
 	}
 	return nil
 }
 
-func writeSectionTitle(w io.Writer, title string) error {
-	_, err := fmt.Fprintf(w, "== %s ==\n", title)
-	return err
+func newStatusTable(w io.Writer, title string) table.Writer {
+	t := table.NewWriter()
+	t.SetOutputMirror(w)
+	t.SetTitle(title)
+	t.SetStyle(table.StyleRounded)
+	return t
 }
 
 func writeLine(w io.Writer, value string) error {

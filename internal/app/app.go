@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/woozymasta/hysteron/internal/cluster"
@@ -129,6 +130,7 @@ func GetClusterStatus(ctx context.Context, cfg *stconfig.CommonConfig) (Status, 
 	}
 	status.Keepers = makeKeeperStatus(cd)
 	status.Cluster = makeClusterStatus(cd)
+	status.Cluster.ProxiesSeen = len(status.Proxies)
 	status.KeeperTree = keeperTreeLines(status.Cluster.MasterDBUID, cd)
 
 	return status, nil
@@ -574,10 +576,23 @@ func makeKeeperStatus(cd *cluster.ClusterData) []KeeperStatus {
 		keeperInfo := cd.Keepers[keeperUID]
 		db := cd.FindDB(keeperInfo)
 		listenAddress := "(no db assigned)"
+		dbUID := "-"
+		role := "-"
+		pgVersion := "-"
+		if keeperInfo.Status.PostgresBinaryVersion.Maj > 0 {
+			if keeperInfo.Status.PostgresBinaryVersion.Min > 0 {
+				pgVersion = strconv.Itoa(keeperInfo.Status.PostgresBinaryVersion.Maj) +
+					"." + strconv.Itoa(keeperInfo.Status.PostgresBinaryVersion.Min)
+			} else {
+				pgVersion = strconv.Itoa(keeperInfo.Status.PostgresBinaryVersion.Maj)
+			}
+		}
 		var pgHealthy bool
 		var pgCurrentGeneration int64
 		var pgWantedGeneration int64
 		if db != nil {
+			dbUID = db.UID
+			role = string(db.Spec.Role)
 			pgHealthy = db.Status.Healthy
 			pgCurrentGeneration = db.Status.CurrentGeneration
 			pgWantedGeneration = db.Generation
@@ -592,9 +607,14 @@ func makeKeeperStatus(cd *cluster.ClusterData) []KeeperStatus {
 		}
 		keepers = append(keepers, KeeperStatus{
 			UID:                 keeperUID,
+			DBUID:               dbUID,
+			Role:                role,
+			PGVersion:           pgVersion,
 			ListenAddress:       listenAddress,
 			Healthy:             keeperInfo.Status.Healthy,
 			PgHealthy:           pgHealthy,
+			CanBeMaster:         keeperInfo.Status.CanBeMaster != nil && *keeperInfo.Status.CanBeMaster,
+			CanBeSyncReplica:    keeperInfo.Status.CanBeSynchronousReplica != nil && *keeperInfo.Status.CanBeSynchronousReplica,
 			PgWantedGeneration:  pgWantedGeneration,
 			PgCurrentGeneration: pgCurrentGeneration,
 		})
@@ -609,6 +629,21 @@ func makeClusterStatus(cd *cluster.ClusterData) ClusterStatus {
 		return clusterStatus
 	}
 	clusterStatus.Available = true
+	clusterStatus.Phase = string(cd.Cluster.Status.Phase)
+	clusterStatus.Generation = cd.Cluster.Generation
+	clusterStatus.FormatVersion = cd.FormatVersion
+	clusterStatus.KeepersTotal = len(cd.Keepers)
+	clusterStatus.DBsTotal = len(cd.DBs)
+	for _, k := range cd.Keepers {
+		if k != nil && k.Status.Healthy {
+			clusterStatus.KeepersHealthy++
+		}
+	}
+	for _, db := range cd.DBs {
+		if db != nil && db.Status.Healthy {
+			clusterStatus.DBsHealthy++
+		}
+	}
 	masterDBUID := cd.Cluster.Status.Master
 	if masterDBUID == "" {
 		return clusterStatus

@@ -10,20 +10,20 @@
   <table>
     <thead>
       <tr>
-        <th>UID</th>
-        <th>Local</th>
-        <th>Leader In</th>
-        <th>Clusters</th>
+        <th title="Sentinel unique identifier">UID</th>
+        <th title="True if this row is the currently opened sentinel process">This Sentinel</th>
+        <th title="Clusters where this sentinel currently holds leader lease">Leader For</th>
+        <th title="Clusters where this sentinel is visible in DCS">Clusters</th>
       </tr>
     </thead>
     <tbody id="sentinels-body">
       {{ range .Sentinels }}
       <tr>
-        <td>{{ .UID }}</td>
-        <td>{{ .IsLocal }}</td>
+        <td><span class="mono">{{ .UID }}</span></td>
+        <td><span class="bool-badge {{ if .IsLocal }}is-true{{ else }}is-neutral{{ end }}">{{ .IsLocal }}</span></td>
         <td>{{ if .LeaderClusters }}{{ range $i, $v := .LeaderClusters }}{{ if $i }},
-          {{ end }}{{ $v }}{{ end }}{{ else }}-{{ end }}</td>
-        <td>{{ if .Clusters }}{{ range $i, $v := .Clusters }}{{ if $i }}, {{ end }}{{ $v }}{{ end }}{{ else }}-{{ end }}
+          {{ end }}<span class="mono">{{ $v }}</span>{{ end }}{{ else }}-{{ end }}</td>
+        <td>{{ if .Clusters }}{{ range $i, $v := .Clusters }}{{ if $i }} {{ end }}<span class="mono">{{ $v }}</span>{{ end }}{{ else }}-{{ end }}
         </td>
       </tr>
       {{ else }}
@@ -39,26 +39,28 @@
   {{ range .Clusters }}
   <section>
     <h2>Cluster: {{ .Name }}</h2>
+    {{ if .Error }}
+    <div class="alert alert-error">Error: {{ .Error }}</div>
+    {{ end }}
     <div class="meta">
-      <div>Phase: {{ .Phase }}</div>
-      <div>Generation: {{ .Generation }}</div>
-      <div>Master DB: {{ .MasterDBUID }}</div>
-      <div>Master Keeper: {{ .MasterKeeperUID }}</div>
-      <div>Keepers: {{ .KeepersHealthy }}/{{ .KeepersTotal }}</div>
-      <div>DBs: {{ .DBsHealthy }}/{{ .DBsTotal }}</div>
-      <div>Proxies seen: {{ .ProxiesSeen }}</div>
-      <div>Error: {{ .Error }}</div>
+      <div title="Cluster phase from cluster data">Phase: {{ .Phase }}</div>
+      <div title="Cluster object generation in DCS">Generation: {{ .Generation }}</div>
+      <div title="UID of the current writable database">Master DB: {{ .MasterDBUID }}</div>
+      <div title="Keeper assigned to current writable database">Master Keeper: {{ .MasterKeeperUID }}</div>
+      <div title="Healthy keepers / total keepers">Keepers: {{ .KeepersHealthy }}/{{ .KeepersTotal }}</div>
+      <div title="Healthy databases / total databases">DBs: {{ .DBsHealthy }}/{{ .DBsTotal }}</div>
+      <div title="Number of proxy heartbeats visible in DCS">Proxies Seen: {{ .ProxiesSeen }}</div>
     </div>
     <h3>Keepers</h3>
     <table>
       <thead>
         <tr>
-          <th>Keeper UID</th>
-          <th>Healthy</th>
-          <th>PG Healthy</th>
-          <th>CanBeMaster</th>
-          <th>CanBeSyncReplica</th>
-          <th>Address</th>
+          <th title="Keeper unique identifier">Keeper UID</th>
+          <th title="Keeper health status reported to DCS">Healthy</th>
+          <th title="PostgreSQL health for keeper's assigned database">PG Healthy</th>
+          <th title="Keeper is eligible to become writable primary">Can Be Master</th>
+          <th title="Keeper is eligible for synchronous standby selection">Can Be Sync Replica</th>
+          <th title="Keeper PostgreSQL listen address">Address</th>
         </tr>
       </thead>
       <tbody>
@@ -82,13 +84,14 @@
     <table>
       <thead>
         <tr>
-          <th>DB UID</th>
-          <th>Keeper UID</th>
-          <th>Role</th>
-          <th>Healthy</th>
-          <th>XLogPos</th>
-          <th>LagBytes</th>
-          <th>Address</th>
+          <th title="Database object unique identifier">DB UID</th>
+          <th title="Keeper currently assigned to DB">Keeper UID</th>
+          <th title="PostgreSQL binary version reported by keeper">PG Version</th>
+          <th title="DB role in cluster topology">Role</th>
+          <th title="DB health status">Healthy</th>
+          <th title="Current WAL position">XLog Pos</th>
+          <th title="Estimated lag from current primary in bytes">Lag Bytes</th>
+          <th title="Database listen address">Address</th>
         </tr>
       </thead>
       <tbody>
@@ -96,6 +99,7 @@
         <tr>
           <td>{{ .UID }}</td>
           <td>{{ .KeeperUID }}</td>
+          <td>{{ .PGVersion }}</td>
           <td>{{ .Role }}</td>
           <td>{{ .Healthy }}</td>
           <td>{{ .XLogPos }}</td>
@@ -104,7 +108,7 @@
         </tr>
         {{ else }}
         <tr>
-          <td colspan="7">no database rows</td>
+          <td colspan="8">no database rows</td>
         </tr>
         {{ end }}
       </tbody>
@@ -113,11 +117,11 @@
     <table>
       <thead>
         <tr>
-          <th>Proxy UID</th>
-          <th>Seen</th>
-          <th>Enabled</th>
-          <th>Generation</th>
-          <th>ProxyTimeout</th>
+          <th title="Proxy unique identifier">Proxy UID</th>
+          <th title="Proxy heartbeat currently visible in DCS">Seen</th>
+          <th title="Proxy is enabled by current cluster proxy spec">Enabled</th>
+          <th title="Last seen proxy generation">Generation</th>
+          <th title="Proxy timeout announced by proxy">Proxy Timeout</th>
         </tr>
       </thead>
       <tbody>

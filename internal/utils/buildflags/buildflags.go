@@ -20,7 +20,11 @@
 // (e.g. plain `go run`) the defaults below remain visible.
 package buildflags
 
-import "time"
+import (
+	"runtime/debug"
+	"strings"
+	"time"
+)
 
 // These variables are intentionally exported and writable: they are the
 // targets of `-ldflags -X` injections from the build pipeline.
@@ -35,6 +39,14 @@ var (
 	URL = ""
 )
 
+// Info contains resolved build metadata values.
+type Info struct {
+	Version string
+	Commit  string
+	Date    string
+	URL     string
+}
+
 // BuildTime parses Date into a time.Time. Returns the zero value if Date
 // is empty or unparsable; callers should treat that as "unknown".
 func BuildTime() time.Time {
@@ -46,4 +58,50 @@ func BuildTime() time.Time {
 		return time.Time{}
 	}
 	return t.UTC()
+}
+
+// Resolve returns build metadata with runtime fallback when ldflags values
+// are missing.
+func Resolve() Info {
+	info := Info{
+		Version: Version,
+		Commit:  Commit,
+		Date:    Date,
+		URL:     URL,
+	}
+
+	if bi, ok := debug.ReadBuildInfo(); ok {
+		if info.Version == "" || info.Version == "dev" {
+			if v := strings.TrimSpace(bi.Main.Version); v != "" && v != "(devel)" {
+				info.Version = v
+			}
+		}
+		if info.URL == "" {
+			if path := strings.TrimSpace(bi.Main.Path); strings.HasPrefix(path, "github.com/") {
+				info.URL = "https://" + path
+			}
+		}
+		for _, s := range bi.Settings {
+			switch s.Key {
+			case "vcs.revision":
+				if info.Commit == "" {
+					info.Commit = strings.TrimSpace(s.Value)
+				}
+			case "vcs.time":
+				if info.Date == "" {
+					info.Date = strings.TrimSpace(s.Value)
+				}
+			case "vcs.modified":
+				if info.Version == "dev" && strings.TrimSpace(s.Value) == "true" {
+					info.Version = "dev-dirty"
+				}
+			case "vcs.remote":
+				if info.URL == "" {
+					info.URL = strings.TrimSpace(s.Value)
+				}
+			}
+		}
+	}
+
+	return info
 }

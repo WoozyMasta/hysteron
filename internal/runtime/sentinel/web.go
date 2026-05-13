@@ -138,6 +138,7 @@ type webKeeperRow struct {
 type webDBRow struct {
 	UID       string `json:"uid"`
 	KeeperUID string `json:"keeper_uid"`
+	PGVersion string `json:"pg_version"`
 	Role      string `json:"role"`
 	LagBytes  string `json:"lag_bytes"`
 	Address   string `json:"address"`
@@ -270,14 +271,15 @@ func collectWebSnapshot(
 ) webSnapshot {
 	names := append([]string(nil), clusterNames...)
 	slices.Sort(names)
+	buildInfo := buildflags.Resolve()
 	snapshot := webSnapshot{
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
 		BasePath:    webLinkBasePath(basePath),
 		Build: webBuildInfo{
-			Version: buildflags.Version,
-			Commit:  buildflags.Commit,
-			Date:    buildflags.Date,
-			URL:     buildflags.URL,
+			Version: buildInfo.Version,
+			Commit:  buildInfo.Commit,
+			Date:    buildInfo.Date,
+			URL:     buildInfo.URL,
 		},
 		Sentinels: make([]webSentinelRow, 0, len(names)),
 		Clusters:  make([]webClusterStatus, 0, len(names)),
@@ -345,6 +347,7 @@ func collectWebSnapshot(
 			}
 			clusterStatus.KeepersTotal = len(cdata.Keepers)
 			keeperRows := make([]webKeeperRow, 0, len(cdata.Keepers))
+			keeperPGVersionByUID := make(map[string]string, len(cdata.Keepers))
 			for _, k := range cdata.Keepers {
 				if k == nil {
 					continue
@@ -358,6 +361,13 @@ func collectWebSnapshot(
 					CanBeMaster:             k.Status.CanBeMaster != nil && *k.Status.CanBeMaster,
 					CanBeSynchronousReplica: k.Status.CanBeSynchronousReplica != nil && *k.Status.CanBeSynchronousReplica,
 					Generation:              k.Generation,
+				}
+				if k.Status.PostgresBinaryVersion.Maj > 0 {
+					if k.Status.PostgresBinaryVersion.Min > 0 {
+						keeperPGVersionByUID[k.UID] = strconv.Itoa(k.Status.PostgresBinaryVersion.Maj) + "." + strconv.Itoa(k.Status.PostgresBinaryVersion.Min)
+					} else {
+						keeperPGVersionByUID[k.UID] = strconv.Itoa(k.Status.PostgresBinaryVersion.Maj)
+					}
 				}
 				for _, db := range cdata.DBs {
 					if db == nil || db.Spec == nil || db.Spec.KeeperUID != k.UID {
@@ -393,6 +403,7 @@ func collectWebSnapshot(
 				rows = append(rows, webDBRow{
 					UID:       db.UID,
 					KeeperUID: db.Spec.KeeperUID,
+					PGVersion: keeperPGVersionByUID[db.Spec.KeeperUID],
 					Role:      string(db.Spec.Role),
 					Healthy:   db.Status.Healthy,
 					XLogPos:   db.Status.XLogPos,

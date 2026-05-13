@@ -17,13 +17,29 @@
     return value ? "true" : "false";
   }
 
-  function boolBadge(value) {
-    var cls = value ? "is-true" : "is-false";
+  function boolBadge(value, falsyClass) {
+    var cls = value ? "is-true" : (falsyClass || "is-false");
     return '<span class="bool-badge ' + cls + '">' + boolText(value) + "</span>";
   }
 
   function mono(value) {
     return '<span class="mono">' + esc(value) + "</span>";
+  }
+
+  function escAttr(value) {
+    return esc(value).replaceAll("`", "&#96;");
+  }
+
+  function detailToggle(kind, id, obj) {
+    var payload = encodeURIComponent(JSON.stringify(obj, null, 2));
+    return '<button type="button" class="row-toggle" data-kind="' + escAttr(kind) +
+      '" data-id="' + escAttr(id) + '" data-payload="' + payload +
+      '" aria-expanded="false" title="Show details">+</button>';
+  }
+
+  function detailRow(colspan) {
+    return '<tr class="detail-row" hidden><td colspan="' + colspan +
+      '"><pre class="detail-json"></pre></td></tr>';
   }
 
   function clamp(value, min, max) {
@@ -99,17 +115,19 @@
       return;
     }
 
-    function list(value) {
+    function codeList(value) {
       if (!value || value.length === 0) return "-";
-      return value.map(esc).join(", ");
+      return value.map(function (v) {
+        return mono(v);
+      }).join(" ");
     }
     body.innerHTML = rows.map(function (row) {
       return "<tr>" +
-        "<td>" + mono(row.uid) + "</td>" +
-        "<td>" + boolBadge(row.is_local) + "</td>" +
-        "<td>" + list(row.leader_clusters) + "</td>" +
-        "<td>" + list(row.clusters) + "</td>" +
-        "</tr>";
+        "<td>" + detailToggle("sentinel", row.uid, row) + " " + mono(row.uid) + "</td>" +
+        "<td>" + boolBadge(row.is_local, "is-neutral") + "</td>" +
+        "<td>" + codeList(row.leader_clusters) + "</td>" +
+        "<td>" + codeList(row.clusters) + "</td>" +
+        "</tr>" + detailRow(4);
     }).join("");
   }
 
@@ -119,19 +137,19 @@
     }
     return rows.map(function (row) {
       return "<tr>" +
-        "<td>" + mono(row.uid) + "</td>" +
+        "<td>" + detailToggle("keeper", row.uid, row) + " " + mono(row.uid) + "</td>" +
         "<td>" + boolBadge(row.healthy) + "</td>" +
         "<td>" + boolBadge(row.pg_healthy) + "</td>" +
         "<td>" + boolBadge(row.can_be_master) + "</td>" +
         "<td>" + boolBadge(row.can_be_synchronous_replica) + "</td>" +
         "<td>" + mono(row.listen_address) + "</td>" +
-        "</tr>";
+        "</tr>" + detailRow(6);
     }).join("");
   }
 
   function renderDBs(rows) {
     if (!rows || rows.length === 0) {
-      return '<tr><td colspan="7">no database rows</td></tr>';
+      return '<tr><td colspan="8">no database rows</td></tr>';
     }
     return rows.map(function (row) {
       var lagValue = Number(row.lag_bytes);
@@ -144,14 +162,15 @@
           direction: "higher-worse",
         });
       return "<tr>" +
-        "<td>" + mono(row.uid) + "</td>" +
+        "<td>" + detailToggle("database", row.uid, row) + " " + mono(row.uid) + "</td>" +
         "<td>" + mono(row.keeper_uid) + "</td>" +
+        "<td>" + mono(row.pg_version || "-") + "</td>" +
         "<td>" + esc(row.role) + "</td>" +
         "<td>" + boolBadge(row.healthy) + "</td>" +
         "<td>" + mono(row.xlog_pos) + "</td>" +
         "<td>" + lag + "</td>" +
         "<td>" + mono(row.address) + "</td>" +
-        "</tr>";
+        "</tr>" + detailRow(8);
     }).join("");
   }
 
@@ -161,12 +180,12 @@
     }
     return rows.map(function (row) {
       return "<tr>" +
-        "<td>" + mono(row.uid) + "</td>" +
+        "<td>" + detailToggle("proxy", row.uid, row) + " " + mono(row.uid) + "</td>" +
         "<td>" + boolBadge(row.seen) + "</td>" +
         "<td>" + boolBadge(row.enabled) + "</td>" +
         "<td>" + mono(row.generation) + "</td>" +
         "<td>" + mono(row.proxy_timeout) + "</td>" +
-        "</tr>";
+        "</tr>" + detailRow(5);
     }).join("");
   }
 
@@ -174,34 +193,49 @@
     var root = document.getElementById("clusters-root");
     if (!root) return;
     root.innerHTML = (rows || []).map(function (cluster) {
+      var errorBlock = "";
+      if (cluster.error) {
+        errorBlock = '<div class="alert alert-error">Error: ' + esc(cluster.error) + "</div>";
+      }
       return "<section>" +
         "<h2>Cluster: " + esc(cluster.name) + "</h2>" +
+        errorBlock +
         '<div class="meta">' +
-        "<div>Phase: " + esc(cluster.phase) + "</div>" +
-        "<div>Generation: " + mono(cluster.generation) + "</div>" +
-        "<div>Master DB: " + mono(cluster.master_db_uid) + "</div>" +
-        "<div>Master Keeper: " + mono(cluster.master_keeper_uid) + "</div>" +
-        "<div>Keepers: " + ratioBadge(cluster.keepers_healthy, cluster.keepers_total, "lower-worse") + "</div>" +
-        "<div>DBs: " + ratioBadge(cluster.dbs_healthy, cluster.dbs_total, "lower-worse") + "</div>" +
-        "<div>Proxies seen: " + coloredNumber(Number(cluster.proxies_seen), {
-          min: 0,
-          mid: 1,
-          max: 3,
-          direction: "lower-worse"
-        }) + "</div>" +
-        "<div>Error: " + esc(cluster.error || "") + "</div>" +
+        '<div title="Cluster phase from cluster data">Phase: ' + esc(cluster.phase) + "</div>" +
+        '<div title="Cluster object generation in DCS">Generation: ' + mono(cluster.generation) + "</div>" +
+        '<div title="UID of the current writable database">Master DB: ' + mono(cluster.master_db_uid) + "</div>" +
+        '<div title="Keeper assigned to current writable database">Master Keeper: ' + mono(cluster.master_keeper_uid) + "</div>" +
+        '<div title="Healthy keepers / total keepers">Keepers: ' + ratioBadge(cluster.keepers_healthy, cluster.keepers_total, "lower-worse") + "</div>" +
+        '<div title="Healthy databases / total databases">DBs: ' + ratioBadge(cluster.dbs_healthy, cluster.dbs_total, "lower-worse") + "</div>" +
+        '<div title="Number of proxy heartbeats visible in DCS">Proxies Seen: ' + mono(cluster.proxies_seen) + "</div>" +
         "</div>" +
         "<h3>Keepers</h3>" +
         "<table><thead><tr>" +
-        "<th>Keeper UID</th><th>Healthy</th><th>PG Healthy</th><th>CanBeMaster</th><th>CanBeSyncReplica</th><th>Address</th>" +
+        '<th title="Keeper unique identifier">Keeper UID</th>' +
+        '<th title="Keeper health status reported to DCS">Healthy</th>' +
+        '<th title="PostgreSQL health for keeper\'s assigned database">PG Healthy</th>' +
+        '<th title="Keeper is eligible to become writable primary">Can Be Master</th>' +
+        '<th title="Keeper is eligible for synchronous standby selection">Can Be Sync Replica</th>' +
+        '<th title="Keeper PostgreSQL listen address">Address</th>' +
         "</tr></thead><tbody>" + renderKeepers(cluster.keeper_rows) + "</tbody></table>" +
         "<h3>Databases</h3>" +
         "<table><thead><tr>" +
-        "<th>DB UID</th><th>Keeper UID</th><th>Role</th><th>Healthy</th><th>XLogPos</th><th>LagBytes</th><th>Address</th>" +
+        '<th title="Database object unique identifier">DB UID</th>' +
+        '<th title="Keeper currently assigned to DB">Keeper UID</th>' +
+        '<th title="PostgreSQL binary version reported by keeper">PG Version</th>' +
+        '<th title="DB role in cluster topology">Role</th>' +
+        '<th title="DB health status">Healthy</th>' +
+        '<th title="Current WAL position">XLog Pos</th>' +
+        '<th title="Estimated lag from current primary in bytes">Lag Bytes</th>' +
+        '<th title="Database listen address">Address</th>' +
         "</tr></thead><tbody>" + renderDBs(cluster.db_rows) + "</tbody></table>" +
         "<h3>Proxies</h3>" +
         "<table><thead><tr>" +
-        "<th>Proxy UID</th><th>Seen</th><th>Enabled</th><th>Generation</th><th>ProxyTimeout</th>" +
+        '<th title="Proxy unique identifier">Proxy UID</th>' +
+        '<th title="Proxy heartbeat currently visible in DCS">Seen</th>' +
+        '<th title="Proxy is enabled by current cluster proxy spec">Enabled</th>' +
+        '<th title="Last seen proxy generation">Generation</th>' +
+        '<th title="Proxy timeout announced by proxy">Proxy Timeout</th>' +
         "</tr></thead><tbody>" + renderProxies(cluster.proxy_rows) + "</tbody></table>" +
         "</section>";
     }).join("");
@@ -228,6 +262,38 @@
       })
       .then(renderSnapshot)
       .catch(function () {});
+  }
+
+  function onRowToggleClick(event) {
+    var target = event.target;
+    if (!target || !target.classList || !target.classList.contains("row-toggle")) {
+      return;
+    }
+    var row = target.closest("tr");
+    if (!row || !row.nextElementSibling || !row.nextElementSibling.classList.contains("detail-row")) {
+      return;
+    }
+    var details = row.nextElementSibling;
+    var pre = details.querySelector(".detail-json");
+    if (!pre) return;
+    var opened = !details.hasAttribute("hidden");
+    if (opened) {
+      details.setAttribute("hidden", "");
+      target.setAttribute("aria-expanded", "false");
+      target.textContent = "+";
+      target.title = "Show details";
+      return;
+    }
+    var payload = target.getAttribute("data-payload") || "";
+    try {
+      pre.textContent = decodeURIComponent(payload);
+    } catch (_) {
+      pre.textContent = "{}";
+    }
+    details.removeAttribute("hidden");
+    target.setAttribute("aria-expanded", "true");
+    target.textContent = "−";
+    target.title = "Hide details";
   }
 
   function setRefresh(value) {
@@ -287,6 +353,7 @@
       setTheme(current === "dark" ? "light" : "dark");
     });
   }
+  document.addEventListener("click", onRowToggleClick);
 
   refreshData();
 })();

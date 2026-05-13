@@ -13,7 +13,13 @@
       <span>Hysteron Status</span>
     </div>
     <div class="logo-center">
+      {{ if .Build.URL }}
+      <a href="{{ .Build.URL }}" target="_blank" rel="noopener noreferrer" aria-label="Open project URL">
+        <img src="{{ .BasePath }}/static/img/hysteron.svg" alt="Hysteron logo">
+      </a>
+      {{ else }}
       <img src="{{ .BasePath }}/static/img/hysteron.svg" alt="Hysteron logo">
+      {{ end }}
     </div>
     <div class="controls">
       <label for="refresh">Refresh:</label>
@@ -32,10 +38,9 @@
     {{ template "content" . }}
   </main>
   <footer class="footer">
-    <span>Version: {{ .Build.Version }}</span>
-    <span>Commit: {{ .Build.Commit }}</span>
-    <span>Build: {{ .Build.Date }}</span>
-    <span>URL: <a href="{{ .Build.URL }}">{{ .Build.URL }}</a></span>
+    <div class="footer-line">Version: {{ .Build.Version }} Build time: {{ .Build.Date }}</div>
+    <div class="footer-line">Commit: {{ .Build.Commit }}</div>
+    <div class="footer-line">Project URL: <a href="{{ .Build.URL }}">{{ .Build.URL }}</a></div>
   </footer>
 </body>
 </html>

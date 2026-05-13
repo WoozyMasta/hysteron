@@ -591,6 +591,8 @@ func hasRecoveryTargetSelector(recoveryTargetSettings *cluster.RecoveryTargetSet
 
 // PostgresKeeper reconciles local PostgreSQL state with cluster data.
 type PostgresKeeper struct {
+	// First-observed timestamp of current DCS degraded window.
+	dcsDegradedSince time.Time
 	// External cluster store client.
 	e store.Store
 	// Parsed keeper command configuration.
@@ -601,24 +603,26 @@ type PostgresKeeper struct {
 	end chan error
 	// Injectable PostgreSQL binary version reader (tests may override).
 	pgBinaryVersion func() (int, int, error)
-
 	// Persisted keeper identity/cluster binding state.
 	keeperLocalState *LocalState
 	// Persisted local database assignment state.
 	dbLocalState *DBLocalState
 	// Last PostgreSQL state published to cluster data.
 	lastPGState *cluster.PostgresState
-
 	// Advertised capability: eligible for master role.
 	canBeMaster *bool
 	// Advertised capability: eligible for synchronous replica role.
 	canBeSynchronousReplica *bool
-
+	// Per-slot retry-after map for standby logical-slot advance failures.
+	logicalSlotStandbyAdvanceRetryAfter map[string]time.Time
+	// Pending async standby logical-slot advance operations keyed by slot/database.
+	logicalSlotAdvancePending map[string]queuedLogicalSlotAdvanceOperation
+	// Wake-up channel for async standby logical-slot advance worker.
+	logicalSlotAdvanceNotify chan struct{}
 	// Keeper process boot identifier.
 	bootUUID string
 	// Absolute keeper data directory path.
 	dataDir string
-
 	// PostgreSQL listen address.
 	pgListenAddress string
 	// Address advertised to other components.
@@ -641,22 +645,32 @@ type PostgresKeeper struct {
 	pgSUUsername string
 	// Superuser password.
 	pgSUPassword string
-
 	// Last emitted standby logical-slot readiness signature for warning dedup.
 	logicalSlotReadinessLast string
-
+	// Current keeper-local failsafe state (scaffold only, no behavior change).
+	failsafeState failsafeState
 	// Main reconciliation loop sleep interval.
 	sleepInterval time.Duration
 	// Timeout for store and PostgreSQL requests.
 	requestTimeout time.Duration
-
+	// Delay before retrying failed standby logical-slot advance operations.
+	logicalSlotStandbyAdvanceRetryDelay time.Duration
+	// Runtime-configured probe interval for failsafe mode.
+	failsafeProbeInterval time.Duration
+	// Runtime-configured probe timeout for failsafe mode.
+	failsafeProbeTimeout time.Duration
+	// Runtime-configured maximum failsafe active window.
+	failsafeTTL time.Duration
 	// Guards keeperLocalState/dbLocalState access.
 	localStateMutex sync.Mutex
 	// Guards lastPGState and pgm state transitions.
 	pgStateMutex sync.Mutex
 	// Serializes expensive PG state collection.
 	getPGStateMutex sync.Mutex
-
+	// Serialized state for async standby logical-slot advance queue and retries.
+	logicalSlotAdvanceMutex sync.Mutex
+	// Runtime-configured allowed missing peer probes in failsafe mode.
+	failsafeMaxMissingPeers uint16
 	// Enables waiting for synchronous standbys before promotion flow completion.
 	waitSyncStandbysSynced bool
 	// Emits one-time warning when experimental logical slot failover gate is enabled.
@@ -669,33 +683,10 @@ type PostgresKeeper struct {
 	logicalSlotStandbyAdvanceUnavailableNoticeEmitted bool
 	// Emits one-time warning when noStream disables standby logical-slot sync path.
 	logicalSlotNoStreamNoticeEmitted bool
-	// Per-slot retry-after map for standby logical-slot advance failures.
-	logicalSlotStandbyAdvanceRetryAfter map[string]time.Time
-	// Delay before retrying failed standby logical-slot advance operations.
-	logicalSlotStandbyAdvanceRetryDelay time.Duration
-	// Serialized state for async standby logical-slot advance queue and retries.
-	logicalSlotAdvanceMutex sync.Mutex
-	// Pending async standby logical-slot advance operations keyed by slot/database.
-	logicalSlotAdvancePending map[string]queuedLogicalSlotAdvanceOperation
-	// Wake-up channel for async standby logical-slot advance worker.
-	logicalSlotAdvanceNotify chan struct{}
-
 	// Runtime-configured failsafe mode flag from cluster spec.
 	failsafeEnabled bool
-	// Runtime-configured probe interval for failsafe mode.
-	failsafeProbeInterval time.Duration
-	// Runtime-configured probe timeout for failsafe mode.
-	failsafeProbeTimeout time.Duration
-	// Runtime-configured allowed missing peer probes in failsafe mode.
-	failsafeMaxMissingPeers uint16
-	// Runtime-configured maximum failsafe active window.
-	failsafeTTL time.Duration
-	// Current keeper-local failsafe state (scaffold only, no behavior change).
-	failsafeState failsafeState
 	// Tracks whether DCS errors are currently observed.
 	dcsDegraded bool
-	// First-observed timestamp of current DCS degraded window.
-	dcsDegradedSince time.Time
 }
 
 type standbyReplayController interface {

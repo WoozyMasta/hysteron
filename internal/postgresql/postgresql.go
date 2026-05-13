@@ -129,8 +129,8 @@ type LogicalReplicationSlot struct {
 	Name              string
 	Database          string
 	Plugin            string
-	Active            bool
 	ConfirmedFlushLSN uint64
+	Active            bool
 	Failover          bool
 	Synced            bool
 }

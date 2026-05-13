@@ -118,6 +118,10 @@ type ClusterChecker struct {
 	readOnly *proxyListener
 	// Proxy instance UID.
 	uid string
+	// Last writable destination string for switch detection.
+	lastWritableDestination string
+	// Last read-only destination signature for switch detection.
+	lastReadOnlyDestinations string
 	// Read-only routing options.
 	readOnlyOptions readOnlyOptions
 	// Interval between periodic proxy checks.
@@ -128,10 +132,6 @@ type ClusterChecker struct {
 	configMutex sync.Mutex
 	// Stop listener when critical store errors happen.
 	stopListening bool
-	// Last writable destination string for switch detection.
-	lastWritableDestination string
-	// Last read-only destination signature for switch detection.
-	lastReadOnlyDestinations string
 }
 
 // NewClusterChecker creates a ClusterChecker from proxy configuration.

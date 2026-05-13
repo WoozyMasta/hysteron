@@ -945,8 +945,6 @@ type DBSpec struct {
 	PGParameters PGParameters `json:"pgParameters,omitempty"`
 	// FollowConfig when Role is "standby"
 	FollowConfig *FollowConfig `json:"followConfig,omitempty"`
-	// NoStream declares archive-recovery-only mode for this DB assignment.
-	NoStream bool `json:"noStream,omitempty"`
 	// The KeeperUID this db is assigned to
 	KeeperUID string `json:"keeperUID,omitempty"`
 	// InitMode defines the db initialization mode. Current modes are: none, new
@@ -988,6 +986,8 @@ type DBSpec struct {
 	// AdditionalWalSenders defines the number of additional wal_senders in
 	// addition to the ones internally defined by hysteron
 	AdditionalWalSenders uint16 `json:"additionalWalSenders"`
+	// NoStream declares archive-recovery-only mode for this DB assignment.
+	NoStream bool `json:"noStream,omitempty"`
 	// EnableLogicalSlotFailover enables experimental logical slot failover
 	// semantics for this database assignment.
 	EnableLogicalSlotFailover bool `json:"enableLogicalSlotFailover,omitempty"`

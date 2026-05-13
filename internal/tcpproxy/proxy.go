@@ -38,19 +38,19 @@ func SetLogger(l zerolog.Logger) {
 
 // Options configures a Proxy.
 type Options struct {
-	// KeepAlive enables TCP keepalive on accepted client connections.
-	KeepAlive bool
+	// OnActiveConnectionsDelta, when set, is called with +1 when a proxied
+	// connection becomes active and -1 when it ends.
+	OnActiveConnectionsDelta func(delta int)
+	// OnConnectError, when set, is called on connection setup failures.
+	OnConnectError func(reason string)
 	// KeepAliveIdle sets idle duration before the first keepalive probe.
 	KeepAliveIdle time.Duration
 	// KeepAliveCount sets the number of probes before considering the peer dead.
 	KeepAliveCount int
 	// KeepAliveInterval sets interval between keepalive probes.
 	KeepAliveInterval time.Duration
-	// OnActiveConnectionsDelta, when set, is called with +1 when a proxied
-	// connection becomes active and -1 when it ends.
-	OnActiveConnectionsDelta func(delta int)
-	// OnConnectError, when set, is called on connection setup failures.
-	OnConnectError func(reason string)
+	// KeepAlive enables TCP keepalive on accepted client connections.
+	KeepAlive bool
 }
 
 // Proxy forwards TCP connections from a listener to current destinations.

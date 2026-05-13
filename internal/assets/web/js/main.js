@@ -179,6 +179,12 @@
     if (!rows || rows.length === 0) {
       return '<tr><td colspan="7">no database rows</td></tr>';
     }
+    function roleBadge(role) {
+      var cls = "role-unknown";
+      if (role === "master") cls = "role-master";
+      if (role === "standby") cls = "role-standby";
+      return '<span class="role-badge ' + cls + '">' + esc(role) + "</span>";
+    }
     return rows.map(function (row) {
       var lagValue = Number(row.lag_bytes);
       var lag = row.lag_bytes === "-" || !Number.isFinite(lagValue) ?
@@ -193,7 +199,7 @@
         "<td>" + detailToggle("database", row.uid, row) + " " + mono(row.uid) + "</td>" +
         "<td>" + mono(row.keeper_uid) + "</td>" +
         "<td>" + mono(row.pg_version || "-") + "</td>" +
-        "<td>" + esc(row.role) + "</td>" +
+        "<td>" + roleBadge(row.role) + "</td>" +
         "<td>" + boolBadge(row.healthy) + "</td>" +
         "<td>" + mono(row.xlog_pos) + "</td>" +
         "<td>" + lag + "</td>" +
@@ -204,7 +210,10 @@
   function listenerPill(label, address, active) {
     if (!address) return "";
     var cls = active ? "up" : "down";
-    return '<span class="listener-pill ' + cls + '">' + esc(label) + " " + mono(address) + "</span>";
+    var hint = "";
+    if (label === "RW") hint = "RW: writable listener used for read/write client traffic";
+    if (label === "RO") hint = "RO: read-only listener used for standby routing";
+    return '<span class="listener-pill ' + cls + '" title="' + escAttr(hint) + '">' + esc(label) + " " + mono(address) + "</span>";
   }
 
   function renderProxyListeners(row) {

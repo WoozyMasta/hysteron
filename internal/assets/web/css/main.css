@@ -259,6 +259,45 @@ thead th {
   border-color: #991b1b;
 }
 
+.role-badge {
+  display: inline-block;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.role-badge.role-master {
+  color: #14532d;
+  background: #dcfce7;
+  border-color: #86efac;
+}
+
+.role-badge.role-standby {
+  color: #1d4ed8;
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+
+.role-badge.role-unknown {
+  color: var(--muted);
+  background: color-mix(in srgb, var(--card) 78%, var(--border));
+  border-color: var(--border);
+}
+
+[data-theme="dark"] .role-badge.role-master {
+  color: #86efac;
+  background: #14532d;
+  border-color: #166534;
+}
+
+[data-theme="dark"] .role-badge.role-standby {
+  color: #93c5fd;
+  background: #1e3a8a;
+  border-color: #1d4ed8;
+}
+
 .row-toggle {
   border: 1px solid var(--border);
   background: var(--card);

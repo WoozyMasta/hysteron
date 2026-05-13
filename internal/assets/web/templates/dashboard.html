@@ -99,7 +99,7 @@
           <td>{{ .UID }}</td>
           <td>{{ .KeeperUID }}</td>
           <td>{{ .PGVersion }}</td>
-          <td>{{ .Role }}</td>
+          <td><span class="role-badge {{ if eq .Role "master" }}role-master{{ else if eq .Role "standby" }}role-standby{{ else }}role-unknown{{ end }}">{{ .Role }}</span></td>
           <td>{{ .Healthy }}</td>
           <td>{{ .XLogPos }}</td>
           <td>{{ .LagBytes }}</td>
@@ -129,7 +129,7 @@
         <tr>
           <td>{{ .UID }}</td>
           <td>{{ .Mode }}</td>
-          <td>{{ if .RWAddress }}<span class="listener-pill {{ if .RWActive }}up{{ else }}down{{ end }}">RW <span class="mono">{{ .RWAddress }}</span></span>{{ end }} {{ if .ROAddress }}<span class="listener-pill {{ if .ROActive }}up{{ else }}down{{ end }}">RO <span class="mono">{{ .ROAddress }}</span></span>{{ end }}{{ if and (eq .RWAddress "") (eq .ROAddress "") }}-{{ end }}</td>
+          <td>{{ if .RWAddress }}<span class="listener-pill {{ if .RWActive }}up{{ else }}down{{ end }}" title="RW: writable listener used for read/write client traffic">RW <span class="mono">{{ .RWAddress }}</span></span>{{ end }} {{ if .ROAddress }}<span class="listener-pill {{ if .ROActive }}up{{ else }}down{{ end }}" title="RO: read-only listener used for standby routing">RO <span class="mono">{{ .ROAddress }}</span></span>{{ end }}{{ if and (eq .RWAddress "") (eq .ROAddress "") }}-{{ end }}</td>
           <td>{{ .Seen }}</td>
           <td>{{ .Enabled }}</td>
           <td>{{ .Generation }}</td>

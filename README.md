@@ -1,82 +1,110 @@
 # Hysteron
 
-hysteron is a cloud native PostgreSQL manager for PostgreSQL high availability. It's cloud native because it'll let you keep an high available PostgreSQL inside your containers (kubernetes integration) but also on every other kind of infrastructure (cloud IaaS, old style infrastructures etc...)
+Stable PostgreSQL failover without flapping.
 
-![Hysteron Logo](doc/hysteron.svg)
+Hysteron is a PostgreSQL high-availability control plane focused on safe
+failover, deterministic recovery, and operational clarity.
+It coordinates keeper, sentinel, and proxy runtimes
+using etcd v3 or Kubernetes as the distributed state store.
 
-For an introduction to hysteron you can also take a look at [this post](https://sgotti.dev/post/hysteron-introduction/)
+Inspired by the original [Stolon][] design,
+Hysteron continues the same HA spirit with modernized internals
+and new capabilities for current PostgreSQL releases.
 
-## Features
+![Hysteron Logo][logo]
 
-* Leverages PostgreSQL streaming replication.
-* Resilient to any kind of partitioning. While trying to keep the maximum availability, it prefers consistency over availability.
-* [kubernetes integration](examples/kubernetes/README.md) letting you achieve postgreSQL high availability.
-* Uses [etcd v3](https://etcd.io) or the Kubernetes API server as a highly
-  available data store and for leader election.
-* Asynchronous (default) and [synchronous](doc/syncrepl.md) replication.
-* Full cluster setup in minutes.
-* Easy cluster administration with the unified
-  [`hysteron` CLI](doc/commands/hysteron.md)
-* Can do point in time recovery integrating with your preferred backup/restore tool.
-* [Standby cluster](doc/standbycluster.md) (for multi site replication and near zero downtime migration).
-* Automatic service discovery and dynamic reconfiguration (handles postgres and hysteron processes changing their addresses).
-* Can use [pg_rewind](doc/pg_rewind.md) for fast instance resynchronization with current master.
+## Highlights
+
+* Safety-first failover and promotion decisions
+  with consistency over availability in ambiguous partition scenarios.
+* Unified `hysteron` CLI for runtime commands and cluster operations.
+* etcd v3 and Kubernetes store backends.
+* Asynchronous and synchronous replication support.
+* Read/write and read-only proxy modes.
+* Managed logical replication slots workflow for modern PostgreSQL versions.
+* Optional embedded Sentinel web status UI.
+* PITR and standby-cluster workflows.
+* Optional `pg_rewind`-based fast resync.
 
 ## Architecture
 
-Hysteron is composed of 3 main components
+Hysteron is composed of 3 main components:
 
-* keeper: it manages a PostgreSQL instance converging to the clusterview computed by the leader sentinel.
-* sentinel: it discovers and monitors keepers and proxies and computes the optimal clusterview.
-* proxy: the client's access point. It enforce connections to the right PostgreSQL master and forcibly closes connections to old masters.
+* `keeper`: converges a local PostgreSQL instance to the desired cluster view.
+* `sentinel`: computes cluster view, leader selection, and failover actions.
+* `proxy`: client entrypoint that routes to current writable primary
+  and can expose read-only routing.
 
-For more details and requirements see [Hysteron Architecture and Requirements](doc/architecture.md)
+Read: [Hysteron Architecture and Requirements][architecture]
 
-![Hysteron architecture](doc/architecture.svg)
+![Hysteron architecture][architecture-diagram]
 
 ## Documentation
 
-[Documentation Index](doc/README.md)
+Start from the [Documentation Index][docs-index].
 
-## Quick start and examples
+Key docs:
 
-* [Simple cluster example](doc/simplecluster.md)
-* [Kubernetes example](examples/kubernetes/README.md)
-* [Two (or more) nodes setup](doc/twonodes.md)
+* [CLI reference][cli-reference]
+* [Architecture][architecture]
+* [Proxy modes][proxy-modes]
+* [Logical slots][logical-slots]
+* [Metrics][metrics]
+* [Integration tests][integration-tests]
 
-## Project Status
+## Quick Start and Examples
 
-Hysteron is under active development and used in different environments. Probably its on disk format (store hierarchy and key contents) will change in future to support new features. If a breaking change is needed it'll be documented in the release notes and an upgrade path will be provided.
-
-Anyway it's quite easy to reset a cluster from scratch keeping the current master instance working and without losing any data.
+* [Simple cluster][simple-cluster]
+* [Docker Compose example][compose-example]
+* [Kubernetes example][k8s-example]
+* [Two (or more) nodes setup][two-nodes]
 
 ## Requirements
 
-* PostgreSQL 18, 17, 16, 15, 14 by default. PostgreSQL 12 and newer are
-  best-effort compatibility targets when explicitly allowed and verified.
-* etcd v3 or Kubernetes, based on the store backend you're going to use.
-* OS: currently hysteron is tested on GNU/Linux, with reports of people using it
-  also on Solaris, *BSD and Darwin.
+* PostgreSQL 18, 17, 16, 15, 14 by default.
+* PostgreSQL 12+ can be used
+  as best-effort legacy compatibility targets when explicitly enabled.
+* etcd v3 or Kubernetes (depends on selected store backend).
+* Cross-platform binaries are supported;
+  Linux remains the primary production target.
 
-## etcd maintenance
+## Operational Notes
 
-When using the etcd v3 backend, periodic compaction and defragmentation are
-required operational tasks. Hysteron does not run global etcd maintenance
-operations automatically.
+When using etcd v3, periodic compaction and defragmentation
+are required operational tasks.
+Hysteron does not run global etcd maintenance automatically.
 
-See [etcd v3 compaction](doc/architecture.md#etcdv3-compaction).
+See [etcd v3 compaction][etcd-compaction].
 
-## High availability
+## Project Status
 
-Hysteron tries to be resilient to any partitioning problem. The cluster view is computed by the leader sentinel and is useful to avoid data loss (one example over all avoid that old dead masters coming back are elected as the new master).
-
-There can be tons of different partitioning cases. The primary ones are covered (and in future more will be added) by various [integration tests](tests/integration)
+Hysteron is under active development.
+Breaking changes are allowed
+when they improve safety, maintainability, or operational behavior,
+and are documented in release notes and changelog entries.
 
 ## FAQ
 
-See [here](doc/faq.md) for a list of faq. If you have additional questions please ask.
+See [FAQ][faq].
 
-## Contributing to hysteron
+## Contributing
 
-hysteron is an open source project under the Apache 2.0 license, and contributions are gladly welcomed!
-To submit your changes please open a pull request.
+Hysteron is open source under Apache 2.0. Contributions are welcome.
+
+<!-- LInks -->
+[Stolon]: https://github.com/sorintlab/stolon
+[logo]: doc/hysteron.svg
+[architecture]: doc/architecture.md
+[architecture-diagram]: doc/architecture.svg
+[docs-index]: doc/README.md
+[cli-reference]: doc/commands/hysteron.md
+[proxy-modes]: doc/proxy.md
+[logical-slots]: doc/logical_slots.md
+[metrics]: doc/metrics.md
+[integration-tests]: doc/integration-tests.md
+[simple-cluster]: doc/simplecluster.md
+[compose-example]: examples/compose/README.md
+[k8s-example]: examples/kubernetes/README.md
+[two-nodes]: doc/twonodes.md
+[etcd-compaction]: doc/architecture.md#etcdv3-compaction
+[faq]: doc/faq.md

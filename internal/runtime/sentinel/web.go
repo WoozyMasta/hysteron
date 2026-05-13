@@ -100,10 +100,11 @@ type webBuildInfo struct {
 }
 
 type webSentinelRow struct {
-	ClusterName string `json:"cluster_name"`
-	UID         string `json:"uid"`
-	IsLocal     bool   `json:"is_local"`
-	IsLeader    bool   `json:"is_leader"`
+	UID            string   `json:"uid"`
+	IsLocal        bool     `json:"is_local"`
+	IsLeader       bool     `json:"is_leader"`
+	Clusters       []string `json:"clusters"`
+	LeaderClusters []string `json:"leader_clusters"`
 }
 
 type webClusterStatus struct {
@@ -281,6 +282,7 @@ func collectWebSnapshot(
 		Sentinels: make([]webSentinelRow, 0, len(names)),
 		Clusters:  make([]webClusterStatus, 0, len(names)),
 	}
+	sentinelRowsByUID := make(map[string]*webSentinelRow)
 
 	timeout := cfg.Store.Timeout
 	if timeout <= 0 {
@@ -313,12 +315,17 @@ func collectWebSnapshot(
 				if isLocal {
 					isLeader = registry.LocalLeadership(clusterName)
 				}
-				snapshot.Sentinels = append(snapshot.Sentinels, webSentinelRow{
-					ClusterName: clusterName,
-					UID:         si.UID,
-					IsLocal:     isLocal,
-					IsLeader:    isLeader,
-				})
+				row, ok := sentinelRowsByUID[si.UID]
+				if !ok {
+					row = &webSentinelRow{UID: si.UID}
+					sentinelRowsByUID[si.UID] = row
+				}
+				row.IsLocal = row.IsLocal || isLocal
+				row.IsLeader = row.IsLeader || isLeader
+				row.Clusters = append(row.Clusters, clusterName)
+				if isLeader {
+					row.LeaderClusters = append(row.LeaderClusters, clusterName)
+				}
 			}
 		}
 
@@ -433,13 +440,34 @@ func collectWebSnapshot(
 		cancel()
 		snapshot.Clusters = append(snapshot.Clusters, clusterStatus)
 	}
+	for _, row := range sentinelRowsByUID {
+		row.Clusters = uniqueSortedStrings(row.Clusters)
+		row.LeaderClusters = uniqueSortedStrings(row.LeaderClusters)
+		snapshot.Sentinels = append(snapshot.Sentinels, *row)
+	}
 	slices.SortFunc(snapshot.Sentinels, func(a, b webSentinelRow) int {
-		if c := strings.Compare(a.ClusterName, b.ClusterName); c != 0 {
-			return c
-		}
 		return strings.Compare(a.UID, b.UID)
 	})
 	return snapshot
+}
+
+func uniqueSortedStrings(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	set := make(map[string]struct{}, len(values))
+	for _, v := range values {
+		if v == "" {
+			continue
+		}
+		set[v] = struct{}{}
+	}
+	out := make([]string, 0, len(set))
+	for v := range set {
+		out = append(out, v)
+	}
+	slices.Sort(out)
+	return out
 }
 
 func webLinkBasePath(basePath string) string {

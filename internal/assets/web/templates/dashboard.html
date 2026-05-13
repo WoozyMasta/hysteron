@@ -10,122 +10,133 @@
   <table>
     <thead>
       <tr>
-        <th>Cluster</th>
         <th>UID</th>
         <th>Local</th>
-        <th>Leader</th>
+        <th>Leader In</th>
+        <th>Clusters</th>
       </tr>
     </thead>
     <tbody id="sentinels-body">
       {{ range .Sentinels }}
       <tr>
-        <td>{{ .ClusterName }}</td>
         <td>{{ .UID }}</td>
         <td>{{ .IsLocal }}</td>
-        <td>{{ .IsLeader }}</td>
+        <td>{{ if .LeaderClusters }}{{ range $i, $v := .LeaderClusters }}{{ if $i }},
+          {{ end }}{{ $v }}{{ end }}{{ else }}-{{ end }}</td>
+        <td>{{ if .Clusters }}{{ range $i, $v := .Clusters }}{{ if $i }}, {{ end }}{{ $v }}{{ end }}{{ else }}-{{ end }}
+        </td>
       </tr>
       {{ else }}
-      <tr><td colspan="4">no sentinel data</td></tr>
+      <tr>
+        <td colspan="4">no sentinel data</td>
+      </tr>
       {{ end }}
     </tbody>
   </table>
 </section>
 
 <div id="clusters-root">
-{{ range .Clusters }}
-<section>
-  <h2>Cluster: {{ .Name }}</h2>
-  <div class="meta">
-    <div>Phase: {{ .Phase }}</div>
-    <div>Generation: {{ .Generation }}</div>
-    <div>Master DB: {{ .MasterDBUID }}</div>
-    <div>Master Keeper: {{ .MasterKeeperUID }}</div>
-    <div>Keepers: {{ .KeepersHealthy }}/{{ .KeepersTotal }}</div>
-    <div>DBs: {{ .DBsHealthy }}/{{ .DBsTotal }}</div>
-    <div>Proxies seen: {{ .ProxiesSeen }}</div>
-    <div>Error: {{ .Error }}</div>
-  </div>
-  <h3>Keepers</h3>
-  <table>
-    <thead>
-      <tr>
-        <th>Keeper UID</th>
-        <th>Healthy</th>
-        <th>PG Healthy</th>
-        <th>CanBeMaster</th>
-        <th>CanBeSyncReplica</th>
-        <th>Address</th>
-      </tr>
-    </thead>
-    <tbody>
-      {{ range .KeeperRows }}
-      <tr>
-        <td>{{ .UID }}</td>
-        <td>{{ .Healthy }}</td>
-        <td>{{ .PGHealthy }}</td>
-        <td>{{ .CanBeMaster }}</td>
-        <td>{{ .CanBeSynchronousReplica }}</td>
-        <td>{{ .ListenAddress }}</td>
-      </tr>
-      {{ else }}
-      <tr><td colspan="6">no keeper rows</td></tr>
-      {{ end }}
-    </tbody>
-  </table>
-  <table>
-    <thead>
-      <tr>
-        <th>DB UID</th>
-        <th>Keeper UID</th>
-        <th>Role</th>
-        <th>Healthy</th>
-        <th>XLogPos</th>
-        <th>LagBytes</th>
-        <th>Address</th>
-      </tr>
-    </thead>
-    <tbody>
-      {{ range .DBRows }}
-      <tr>
-        <td>{{ .UID }}</td>
-        <td>{{ .KeeperUID }}</td>
-        <td>{{ .Role }}</td>
-        <td>{{ .Healthy }}</td>
-        <td>{{ .XLogPos }}</td>
-        <td>{{ .LagBytes }}</td>
-        <td>{{ .Address }}</td>
-      </tr>
-      {{ else }}
-      <tr><td colspan="7">no database rows</td></tr>
-      {{ end }}
-    </tbody>
-  </table>
-  <h3>Proxies</h3>
-  <table>
-    <thead>
-      <tr>
-        <th>Proxy UID</th>
-        <th>Seen</th>
-        <th>Enabled</th>
-        <th>Generation</th>
-        <th>ProxyTimeout</th>
-      </tr>
-    </thead>
-    <tbody>
-      {{ range .ProxyRows }}
-      <tr>
-        <td>{{ .UID }}</td>
-        <td>{{ .Seen }}</td>
-        <td>{{ .Enabled }}</td>
-        <td>{{ .Generation }}</td>
-        <td>{{ .ProxyTimeout }}</td>
-      </tr>
-      {{ else }}
-      <tr><td colspan="5">no proxy rows</td></tr>
-      {{ end }}
-    </tbody>
-  </table>
-</section>
-{{ end }}
+  {{ range .Clusters }}
+  <section>
+    <h2>Cluster: {{ .Name }}</h2>
+    <div class="meta">
+      <div>Phase: {{ .Phase }}</div>
+      <div>Generation: {{ .Generation }}</div>
+      <div>Master DB: {{ .MasterDBUID }}</div>
+      <div>Master Keeper: {{ .MasterKeeperUID }}</div>
+      <div>Keepers: {{ .KeepersHealthy }}/{{ .KeepersTotal }}</div>
+      <div>DBs: {{ .DBsHealthy }}/{{ .DBsTotal }}</div>
+      <div>Proxies seen: {{ .ProxiesSeen }}</div>
+      <div>Error: {{ .Error }}</div>
+    </div>
+    <h3>Keepers</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Keeper UID</th>
+          <th>Healthy</th>
+          <th>PG Healthy</th>
+          <th>CanBeMaster</th>
+          <th>CanBeSyncReplica</th>
+          <th>Address</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{ range .KeeperRows }}
+        <tr>
+          <td>{{ .UID }}</td>
+          <td>{{ .Healthy }}</td>
+          <td>{{ .PGHealthy }}</td>
+          <td>{{ .CanBeMaster }}</td>
+          <td>{{ .CanBeSynchronousReplica }}</td>
+          <td>{{ .ListenAddress }}</td>
+        </tr>
+        {{ else }}
+        <tr>
+          <td colspan="6">no keeper rows</td>
+        </tr>
+        {{ end }}
+      </tbody>
+    </table>
+    <h3>Databases</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>DB UID</th>
+          <th>Keeper UID</th>
+          <th>Role</th>
+          <th>Healthy</th>
+          <th>XLogPos</th>
+          <th>LagBytes</th>
+          <th>Address</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{ range .DBRows }}
+        <tr>
+          <td>{{ .UID }}</td>
+          <td>{{ .KeeperUID }}</td>
+          <td>{{ .Role }}</td>
+          <td>{{ .Healthy }}</td>
+          <td>{{ .XLogPos }}</td>
+          <td>{{ .LagBytes }}</td>
+          <td>{{ .Address }}</td>
+        </tr>
+        {{ else }}
+        <tr>
+          <td colspan="7">no database rows</td>
+        </tr>
+        {{ end }}
+      </tbody>
+    </table>
+    <h3>Proxies</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Proxy UID</th>
+          <th>Seen</th>
+          <th>Enabled</th>
+          <th>Generation</th>
+          <th>ProxyTimeout</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{ range .ProxyRows }}
+        <tr>
+          <td>{{ .UID }}</td>
+          <td>{{ .Seen }}</td>
+          <td>{{ .Enabled }}</td>
+          <td>{{ .Generation }}</td>
+          <td>{{ .ProxyTimeout }}</td>
+        </tr>
+        {{ else }}
+        <tr>
+          <td colspan="5">no proxy rows</td>
+        </tr>
+        {{ end }}
+      </tbody>
+    </table>
+  </section>
+  {{ end }}
 </div>
 {{ end }}

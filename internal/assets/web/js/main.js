@@ -28,12 +28,16 @@
       body.innerHTML = '<tr><td colspan="4">no sentinel data</td></tr>';
       return;
     }
+    function list(value) {
+      if (!value || value.length === 0) return "-";
+      return value.map(esc).join(", ");
+    }
     body.innerHTML = rows.map(function (row) {
       return "<tr>" +
-        "<td>" + esc(row.cluster_name) + "</td>" +
         "<td>" + esc(row.uid) + "</td>" +
         "<td>" + boolText(row.is_local) + "</td>" +
-        "<td>" + boolText(row.is_leader) + "</td>" +
+        "<td>" + list(row.leader_clusters) + "</td>" +
+        "<td>" + list(row.clusters) + "</td>" +
       "</tr>";
     }).join("");
   }
@@ -106,6 +110,7 @@
         "<table><thead><tr>" +
         "<th>Keeper UID</th><th>Healthy</th><th>PG Healthy</th><th>CanBeMaster</th><th>CanBeSyncReplica</th><th>Address</th>" +
         "</tr></thead><tbody>" + renderKeepers(cluster.keeper_rows) + "</tbody></table>" +
+        "<h3>Databases</h3>" +
         "<table><thead><tr>" +
         "<th>DB UID</th><th>Keeper UID</th><th>Role</th><th>Healthy</th><th>XLogPos</th><th>LagBytes</th><th>Address</th>" +
         "</tr></thead><tbody>" + renderDBs(cluster.db_rows) + "</tbody></table>" +

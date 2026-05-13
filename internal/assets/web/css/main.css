@@ -93,6 +93,11 @@ body {
   gap: 14px;
 }
 
+#clusters-root {
+  display: grid;
+  gap: 14px;
+}
+
 section {
   background: var(--card);
   border: 1px solid var(--border);
@@ -103,6 +108,11 @@ section {
 h2 {
   margin: 0 0 8px;
   font-size: 16px;
+}
+
+h3 {
+  margin: 12px 0 6px;
+  font-size: 14px;
 }
 
 .meta {
@@ -117,6 +127,7 @@ table {
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
+  margin-top: 6px;
 }
 
 th,

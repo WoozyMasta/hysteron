@@ -57,22 +57,22 @@ type config struct {
 	runtimecommon.CommonConfig
 
 	KeepAlive     tcpKeepAliveOptions `group:"TCP Keep-Alive" namespace:"tcp-keepalive" env-namespace:"TCP_KEEPALIVE"`
-	StopListening bool                `                                                                               long:"stop-listening" env:"STOP_LISTENING" description:"stop listening on store error (default true)"`
+	StopListening bool                `long:"stop-listening" env:"STOP_LISTENING" description:"stop listening on store error (default true)"`
 }
 
 type readOnlyOptions struct {
 	ListenAddress   string                   `long:"listen-address"   env:"LISTEN_ADDRESS"   description:"read-only proxy listening address"`
 	Port            string                   `long:"port"             env:"PORT"             description:"read-only proxy listening port"`
-	ReplicaPriority readonly.ReplicaPriority `long:"replica-priority" env:"REPLICA_PRIORITY" default:"sync" choices:"sync;async;any" description:"read-only replica priority policy"`
-	MaxLag          units.BytesValue         `long:"max-lag"          env:"MAX_LAG"          default:"0" description:"maximum standby WAL lag in bytes for read-only routing"`
-	NoFallback      bool                     `long:"no-fallback"      env:"NO_FALLBACK"      xor:"read-only-primary-policy" description:"do not route read-only connections to primary when no eligible standby exists"`
-	IncludePrimary  bool                     `long:"include-primary"  env:"INCLUDE_PRIMARY"  xor:"read-only-primary-policy" description:"include primary in the normal read-only backend pool"`
+	ReplicaPriority readonly.ReplicaPriority `long:"replica-priority" env:"REPLICA_PRIORITY" description:"read-only replica priority policy"                                             default:"sync" choices:"sync;async;any"`
+	MaxLag          units.BytesValue         `long:"max-lag"          env:"MAX_LAG"          description:"maximum standby WAL lag in bytes for read-only routing"                        default:"0"`
+	NoFallback      bool                     `long:"no-fallback"      env:"NO_FALLBACK"      description:"do not route read-only connections to primary when no eligible standby exists" xor:"read-only-primary-policy"`
+	IncludePrimary  bool                     `long:"include-primary"  env:"INCLUDE_PRIMARY"  description:"include primary in the normal read-only backend pool"                          xor:"read-only-primary-policy"`
 }
 
 type writableOptions struct {
 	ListenAddress   string `short:"l" long:"listen-address"            env:"LISTEN_ADDRESS"            default:"127.0.0.1" description:"proxy listening address"`
 	Port            string `short:"p" long:"port"                      env:"PORT"                      default:"5432"      description:"proxy listening port"`
-	DisableListener bool   `          long:"disable-writable-listener" env:"DISABLE_WRITABLE_LISTENER"                    description:"disable the writable proxy listener"`
+	DisableListener bool   `long:"disable-writable-listener" env:"DISABLE_WRITABLE_LISTENER" description:"disable the writable proxy listener"`
 }
 
 type proxyMode string

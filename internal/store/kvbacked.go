@@ -190,8 +190,7 @@ type KVBackedStore struct {
 // NewKVBackedStore creates a Store backed by a KVStore.
 func NewKVBackedStore(kvStore KVStore, path string) *KVBackedStore {
 	backend := "kv"
-	switch kvStore.(type) {
-	case *etcdV3Store:
+	if _, ok := kvStore.(*etcdV3Store); ok {
 		backend = "etcdv3"
 	}
 	return &KVBackedStore{

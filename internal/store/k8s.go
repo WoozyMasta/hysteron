@@ -472,30 +472,10 @@ func (s *KubeStore) GetKeepersInfo(ctx context.Context) (cluster.KeepersInfo, er
 		observeDCSOperation(start, s.clusterName, "kubernetes", "get_keepers_info", opErr)
 	}()
 
-	keepers := cluster.KeepersInfo{}
-
-	podsClient := s.client.CoreV1().Pods(s.namespace)
-
-	listOpts := metav1.ListOptions{
-		LabelSelector: s.labelSelector(KeeperLabelValue).String(),
-	}
-	result, err := podsClient.List(ctx, listOpts)
+	keepers, err := s.listKeepersInfoByComponent(ctx, KeeperLabelValue)
+	opErr = err
 	if err != nil {
-		opErr = err
-		return nil, fmt.Errorf("failed to get latest version of pod: %v", err)
-	}
-
-	pods := result.Items
-	for _, pod := range pods {
-		var ki cluster.KeeperInfo
-		if kij, ok := pod.Annotations[k8sutil.KubeStatusAnnnotation]; ok {
-			err = json.Unmarshal([]byte(kij), &ki)
-			if err != nil {
-				opErr = err
-				return nil, err
-			}
-			keepers[ki.UID] = &ki
-		}
+		return nil, err
 	}
 	return keepers, nil
 }
@@ -578,32 +558,72 @@ func (s *KubeStore) GetProxiesInfo(ctx context.Context) (cluster.ProxiesInfo, er
 		observeDCSOperation(start, s.clusterName, "kubernetes", "get_proxies_info", opErr)
 	}()
 
-	psi := cluster.ProxiesInfo{}
+	psi, err := s.listProxiesInfoByComponent(ctx, ProxyLabelValue)
+	opErr = err
+	if err != nil {
+		return nil, err
+	}
+	return psi, nil
+}
 
+func (s *KubeStore) listKeepersInfoByComponent(
+	ctx context.Context,
+	component ComponentLabelValue,
+) (cluster.KeepersInfo, error) {
+	annotations, err := s.listStatusAnnotationsByComponent(ctx, component)
+	if err != nil {
+		return nil, err
+	}
+	keepers := cluster.KeepersInfo{}
+	for _, raw := range annotations {
+		var ki cluster.KeeperInfo
+		if err := json.Unmarshal([]byte(raw), &ki); err != nil {
+			return nil, err
+		}
+		keepers[ki.UID] = &ki
+	}
+	return keepers, nil
+}
+
+func (s *KubeStore) listProxiesInfoByComponent(
+	ctx context.Context,
+	component ComponentLabelValue,
+) (cluster.ProxiesInfo, error) {
+	annotations, err := s.listStatusAnnotationsByComponent(ctx, component)
+	if err != nil {
+		return nil, err
+	}
+	proxies := cluster.ProxiesInfo{}
+	for _, raw := range annotations {
+		var pi cluster.ProxyInfo
+		if err := json.Unmarshal([]byte(raw), &pi); err != nil {
+			return nil, err
+		}
+		proxies[pi.UID] = &pi
+	}
+	return proxies, nil
+}
+
+func (s *KubeStore) listStatusAnnotationsByComponent(
+	ctx context.Context,
+	component ComponentLabelValue,
+) ([]string, error) {
 	podsClient := s.client.CoreV1().Pods(s.namespace)
-
 	listOpts := metav1.ListOptions{
-		LabelSelector: s.labelSelector(ProxyLabelValue).String(),
+		LabelSelector: s.labelSelector(component).String(),
 	}
 	result, err := podsClient.List(ctx, listOpts)
 	if err != nil {
-		opErr = err
 		return nil, fmt.Errorf("failed to get latest version of pod: %v", err)
 	}
 
-	pods := result.Items
-	for _, pod := range pods {
-		var pi cluster.ProxyInfo
-		if pij, ok := pod.Annotations[k8sutil.KubeStatusAnnnotation]; ok {
-			err = json.Unmarshal([]byte(pij), &pi)
-			if err != nil {
-				opErr = err
-				return nil, err
-			}
-			psi[pi.UID] = &pi
+	annotations := make([]string, 0, len(result.Items))
+	for _, pod := range result.Items {
+		if status, ok := pod.Annotations[k8sutil.KubeStatusAnnnotation]; ok {
+			annotations = append(annotations, status)
 		}
 	}
-	return psi, nil
+	return annotations, nil
 }
 
 // KubeElection implements sentinel leader election via Kubernetes Lease locks.

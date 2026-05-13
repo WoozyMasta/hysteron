@@ -565,7 +565,7 @@ func PGLsnToInt(lsn string) (uint64, error) {
 
 // IntToPGLSN converts integer LSN value into PostgreSQL LSN string.
 func IntToPGLSN(lsn uint64) string {
-	return fmt.Sprintf("%X/%X", uint32(lsn>>32), uint32(lsn))
+	return fmt.Sprintf("%X/%X", lsn>>32, lsn&0xFFFFFFFF)
 }
 
 // GetSystemData returns system identifier and WAL position from IDENTIFY_SYSTEM.

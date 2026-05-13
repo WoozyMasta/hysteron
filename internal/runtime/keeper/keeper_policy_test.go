@@ -690,10 +690,7 @@ func TestPruneLogicalSlotAdvanceRetryAfter(t *testing.T) {
 		"slot3@postgres": now,
 	}
 
-	removed := pruneLogicalSlotAdvanceRetryAfter(retryAfter, now)
-	if removed != 2 {
-		t.Fatalf("unexpected removed count: got=%d want=2", removed)
-	}
+	pruneLogicalSlotAdvanceRetryAfter(retryAfter, now)
 	if len(retryAfter) != 1 {
 		t.Fatalf("unexpected map size after prune: got=%d want=1", len(retryAfter))
 	}

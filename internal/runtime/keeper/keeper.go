@@ -115,13 +115,13 @@ type config struct {
 	PG postgresOptions `group:"PostgreSQL" namespace:"pg" env-namespace:"PG"`
 
 	UID     string `short:"i" long:"uid"      env:"UID"      long-alias:"id" description:"keeper uid (must be unique in the cluster and can contain only lower-case letters, numbers and the underscore character). If not provided a random uid will be generated."`
-	DataDir string `short:"d" long:"data-dir" env:"DATA_DIR"                 description:"data directory"`
+	DataDir string `short:"d" long:"data-dir" env:"DATA_DIR" description:"data directory"`
 	runtimecommon.CommonConfig
 
-	CanBeMaster             bool `long:"can-be-master"                      env:"CAN_BE_MASTER"                      description:"allow keeper to be elected as master (default true)"`
-	CanBeSynchronousReplica bool `long:"can-be-synchronous-replica"         env:"CAN_BE_SYNCHRONOUS_REPLICA"         description:"allow keeper to be chosen as synchronous replica (default true)"`
-	DisableDataDirLocking   bool `long:"disable-data-dir-locking"           env:"DISABLE_DATA_DIR_LOCKING"           description:"disable locking on data dir. Warning! It'll cause data corruptions if two keepers are concurrently running with the same data dir."`
-	AllowNewerPG            bool `long:"allow-newer-postgres-version"       env:"ALLOW_NEWER_POSTGRES_VERSION"       description:"allow running with PostgreSQL major versions newer than the highest default-supported major. Older-than-supported versions are always rejected."`
+	CanBeMaster             bool `long:"can-be-master"                env:"CAN_BE_MASTER"                description:"allow keeper to be elected as master (default true)"`
+	CanBeSynchronousReplica bool `long:"can-be-synchronous-replica"   env:"CAN_BE_SYNCHRONOUS_REPLICA"   description:"allow keeper to be chosen as synchronous replica (default true)"`
+	DisableDataDirLocking   bool `long:"disable-data-dir-locking"     env:"DISABLE_DATA_DIR_LOCKING"     description:"disable locking on data dir. Warning! It'll cause data corruptions if two keepers are concurrently running with the same data dir."`
+	AllowNewerPG            bool `long:"allow-newer-postgres-version" env:"ALLOW_NEWER_POSTGRES_VERSION" description:"allow running with PostgreSQL major versions newer than the highest default-supported major. Older-than-supported versions are always rejected."`
 }
 
 // postgresOptions groups PostgreSQL connection settings managed by the
@@ -141,17 +141,17 @@ type postgresOptions struct {
 // postgresReplOptions configures the postgres replication user.
 type postgresReplOptions struct {
 	AuthMethod   string `long:"auth-method"  env:"AUTH_METHOD"  choices:"md5;trust" default:"md5" description:"postgres replication user auth method"`
-	Username     string `long:"username"     env:"USERNAME"                                       description:"postgres replication user name. Required. It'll be created on db initialization. Must be the same for all keepers."`
-	Password     string `long:"password"     env:"PASSWORD"                                       description:"postgres replication user password. Mutually exclusive with --pg-repl-passwordfile. Must be the same for all keepers."  xor:"pg-repl-secret"`
-	PasswordFile string `long:"passwordfile" env:"PASSWORDFILE"                                   description:"postgres replication user password file. Mutually exclusive with --pg-repl-password. Must be the same for all keepers." xor:"pg-repl-secret"`
+	Username     string `long:"username"     env:"USERNAME"     description:"postgres replication user name. Required. It'll be created on db initialization. Must be the same for all keepers."`
+	Password     string `long:"password"     env:"PASSWORD"     description:"postgres replication user password. Mutually exclusive with --pg-repl-passwordfile. Must be the same for all keepers."  xor:"pg-repl-secret"`
+	PasswordFile string `long:"passwordfile" env:"PASSWORDFILE" description:"postgres replication user password file. Mutually exclusive with --pg-repl-password. Must be the same for all keepers." xor:"pg-repl-secret"`
 }
 
 // postgresSUOptions configures the postgres superuser.
 type postgresSUOptions struct {
 	AuthMethod   string `long:"auth-method"  env:"AUTH_METHOD"  choices:"md5;trust" default:"md5" description:"postgres superuser auth method"`
-	Username     string `long:"username"     env:"USERNAME"                                       description:"postgres superuser user name. Defaults to the effective user running keeper. Must be the same for all keepers."`
-	Password     string `long:"password"     env:"PASSWORD"                                       description:"postgres superuser password. Mutually exclusive with --pg-su-passwordfile. Must be the same for all keepers."          xor:"pg-su-secret"`
-	PasswordFile string `long:"passwordfile" env:"PASSWORDFILE"                                   description:"postgres superuser password file. Mutually exclusive with --pg-su-password. Must be the same for all keepers."         xor:"pg-su-secret"`
+	Username     string `long:"username"     env:"USERNAME"     description:"postgres superuser user name. Defaults to the effective user running keeper. Must be the same for all keepers."`
+	Password     string `long:"password"     env:"PASSWORD"     description:"postgres superuser password. Mutually exclusive with --pg-su-passwordfile. Must be the same for all keepers."   xor:"pg-su-secret"`
+	PasswordFile string `long:"passwordfile" env:"PASSWORDFILE" description:"postgres superuser password file. Mutually exclusive with --pg-su-password. Must be the same for all keepers."  xor:"pg-su-secret"`
 }
 
 // Defaults that cannot be expressed as struct tags (booleans default to
@@ -2013,18 +2013,15 @@ func clearLogicalSlotAdvanceFailure(
 func pruneLogicalSlotAdvanceRetryAfter(
 	retryAfter map[string]time.Time,
 	now time.Time,
-) int {
+) {
 	if retryAfter == nil {
-		return 0
+		return
 	}
-	removed := 0
 	for key, next := range retryAfter {
 		if !now.Before(next) {
 			delete(retryAfter, key)
-			removed++
 		}
 	}
-	return removed
 }
 
 func resetLogicalSlotAdvanceRetryState(
@@ -2667,12 +2664,13 @@ func (p *PostgresKeeper) refreshReplicationSlots(
 	createFailoverSlot := false
 	if db.Spec.EnableLogicalSlotFailover {
 		pgMajor, _, versionErr := p.pgm.BinaryVersion()
-		if versionErr != nil {
+		switch {
+		case versionErr != nil:
 			p.baseLog().
 				Warn().
 				Err(versionErr).
 				Msg("failed to detect PostgreSQL binary version; creating logical slots without native failover flag")
-		} else if shouldUseNativeLogicalSlotFailover(db.Spec.EnableLogicalSlotFailover, pgMajor) {
+		case shouldUseNativeLogicalSlotFailover(db.Spec.EnableLogicalSlotFailover, pgMajor):
 			createFailoverSlot = true
 			if !p.logicalSlotNativeModeNoticeEmitted {
 				p.baseLog().
@@ -2682,7 +2680,7 @@ func (p *PostgresKeeper) refreshReplicationSlots(
 				p.logicalSlotNativeModeNoticeEmitted = true
 			}
 			p.logicalSlotLegacyModeNoticeEmitted = false
-		} else {
+		default:
 			if !p.logicalSlotLegacyModeNoticeEmitted {
 				p.baseLog().
 					Warn().

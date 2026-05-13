@@ -135,6 +135,7 @@ td {
   text-align: left;
   border-bottom: 1px solid var(--border);
   padding: 6px 4px;
+  vertical-align: middle;
 }
 
 thead th {
@@ -154,4 +155,50 @@ thead th {
 
 .footer a {
   color: inherit;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  background: color-mix(in srgb, var(--card) 70%, var(--border));
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 1px 6px;
+  display: inline-block;
+}
+
+.bool-badge {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.bool-badge.is-true {
+  color: #14532d;
+  background: #dcfce7;
+  border-color: #86efac;
+}
+
+.bool-badge.is-false {
+  color: #7f1d1d;
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+
+[data-theme="dark"] .bool-badge.is-true {
+  color: #86efac;
+  background: #14532d;
+  border-color: #166534;
+}
+
+[data-theme="dark"] .bool-badge.is-false {
+  color: #fca5a5;
+  background: #7f1d1d;
+  border-color: #991b1b;
+}
+
+.metric-color {
+  font-weight: 700;
 }

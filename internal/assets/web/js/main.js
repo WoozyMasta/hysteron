@@ -17,6 +17,76 @@
     return value ? "true" : "false";
   }
 
+  function boolBadge(value) {
+    var cls = value ? "is-true" : "is-false";
+    return '<span class="bool-badge ' + cls + '">' + boolText(value) + "</span>";
+  }
+
+  function mono(value) {
+    return '<span class="mono">' + esc(value) + "</span>";
+  }
+
+  function clamp(value, min, max) {
+    if (value < min) return min;
+    if (value > max) return max;
+    return value;
+  }
+
+  function mixColor(a, b, t) {
+    var r = Math.round(a[0] + (b[0] - a[0]) * t);
+    var g = Math.round(a[1] + (b[1] - a[1]) * t);
+    var bl = Math.round(a[2] + (b[2] - a[2]) * t);
+    return "rgb(" + r + "," + g + "," + bl + ")";
+  }
+
+  // direction:
+  // - "higher-worse": min=green, mid=yellow, max=red
+  // - "lower-worse": min=red, mid=yellow, max=green
+  function heatColor(value, opts) {
+    if (!Number.isFinite(value)) return "";
+    var min = Number(opts.min);
+    var mid = Number(opts.mid);
+    var max = Number(opts.max);
+    if (!(min < mid && mid < max)) return "";
+    var direction = opts.direction || "higher-worse";
+    var good = [34, 197, 94];
+    var warn = [245, 158, 11];
+    var bad = [239, 68, 68];
+    if (direction === "lower-worse") {
+      var tmp = good;
+      good = bad;
+      bad = tmp;
+    }
+    var v = clamp(value, min, max);
+    if (v <= mid) {
+      return mixColor(good, warn, (v - min) / (mid - min));
+    }
+    return mixColor(warn, bad, (v - mid) / (max - mid));
+  }
+
+  function coloredNumber(value, opts, suffix) {
+    if (!Number.isFinite(value)) return esc(value);
+    var color = heatColor(value, opts);
+    var text = String(value) + (suffix || "");
+    if (!color) return text;
+    return '<span class="metric-color" style="color:' + color + '">' + esc(text) + "</span>";
+  }
+
+  function ratioBadge(ok, total, direction) {
+    if (!Number.isFinite(ok) || !Number.isFinite(total) || total <= 0) {
+      return esc(ok) + "/" + esc(total);
+    }
+    var percent = (ok / total) * 100;
+    var color = heatColor(percent, {
+      min: 0,
+      mid: 70,
+      max: 100,
+      direction: direction || "lower-worse",
+    });
+    var text = ok + "/" + total;
+    return '<span class="metric-color mono" style="color:' + color + '">' + esc(text) + "</span>";
+  }
+
   function statusPath() {
     return (basePath || "") + "/api/v1/status";
   }
@@ -28,17 +98,18 @@
       body.innerHTML = '<tr><td colspan="4">no sentinel data</td></tr>';
       return;
     }
+
     function list(value) {
       if (!value || value.length === 0) return "-";
       return value.map(esc).join(", ");
     }
     body.innerHTML = rows.map(function (row) {
       return "<tr>" +
-        "<td>" + esc(row.uid) + "</td>" +
-        "<td>" + boolText(row.is_local) + "</td>" +
+        "<td>" + mono(row.uid) + "</td>" +
+        "<td>" + boolBadge(row.is_local) + "</td>" +
         "<td>" + list(row.leader_clusters) + "</td>" +
         "<td>" + list(row.clusters) + "</td>" +
-      "</tr>";
+        "</tr>";
     }).join("");
   }
 
@@ -48,13 +119,13 @@
     }
     return rows.map(function (row) {
       return "<tr>" +
-        "<td>" + esc(row.uid) + "</td>" +
-        "<td>" + boolText(row.healthy) + "</td>" +
-        "<td>" + boolText(row.pg_healthy) + "</td>" +
-        "<td>" + boolText(row.can_be_master) + "</td>" +
-        "<td>" + boolText(row.can_be_synchronous_replica) + "</td>" +
-        "<td>" + esc(row.listen_address) + "</td>" +
-      "</tr>";
+        "<td>" + mono(row.uid) + "</td>" +
+        "<td>" + boolBadge(row.healthy) + "</td>" +
+        "<td>" + boolBadge(row.pg_healthy) + "</td>" +
+        "<td>" + boolBadge(row.can_be_master) + "</td>" +
+        "<td>" + boolBadge(row.can_be_synchronous_replica) + "</td>" +
+        "<td>" + mono(row.listen_address) + "</td>" +
+        "</tr>";
     }).join("");
   }
 
@@ -63,15 +134,24 @@
       return '<tr><td colspan="7">no database rows</td></tr>';
     }
     return rows.map(function (row) {
+      var lagValue = Number(row.lag_bytes);
+      var lag = row.lag_bytes === "-" || !Number.isFinite(lagValue) ?
+        esc(row.lag_bytes) :
+        coloredNumber(lagValue, {
+          min: 0,
+          mid: 16 * 1024 * 1024,
+          max: 128 * 1024 * 1024,
+          direction: "higher-worse",
+        });
       return "<tr>" +
-        "<td>" + esc(row.uid) + "</td>" +
-        "<td>" + esc(row.keeper_uid) + "</td>" +
+        "<td>" + mono(row.uid) + "</td>" +
+        "<td>" + mono(row.keeper_uid) + "</td>" +
         "<td>" + esc(row.role) + "</td>" +
-        "<td>" + boolText(row.healthy) + "</td>" +
-        "<td>" + esc(row.xlog_pos) + "</td>" +
-        "<td>" + esc(row.lag_bytes) + "</td>" +
-        "<td>" + esc(row.address) + "</td>" +
-      "</tr>";
+        "<td>" + boolBadge(row.healthy) + "</td>" +
+        "<td>" + mono(row.xlog_pos) + "</td>" +
+        "<td>" + lag + "</td>" +
+        "<td>" + mono(row.address) + "</td>" +
+        "</tr>";
     }).join("");
   }
 
@@ -81,12 +161,12 @@
     }
     return rows.map(function (row) {
       return "<tr>" +
-        "<td>" + esc(row.uid) + "</td>" +
-        "<td>" + boolText(row.seen) + "</td>" +
-        "<td>" + boolText(row.enabled) + "</td>" +
-        "<td>" + esc(row.generation) + "</td>" +
-        "<td>" + esc(row.proxy_timeout) + "</td>" +
-      "</tr>";
+        "<td>" + mono(row.uid) + "</td>" +
+        "<td>" + boolBadge(row.seen) + "</td>" +
+        "<td>" + boolBadge(row.enabled) + "</td>" +
+        "<td>" + mono(row.generation) + "</td>" +
+        "<td>" + mono(row.proxy_timeout) + "</td>" +
+        "</tr>";
     }).join("");
   }
 
@@ -97,14 +177,19 @@
       return "<section>" +
         "<h2>Cluster: " + esc(cluster.name) + "</h2>" +
         '<div class="meta">' +
-          "<div>Phase: " + esc(cluster.phase) + "</div>" +
-          "<div>Generation: " + esc(cluster.generation) + "</div>" +
-          "<div>Master DB: " + esc(cluster.master_db_uid) + "</div>" +
-          "<div>Master Keeper: " + esc(cluster.master_keeper_uid) + "</div>" +
-          "<div>Keepers: " + esc(cluster.keepers_healthy) + "/" + esc(cluster.keepers_total) + "</div>" +
-          "<div>DBs: " + esc(cluster.dbs_healthy) + "/" + esc(cluster.dbs_total) + "</div>" +
-          "<div>Proxies seen: " + esc(cluster.proxies_seen) + "</div>" +
-          "<div>Error: " + esc(cluster.error || "") + "</div>" +
+        "<div>Phase: " + esc(cluster.phase) + "</div>" +
+        "<div>Generation: " + mono(cluster.generation) + "</div>" +
+        "<div>Master DB: " + mono(cluster.master_db_uid) + "</div>" +
+        "<div>Master Keeper: " + mono(cluster.master_keeper_uid) + "</div>" +
+        "<div>Keepers: " + ratioBadge(cluster.keepers_healthy, cluster.keepers_total, "lower-worse") + "</div>" +
+        "<div>DBs: " + ratioBadge(cluster.dbs_healthy, cluster.dbs_total, "lower-worse") + "</div>" +
+        "<div>Proxies seen: " + coloredNumber(Number(cluster.proxies_seen), {
+          min: 0,
+          mid: 1,
+          max: 3,
+          direction: "lower-worse"
+        }) + "</div>" +
+        "<div>Error: " + esc(cluster.error || "") + "</div>" +
         "</div>" +
         "<h3>Keepers</h3>" +
         "<table><thead><tr>" +
@@ -118,7 +203,7 @@
         "<table><thead><tr>" +
         "<th>Proxy UID</th><th>Seen</th><th>Enabled</th><th>Generation</th><th>ProxyTimeout</th>" +
         "</tr></thead><tbody>" + renderProxies(cluster.proxy_rows) + "</tbody></table>" +
-      "</section>";
+        "</section>";
     }).join("");
   }
 
@@ -134,7 +219,9 @@
   }
 
   function refreshData() {
-    fetch(statusPath(), { cache: "no-store" })
+    fetch(statusPath(), {
+        cache: "no-store"
+      })
       .then(function (resp) {
         if (!resp.ok) throw new Error("status " + resp.status);
         return resp.json();
@@ -168,9 +255,9 @@
 
   function preferredTheme() {
     return window.matchMedia &&
-      window.matchMedia("(prefers-color-scheme: dark)").matches
-      ? "dark"
-      : "light";
+      window.matchMedia("(prefers-color-scheme: dark)").matches ?
+      "dark" :
+      "light";
   }
 
   var storedRefresh = localStorage.getItem("hysteron.refresh");

@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/woozymasta/hysteron/internal/cluster"
 	stconfig "github.com/woozymasta/hysteron/internal/config"
@@ -116,6 +117,8 @@ func GetClusterStatus(ctx context.Context, cfg *stconfig.CommonConfig) (Status, 
 	for _, pi := range proxies {
 		status.Proxies = append(status.Proxies, ProxyStatus{
 			UID:        pi.UID,
+			Mode:       proxyStatusMode(pi.Listeners),
+			Listeners:  proxyStatusListeners(pi.Listeners),
 			Generation: pi.Generation,
 		})
 	}
@@ -129,6 +132,58 @@ func GetClusterStatus(ctx context.Context, cfg *stconfig.CommonConfig) (Status, 
 	status.KeeperTree = keeperTreeLines(status.Cluster.MasterDBUID, cd)
 
 	return status, nil
+}
+
+func proxyStatusMode(listeners []cluster.ProxyListenerInfo) string {
+	hasWritable := false
+	hasReadOnly := false
+	for _, l := range listeners {
+		if !l.Active {
+			continue
+		}
+		switch l.Mode {
+		case "writable":
+			hasWritable = true
+		case "read-only":
+			hasReadOnly = true
+		}
+	}
+	switch {
+	case hasWritable && hasReadOnly:
+		return "write+read"
+	case hasWritable:
+		return "write"
+	case hasReadOnly:
+		return "read"
+	default:
+		return "-"
+	}
+}
+
+func proxyStatusListeners(listeners []cluster.ProxyListenerInfo) string {
+	if len(listeners) == 0 {
+		return "-"
+	}
+	out := make([]string, 0, len(listeners))
+	for _, l := range listeners {
+		if strings.TrimSpace(l.Address) == "" || strings.TrimSpace(l.Port) == "" {
+			continue
+		}
+		mode := l.Mode
+		if mode == "" {
+			mode = "unknown"
+		}
+		status := "down"
+		if l.Active {
+			status = "up"
+		}
+		out = append(out, mode+"="+l.Address+":"+l.Port+"("+status+")")
+	}
+	if len(out) == 0 {
+		return "-"
+	}
+	sort.Strings(out)
+	return strings.Join(out, ", ")
 }
 
 // ReadClusterData returns validated cluster data from the configured store.

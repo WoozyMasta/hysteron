@@ -118,6 +118,8 @@
       <thead>
         <tr>
           <th title="Proxy unique identifier">Proxy UID</th>
+          <th title="Active listener mode(s): write/read/write+read">Mode</th>
+          <th title="Proxy listeners and runtime status">Listeners</th>
           <th title="Proxy heartbeat currently visible in DCS">Seen</th>
           <th title="Proxy is enabled by current cluster proxy spec">Enabled</th>
           <th title="Last seen proxy generation">Generation</th>
@@ -128,6 +130,8 @@
         {{ range .ProxyRows }}
         <tr>
           <td>{{ .UID }}</td>
+          <td>{{ .Mode }}</td>
+          <td>{{ .Listeners }}</td>
           <td>{{ .Seen }}</td>
           <td>{{ .Enabled }}</td>
           <td>{{ .Generation }}</td>
@@ -135,7 +139,7 @@
         </tr>
         {{ else }}
         <tr>
-          <td colspan="5">no proxy rows</td>
+          <td colspan="7">no proxy rows</td>
         </tr>
         {{ end }}
       </tbody>

@@ -3,6 +3,7 @@
   var themeButton = document.getElementById("theme");
   var timer = null;
   var basePath = document.body.getAttribute("data-base-path") || "";
+  var openDetailKeys = new Set();
 
   function esc(value) {
     return String(value == null ? "" : value)
@@ -32,14 +33,41 @@
 
   function detailToggle(kind, id, obj) {
     var payload = encodeURIComponent(JSON.stringify(obj, null, 2));
+    var key = kind + ":" + String(id);
     return '<button type="button" class="row-toggle" data-kind="' + escAttr(kind) +
-      '" data-id="' + escAttr(id) + '" data-payload="' + payload +
+      '" data-id="' + escAttr(id) + '" data-key="' + escAttr(key) + '" data-payload="' + payload +
       '" aria-expanded="false" title="Show details">+</button>';
   }
 
   function detailRow(colspan) {
     return '<tr class="detail-row" hidden><td colspan="' + colspan +
-      '"><pre class="detail-json"></pre></td></tr>';
+      '"><div class="detail-wrap"></div></td></tr>';
+  }
+
+  function renderValue(value) {
+    if (value == null) return '<span class="detail-empty">-</span>';
+    if (Array.isArray(value)) {
+      if (value.length === 0) return '<span class="detail-empty">[]</span>';
+      return esc(value.map(function (v) {
+        if (typeof v === "object" && v !== null) return JSON.stringify(v);
+        return String(v);
+      }).join(", "));
+    }
+    if (typeof value === "object") {
+      return "<code>" + esc(JSON.stringify(value)) + "</code>";
+    }
+    if (typeof value === "boolean") return boolBadge(value, "is-neutral");
+    return esc(String(value));
+  }
+
+  function renderDetailTable(obj) {
+    if (!obj || typeof obj !== "object") return '<span class="detail-empty">no details</span>';
+    var keys = Object.keys(obj).sort();
+    if (keys.length === 0) return '<span class="detail-empty">empty object</span>';
+    var rows = keys.map(function (k) {
+      return "<tr><th>" + esc(k) + "</th><td>" + renderValue(obj[k]) + "</td></tr>";
+    }).join("");
+    return '<table class="detail-table"><tbody>' + rows + "</tbody></table>";
   }
 
   function clamp(value, min, max) {
@@ -176,16 +204,18 @@
 
   function renderProxies(rows) {
     if (!rows || rows.length === 0) {
-      return '<tr><td colspan="5">no proxy rows</td></tr>';
+      return '<tr><td colspan="7">no proxy rows</td></tr>';
     }
     return rows.map(function (row) {
       return "<tr>" +
         "<td>" + detailToggle("proxy", row.uid, row) + " " + mono(row.uid) + "</td>" +
+        "<td>" + mono(row.mode || "-") + "</td>" +
+        "<td>" + mono(row.listeners || "-") + "</td>" +
         "<td>" + boolBadge(row.seen) + "</td>" +
         "<td>" + boolBadge(row.enabled) + "</td>" +
         "<td>" + mono(row.generation) + "</td>" +
         "<td>" + mono(row.proxy_timeout) + "</td>" +
-        "</tr>" + detailRow(5);
+        "</tr>" + detailRow(7);
     }).join("");
   }
 
@@ -232,6 +262,8 @@
         "<h3>Proxies</h3>" +
         "<table><thead><tr>" +
         '<th title="Proxy unique identifier">Proxy UID</th>' +
+        '<th title="Active listener mode(s): write/read/write+read">Mode</th>' +
+        '<th title="Proxy listeners and runtime status">Listeners</th>' +
         '<th title="Proxy heartbeat currently visible in DCS">Seen</th>' +
         '<th title="Proxy is enabled by current cluster proxy spec">Enabled</th>' +
         '<th title="Last seen proxy generation">Generation</th>' +
@@ -250,6 +282,7 @@
     if (sentinelsCount) sentinelsCount.textContent = "Sentinels seen: " + ((snapshot.sentinels || []).length);
     renderSentinels(snapshot.sentinels || []);
     renderClusters(snapshot.clusters || []);
+    restoreExpandedDetails();
   }
 
   function refreshData() {
@@ -264,6 +297,47 @@
       .catch(function () {});
   }
 
+  function restoreExpandedDetails() {
+    if (openDetailKeys.size === 0) return;
+    var toggles = document.querySelectorAll(".row-toggle[data-key]");
+    for (var i = 0; i < toggles.length; i++) {
+      var btn = toggles[i];
+      var key = btn.getAttribute("data-key");
+      if (!key || !openDetailKeys.has(key)) continue;
+      openDetail(btn);
+    }
+  }
+
+  function openDetail(button) {
+    var row = button.closest("tr");
+    if (!row || !row.nextElementSibling || !row.nextElementSibling.classList.contains("detail-row")) return;
+    var details = row.nextElementSibling;
+    var wrap = details.querySelector(".detail-wrap");
+    if (!wrap) return;
+    var payload = button.getAttribute("data-payload") || "";
+    var obj = {};
+    try {
+      obj = JSON.parse(decodeURIComponent(payload));
+    } catch (_) {
+      obj = {};
+    }
+    wrap.innerHTML = renderDetailTable(obj);
+    details.removeAttribute("hidden");
+    button.setAttribute("aria-expanded", "true");
+    button.textContent = "−";
+    button.title = "Hide details";
+  }
+
+  function closeDetail(button) {
+    var row = button.closest("tr");
+    if (!row || !row.nextElementSibling || !row.nextElementSibling.classList.contains("detail-row")) return;
+    var details = row.nextElementSibling;
+    details.setAttribute("hidden", "");
+    button.setAttribute("aria-expanded", "false");
+    button.textContent = "+";
+    button.title = "Show details";
+  }
+
   function onRowToggleClick(event) {
     var target = event.target;
     if (!target || !target.classList || !target.classList.contains("row-toggle")) {
@@ -274,26 +348,15 @@
       return;
     }
     var details = row.nextElementSibling;
-    var pre = details.querySelector(".detail-json");
-    if (!pre) return;
+    var key = target.getAttribute("data-key");
     var opened = !details.hasAttribute("hidden");
     if (opened) {
-      details.setAttribute("hidden", "");
-      target.setAttribute("aria-expanded", "false");
-      target.textContent = "+";
-      target.title = "Show details";
+      closeDetail(target);
+      if (key) openDetailKeys.delete(key);
       return;
     }
-    var payload = target.getAttribute("data-payload") || "";
-    try {
-      pre.textContent = decodeURIComponent(payload);
-    } catch (_) {
-      pre.textContent = "{}";
-    }
-    details.removeAttribute("hidden");
-    target.setAttribute("aria-expanded", "true");
-    target.textContent = "−";
-    target.title = "Hide details";
+    openDetail(target);
+    if (key) openDetailKeys.add(key);
   }
 
   function setRefresh(value) {

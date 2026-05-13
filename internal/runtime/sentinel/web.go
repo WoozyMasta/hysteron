@@ -148,6 +148,8 @@ type webDBRow struct {
 
 type webProxyRow struct {
 	UID          string `json:"uid"`
+	Mode         string `json:"mode"`
+	Listeners    string `json:"listeners"`
 	ProxyTimeout string `json:"proxy_timeout"`
 	Generation   int64  `json:"generation"`
 	Seen         bool   `json:"seen"`
@@ -440,6 +442,8 @@ func collectWebSnapshot(
 					row.Seen = true
 					row.Generation = pi.Generation
 					row.ProxyTimeout = pi.ProxyTimeout.String()
+					row.Mode = webProxyMode(pi.Listeners)
+					row.Listeners = webProxyListeners(pi.Listeners)
 				}
 				proxyRows = append(proxyRows, row)
 			}
@@ -460,6 +464,58 @@ func collectWebSnapshot(
 		return strings.Compare(a.UID, b.UID)
 	})
 	return snapshot
+}
+
+func webProxyMode(listeners []cluster.ProxyListenerInfo) string {
+	hasWritable := false
+	hasReadOnly := false
+	for _, l := range listeners {
+		if !l.Active {
+			continue
+		}
+		switch l.Mode {
+		case "writable":
+			hasWritable = true
+		case "read-only":
+			hasReadOnly = true
+		}
+	}
+	switch {
+	case hasWritable && hasReadOnly:
+		return "write+read"
+	case hasWritable:
+		return "write"
+	case hasReadOnly:
+		return "read"
+	default:
+		return "-"
+	}
+}
+
+func webProxyListeners(listeners []cluster.ProxyListenerInfo) string {
+	if len(listeners) == 0 {
+		return "-"
+	}
+	out := make([]string, 0, len(listeners))
+	for _, l := range listeners {
+		if strings.TrimSpace(l.Address) == "" || strings.TrimSpace(l.Port) == "" {
+			continue
+		}
+		mode := l.Mode
+		if mode == "" {
+			mode = "unknown"
+		}
+		status := "down"
+		if l.Active {
+			status = "up"
+		}
+		out = append(out, mode+"="+l.Address+":"+l.Port+"("+status+")")
+	}
+	if len(out) == 0 {
+		return "-"
+	}
+	slices.Sort(out)
+	return strings.Join(out, ", ")
 }
 
 func uniqueSortedStrings(values []string) []string {

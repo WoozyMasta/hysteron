@@ -136,10 +136,11 @@ func LogSummaryProxyInfo(pi *ProxyInfo) map[string]any {
 		return map[string]any{"proxy_info": nil}
 	}
 	return map[string]any{
-		"info_uid":      pi.InfoUID,
-		"proxy_uid":     pi.UID,
-		"generation":    pi.Generation,
-		"proxy_timeout": pi.ProxyTimeout.String(),
+		"info_uid":       pi.InfoUID,
+		"proxy_uid":      pi.UID,
+		"generation":     pi.Generation,
+		"proxy_timeout":  pi.ProxyTimeout.String(),
+		"listener_count": len(pi.Listeners),
 	}
 }
 

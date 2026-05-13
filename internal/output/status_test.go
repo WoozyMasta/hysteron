@@ -53,7 +53,12 @@ func TestWriteStatusPlain(t *testing.T) {
 			MasterDBUID:     "db-1",
 		},
 		Sentinels: []app.SentinelStatus{{UID: "s1", Leader: true}},
-		Proxies:   []app.ProxyStatus{{UID: "p1", Generation: 4}},
+		Proxies: []app.ProxyStatus{{
+			UID:        "p1",
+			Mode:       "write+read",
+			Listeners:  "writable=127.0.0.1:5432(up), read-only=127.0.0.1:6432(up)",
+			Generation: 4,
+		}},
 		Keepers: []app.KeeperStatus{{
 			UID:                 "keeper-1",
 			ListenAddress:       "10.0.0.1:5432",
@@ -76,6 +81,9 @@ func TestWriteStatusPlain(t *testing.T) {
 	}
 	if !strings.Contains(out, "keeper-1 (master)") {
 		t.Fatalf("expected tree line, got %q", out)
+	}
+	if !strings.Contains(out, "write+read") {
+		t.Fatalf("expected proxy mode in output, got %q", out)
 	}
 }
 

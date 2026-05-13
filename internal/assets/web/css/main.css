@@ -241,13 +241,33 @@ thead th {
   background: color-mix(in srgb, var(--card) 88%, var(--border));
 }
 
-.detail-json {
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+.detail-wrap {
+  padding: 2px 0;
+}
+
+.detail-table {
+  width: 100%;
+  border-collapse: collapse;
   font-size: 12px;
-  color: var(--fg);
+}
+
+.detail-table th,
+.detail-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 4px 6px;
+  vertical-align: top;
+}
+
+.detail-table th {
+  width: 220px;
+  color: var(--muted);
+  font-weight: 600;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.detail-empty {
+  color: var(--muted);
+  font-style: italic;
 }
 
 .alert {

@@ -288,16 +288,43 @@ func (l *proxyListener) setDestinations(addrs []*net.TCPAddr) {
 	}
 }
 
+func (l *proxyListener) isActive() bool {
+	if l == nil {
+		return false
+	}
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	return l.tcpProxy != nil
+}
+
 // SetProxyInfo updates this proxy's liveness and generation information.
 func (c *ClusterChecker) SetProxyInfo(
 	generation int64,
 	proxyTimeout time.Duration,
 ) error {
+	listeners := make([]cluster.ProxyListenerInfo, 0, 2)
+	if c.writable != nil {
+		listeners = append(listeners, cluster.ProxyListenerInfo{
+			Mode:    string(proxyModeWritable),
+			Address: c.writable.listenAddress,
+			Port:    c.writable.port,
+			Active:  c.writable.isActive(),
+		})
+	}
+	if c.readOnly != nil {
+		listeners = append(listeners, cluster.ProxyListenerInfo{
+			Mode:    string(proxyModeReadOnly),
+			Address: c.readOnly.listenAddress,
+			Port:    c.readOnly.port,
+			Active:  c.readOnly.isActive(),
+		})
+	}
 	proxyInfo := &cluster.ProxyInfo{
 		InfoUID:      id.UID(),
 		UID:          c.uid,
 		Generation:   generation,
 		ProxyTimeout: proxyTimeout,
+		Listeners:    listeners,
 	}
 	log.Debug().
 		Fields(cluster.LogSummaryProxyInfo(proxyInfo)).

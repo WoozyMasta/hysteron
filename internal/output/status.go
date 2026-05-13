@@ -83,9 +83,14 @@ func writeStatusTable(w io.Writer, status app.Status) error {
 	} else {
 		t := table.NewWriter()
 		t.SetOutputMirror(w)
-		t.AppendHeader(table.Row{"UID", "Generation"})
+		t.AppendHeader(table.Row{"UID", "Mode", "Listeners", "Generation"})
 		for _, proxy := range status.Proxies {
-			t.AppendRow(table.Row{proxy.UID, proxy.Generation})
+			t.AppendRow(table.Row{
+				proxy.UID,
+				valueOrDash(proxy.Mode),
+				valueOrDash(proxy.Listeners),
+				proxy.Generation,
+			})
 		}
 		t.Render()
 	}

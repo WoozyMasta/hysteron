@@ -181,6 +181,16 @@ type ProxyInfo struct {
 	// proxy should be considered active.
 	// ProxyTimeout is timeout used by sentinel to consider the proxy active.
 	ProxyTimeout time.Duration
+	// Listeners describes proxy listeners and their runtime state.
+	Listeners []ProxyListenerInfo `json:"listeners,omitempty"`
+}
+
+// ProxyListenerInfo describes one proxy listener endpoint and mode.
+type ProxyListenerInfo struct {
+	Mode    string `json:"mode,omitempty"`
+	Address string `json:"address,omitempty"`
+	Port    string `json:"port,omitempty"`
+	Active  bool   `json:"active,omitempty"`
 }
 
 // ProxiesInfo maps proxy UID to published proxy info.
@@ -198,6 +208,9 @@ func (p ProxiesInfo) DeepCopy() ProxiesInfo {
 			continue
 		}
 		infoCopy := *info
+		if info.Listeners != nil {
+			infoCopy.Listeners = slices.Clone(info.Listeners)
+		}
 		np[uid] = &infoCopy
 	}
 	return np

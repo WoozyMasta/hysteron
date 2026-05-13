@@ -39,6 +39,8 @@ type SentinelStatus struct {
 // ProxyStatus is the status output for one proxy.
 type ProxyStatus struct {
 	UID        string `json:"uid"`
+	Mode       string `json:"mode"`
+	Listeners  string `json:"listeners"`
 	Generation int64  `json:"generation"`
 }
 

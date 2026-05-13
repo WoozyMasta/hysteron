@@ -26,10 +26,11 @@ Run from repository root (`stolon`):
 
 ```bash
 # Build hysteron runtime image.
-docker build -f Dockerfile -t hysteron .
+docker build -f Dockerfile -t hysteron:latest .
 # Build keeper image (PostgreSQL + hysteron keeper binary).
 docker build -f examples/compose/Dockerfile \
   --build-arg HYSTERON_IMAGE=hysteron \
+  --build-arg HYSTERON_TAG=latest
   --build-arg POSTGRES_VERSION=17 \
   -t hysteron-pg:17 .
 ```
@@ -181,7 +182,9 @@ docker run --rm --network compose_default \
 ## Stop and Cleanup
 
 ```bash
-docker compose down -v
+docker compose down
+# or with full cleanup
+docker compose down --volumes --remove-orphans --rmi
 ```
 
 ## Notes

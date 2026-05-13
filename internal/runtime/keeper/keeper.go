@@ -53,7 +53,6 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog"
-	"github.com/woozymasta/flags"
 )
 
 // keeperRootLog is for helpers before a PostgresKeeper exists.
@@ -4132,29 +4131,6 @@ func sigHandler(sigs chan os.Signal, cancel context.CancelFunc) {
 	cancel()
 }
 
-// newParser creates a parser for runtime keeper options. Built-in helper
-// commands remain available, but the keeper itself is a daemon so
-// subcommand selection is optional.
-func newParser() *flags.Parser {
-	parser := runtimecommon.NewParser("hysteron keeper", "HYSTERON", &cfg, 0)
-	parser.SubcommandsOptional = true
-	return parser
-}
-
-// Run starts keeper with externally prepared common config and optional
-// keeper-specific CLI arguments.
-func Run(commonConfig stconfig.CommonConfig, args []string) error {
-	cfg.CommonConfig = runtimecommon.FromConfigCommon(commonConfig)
-	parser := newParser()
-	if _, err := parser.ParseArgs(args); err != nil {
-		return err
-	}
-	if parser.Active != nil {
-		return nil
-	}
-	return runKeeper(parser)
-}
-
 // RunPostgresReplOptions configures postgres replication user in RunWithOptions.
 type RunPostgresReplOptions struct {
 	AuthMethod   string
@@ -4223,10 +4199,10 @@ func RunWithOptions(commonConfig stconfig.CommonConfig, opts RunOptions) error {
 	cfg.PG.SU.Password = opts.PG.SU.Password
 	cfg.PG.SU.PasswordFile = opts.PG.SU.PasswordFile
 
-	return runKeeper(nil)
+	return runKeeper()
 }
 
-func runKeeper(parser *flags.Parser) error {
+func runKeeper() error {
 	closer, err := runtimecommon.InitLogging(&cfg.CommonConfig)
 	if err != nil {
 		return fmt.Errorf("logging: %w", err)
@@ -4240,11 +4216,7 @@ func runKeeper(parser *flags.Parser) error {
 		listenAddFlag = "pg-advertise-address"
 	)
 
-	option := (*flags.Option)(nil)
-	if parser != nil {
-		option = parser.FindOptionByLongName("pg-su-username")
-	}
-	if option == nil || !option.IsSet() {
+	if cfg.PG.SU.Username == "" {
 		// set the pgSuUsername to the current user
 		var user string
 		user, err = osuser.GetUser()

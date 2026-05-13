@@ -41,7 +41,6 @@ import (
 	units "github.com/woozymasta/hysteron/internal/utils/units"
 
 	"github.com/rs/zerolog"
-	"github.com/woozymasta/flags"
 )
 
 // log is the proxy component logger; refreshed after logging is configured.
@@ -680,29 +679,6 @@ func (c *ClusterChecker) Start() error {
 			}
 		}
 	}
-}
-
-// newParser creates a parser for runtime proxy options. Built-in helper
-// commands stay available; subcommands are optional because the proxy
-// is a daemon.
-func newParser() *flags.Parser {
-	parser := runtimecommon.NewParser("hysteron proxy", "HYSTERON", &cfg, 0)
-	parser.SubcommandsOptional = true
-	return parser
-}
-
-// Run starts proxy with externally prepared common config and optional
-// proxy-specific CLI arguments.
-func Run(commonConfig stconfig.CommonConfig, args []string) error {
-	cfg.CommonConfig = runtimecommon.FromConfigCommon(commonConfig)
-	parser := newParser()
-	if _, err := parser.ParseArgs(args); err != nil {
-		return err
-	}
-	if parser.Active != nil {
-		return nil
-	}
-	return runProxy()
 }
 
 // RunOptions provides typed proxy runtime options for unified CLI.

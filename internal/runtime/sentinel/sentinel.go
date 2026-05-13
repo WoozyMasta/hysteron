@@ -45,7 +45,6 @@ import (
 	"github.com/woozymasta/hysteron/internal/utils/timer"
 
 	"github.com/rs/zerolog"
-	"github.com/woozymasta/flags"
 )
 
 // log is the sentinel component logger; refreshed after logging is configured.
@@ -2954,29 +2953,6 @@ func runSentinelOnce(ctx context.Context, s *Sentinel) (err error) {
 		return nil
 	}
 	return errors.New("sentinel cluster runner returned without cancellation")
-}
-
-// newParser creates a parser for runtime sentinel options. Built-in helper
-// commands remain available; subcommands are optional because the
-// sentinel is a daemon.
-func newParser() *flags.Parser {
-	parser := runtimecommon.NewParser("hysteron sentinel", "HYSTERON", &cfg, 0)
-	parser.SubcommandsOptional = true
-	return parser
-}
-
-// Run starts sentinel with externally prepared common config and optional
-// sentinel-specific CLI arguments.
-func Run(commonConfig stconfig.CommonConfig, args []string) error {
-	cfg.CommonConfig = runtimecommon.FromConfigCommon(commonConfig)
-	parser := newParser()
-	if _, err := parser.ParseArgs(args); err != nil {
-		return err
-	}
-	if parser.Active != nil {
-		return nil
-	}
-	return runSentinel()
 }
 
 // RunOptions provides typed sentinel runtime options for unified CLI.

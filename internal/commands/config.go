@@ -30,33 +30,32 @@ type proxyRuntimeOptions struct {
 	ListenAddress string `long:"listen-address" env:"LISTEN_ADDRESS" description:"proxy listening address"`
 	Port          string `long:"port"           env:"PORT"           description:"proxy listening port"`
 
-	DisableWritableListener bool `long:"disable-writable-listener" env:"DISABLE_WRITABLE_LISTENER" description:"disable the writable proxy listener"`
-
-	ReadOnlyListenAddress string `long:"read-only-listen-address" env:"READ_ONLY_LISTEN_ADDRESS" description:"read-only proxy listening address"`
-	ReadOnlyPort          string `long:"read-only-port"           env:"READ_ONLY_PORT"           description:"read-only proxy listening port"`
+	ReadOnlyListenAddress   string `long:"read-only-listen-address"  env:"READ_ONLY_LISTEN_ADDRESS"  description:"read-only proxy listening address"`
+	ReadOnlyPort            string `long:"read-only-port"            env:"READ_ONLY_PORT"            description:"read-only proxy listening port"`
+	DisableWritableListener bool   `long:"disable-writable-listener" env:"DISABLE_WRITABLE_LISTENER" description:"disable the writable proxy listener"`
 }
 
 type keeperRuntimeOptions struct {
-	UID     string `short:"i" long:"uid"      env:"UID"      long-alias:"id" description:"keeper uid (must be unique in the cluster and can contain only lower-case letters, numbers and the underscore character). If not provided a random uid will be generated."`
-	DataDir string `short:"d" long:"data-dir" env:"DATA_DIR" description:"data directory"`
-
-	CanBeMaster             *bool `long:"can-be-master"              env:"CAN_BE_MASTER"              description:"allow keeper to be elected as master"`
+	CanBeMaster             *bool `long:"can-be-master" env:"CAN_BE_MASTER" description:"allow keeper to be elected as master"`
 	CanBeSynchronousReplica *bool `long:"can-be-synchronous-replica" env:"CAN_BE_SYNCHRONOUS_REPLICA" description:"allow keeper to be chosen as synchronous replica"`
-	DisableDataDirLocking   bool  `long:"disable-data-dir-locking"   env:"DISABLE_DATA_DIR_LOCKING"   description:"disable locking on data dir. Warning! It'll cause data corruptions if two keepers are concurrently running with the same data dir."`
-	AllowNewerPG            bool  `long:"allow-newer-postgres-version" env:"ALLOW_NEWER_POSTGRES_VERSION" description:"allow running with PostgreSQL major versions newer than the highest default-supported major. Older-than-supported versions are always rejected."`
 
-	PG keeperPostgresOptions `group:"PostgreSQL" namespace:"pg" env-namespace:"PG"`
+	PG      keeperPostgresOptions `group:"PostgreSQL" namespace:"pg" env-namespace:"PG"`
+	UID     string                `long:"uid" env:"UID" description:"keeper uid (must be unique in the cluster and can contain only lower-case letters, numbers and the underscore character). If not provided a random uid will be generated." short:"i" long-alias:"id"`
+	DataDir string                `long:"data-dir" env:"DATA_DIR" description:"data directory" short:"d"`
+
+	DisableDataDirLocking bool `long:"disable-data-dir-locking" env:"DISABLE_DATA_DIR_LOCKING" description:"disable locking on data dir. Warning! It'll cause data corruptions if two keepers are concurrently running with the same data dir."`
+	AllowNewerPG          bool `long:"allow-newer-postgres-version" env:"ALLOW_NEWER_POSTGRES_VERSION" description:"allow running with PostgreSQL major versions newer than the highest default-supported major. Older-than-supported versions are always rejected."`
 }
 
 type keeperPostgresOptions struct {
-	ListenAddress    string `long:"listen-address"    env:"LISTEN_ADDRESS"    description:"postgresql instance listening address, local address used for the postgres instance. For all network interface, you can set the value to '*'."`
+	ListenAddress    string `long:"listen-address" env:"LISTEN_ADDRESS" description:"postgresql instance listening address, local address used for the postgres instance. For all network interface, you can set the value to '*'."`
 	AdvertiseAddress string `long:"advertise-address" env:"ADVERTISE_ADDRESS" description:"postgresql instance address from outside. Use it to expose ip different than local ip with a NAT networking config"`
-	Port             string `long:"port"              env:"PORT"              short:"p" default:"5432" description:"postgresql instance listening port"`
-	AdvertisePort    string `long:"advertise-port"    env:"ADVERTISE_PORT"    description:"postgresql instance port from outside. Use it to expose port different than local port with a PAT networking config"`
-	BinPath          string `long:"bin-path"          env:"BIN_PATH"          description:"absolute path to postgresql binaries. If empty they will be searched in the current PATH"`
+	Port             string `long:"port" env:"PORT" description:"postgresql instance listening port" short:"p" default:"5432"`
+	AdvertisePort    string `long:"advertise-port" env:"ADVERTISE_PORT" description:"postgresql instance port from outside. Use it to expose port different than local port with a PAT networking config"`
+	BinPath          string `long:"bin-path" env:"BIN_PATH" description:"absolute path to postgresql binaries. If empty they will be searched in the current PATH"`
 
 	Repl keeperPostgresReplOptions `group:"PostgreSQL Replication User" namespace:"repl" env-namespace:"REPL"`
-	SU   keeperPostgresSUOptions   `group:"PostgreSQL Superuser"        namespace:"su"   env-namespace:"SU"`
+	SU   keeperPostgresSUOptions   `group:"PostgreSQL Superuser" namespace:"su" env-namespace:"SU"`
 }
 
 type keeperPostgresReplOptions struct {
@@ -98,8 +97,8 @@ type rootGlobalOptions struct {
 
 type managementCommonOptions struct {
 	clusterSelectionOptions
-	K8s   k8sStoreOptions    `group:"Kubernetes" namespace:"k8s" env-namespace:"K8S"`
-	Store clusterStoreOption `group:"Store" namespace:"store" env-namespace:"STORE"`
+	K8s   k8sStoreOptions    `group:"Kubernetes" namespace:"k8s"   env-namespace:"K8S"`
+	Store clusterStoreOption `group:"Store"      namespace:"store" env-namespace:"STORE"`
 }
 
 type clusterSelectionOptions struct {
@@ -112,20 +111,20 @@ type clusterStoreOption struct {
 }
 
 type k8sStoreOptions struct {
-	Config       string `long:"config" env:"CONFIG" description:"path to kubeconfig file. Overrides $KUBECONFIG"`
-	ResourceKind string `long:"resource-kind" env:"RESOURCE_KIND" description:"k8s resource kind used to store cluster data" choices:"configmap;secret"`
+	Config       string `long:"config"        env:"CONFIG"        description:"path to kubeconfig file. Overrides $KUBECONFIG"`
+	ResourceKind string `long:"resource-kind" env:"RESOURCE_KIND" description:"k8s resource kind used to store cluster data"                            choices:"configmap;secret"`
 	ResourceName string `long:"resource-name" env:"RESOURCE_NAME" description:"k8s resource name template; {cluster} is replaced with the cluster name" default:"hysteron-{cluster}"`
-	Context      string `long:"context" env:"CONTEXT" description:"kubeconfig context name"`
-	Namespace    string `long:"namespace" env:"NAMESPACE" description:"kubernetes namespace name"`
+	Context      string `long:"context"       env:"CONTEXT"       description:"kubeconfig context name"`
+	Namespace    string `long:"namespace"     env:"NAMESPACE"     description:"kubernetes namespace name"`
 }
 
 type storeConnectionOptions struct {
-	Endpoints     string        `long:"endpoints" env:"ENDPOINTS" description:"comma-separated list of store endpoints"`
-	Prefix        string        `long:"prefix" env:"PREFIX" description:"store base prefix" default:"hysteron/cluster"`
-	CertFile      string        `long:"cert-file" env:"CERT_FILE" description:"certificate file for store client identification"`
-	KeyFile       string        `long:"key" env:"KEY" description:"private key file for store client identification"`
-	CAFile        string        `long:"ca-file" env:"CA_FILE" description:"CA bundle for HTTPS-enabled store servers"`
-	Timeout       time.Duration `long:"timeout" env:"TIMEOUT" description:"store request timeout" default:"5s"`
+	Endpoints     string        `long:"endpoints"       env:"ENDPOINTS"       description:"comma-separated list of store endpoints"`
+	Prefix        string        `long:"prefix"          env:"PREFIX"          description:"store base prefix"                                default:"hysteron/cluster"`
+	CertFile      string        `long:"cert-file"       env:"CERT_FILE"       description:"certificate file for store client identification"`
+	KeyFile       string        `long:"key"             env:"KEY"             description:"private key file for store client identification"`
+	CAFile        string        `long:"ca-file"         env:"CA_FILE"         description:"CA bundle for HTTPS-enabled store servers"`
+	Timeout       time.Duration `long:"timeout"         env:"TIMEOUT"         description:"store request timeout"                            default:"5s"`
 	SkipTLSVerify bool          `long:"skip-tls-verify" env:"SKIP_TLS_VERIFY" description:"skip store certificate verification (insecure)"`
 }
 

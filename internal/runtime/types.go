@@ -19,24 +19,25 @@ import stconfig "github.com/woozymasta/hysteron/internal/config"
 // Target identifies a runtime component and selected backend.
 type Target struct {
 	CommonConfig *stconfig.CommonConfig
-	Backend      string
-	Component    string
 	Sentinel     *SentinelOptions
 	Proxy        *ProxyOptions
 	Keeper       *KeeperOptions
+	Backend      string
+	Component    string
 }
 
 // SentinelOptions configures sentinel runtime options from unified CLI.
 type SentinelOptions struct {
 	InitialClusterSpecFile string
-	ClusterSpecFiles       []string
 
-	WebListenAddress               string
-	WebBasePath                    string
-	WebAuthUsername                string
-	WebAuthPassword                string
-	WebReadTimeout                 string
-	WebWriteTimeout                string
+	WebListenAddress string
+	WebBasePath      string
+	WebAuthUsername  string
+	WebAuthPassword  string
+	WebReadTimeout   string
+	WebWriteTimeout  string
+	ClusterSpecFiles []string
+
 	WebAllowUnsafeAdminWithoutAuth bool
 }
 
@@ -45,14 +46,15 @@ type ProxyOptions struct {
 	ListenAddress string
 	Port          string
 
-	DisableWritableListener bool
-
 	ReadOnlyListenAddress string
 	ReadOnlyPort          string
+
+	DisableWritableListener bool
 }
 
 // KeeperOptions configures keeper runtime options from unified CLI.
 type KeeperOptions struct {
+	PG      KeeperPostgresOptions
 	UID     string
 	DataDir string
 
@@ -60,8 +62,6 @@ type KeeperOptions struct {
 	CanBeSynchronousReplica bool
 	DisableDataDirLocking   bool
 	AllowNewerPG            bool
-
-	PG KeeperPostgresOptions
 }
 
 // KeeperPostgresOptions contains keeper-managed PostgreSQL settings.

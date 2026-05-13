@@ -60,12 +60,12 @@ type config struct {
 }
 
 type readOnlyOptions struct {
-	ListenAddress   string                   `long:"listen-address"   env:"LISTEN_ADDRESS"   description:"read-only proxy listening address"`
-	Port            string                   `long:"port"             env:"PORT"             description:"read-only proxy listening port"`
-	ReplicaPriority readonly.ReplicaPriority `long:"replica-priority" env:"REPLICA_PRIORITY" description:"read-only replica priority policy"                                             default:"sync" choices:"sync;async;any"`
-	MaxLag          units.BytesValue         `long:"max-lag"          env:"MAX_LAG"          description:"maximum standby WAL lag in bytes for read-only routing"                        default:"0"`
-	NoFallback      bool                     `long:"no-fallback"      env:"NO_FALLBACK"      description:"do not route read-only connections to primary when no eligible standby exists" xor:"read-only-primary-policy"`
-	IncludePrimary  bool                     `long:"include-primary"  env:"INCLUDE_PRIMARY"  description:"include primary in the normal read-only backend pool"                          xor:"read-only-primary-policy"`
+	ListenAddress   string                   `long:"listen-address" env:"LISTEN_ADDRESS" description:"read-only proxy listening address"`
+	Port            string                   `long:"port" env:"PORT" description:"read-only proxy listening port"`
+	ReplicaPriority readonly.ReplicaPriority `long:"replica-priority" env:"REPLICA_PRIORITY" description:"read-only replica priority policy" default:"sync" choices:"sync;async;any"`
+	MaxLag          units.BytesValue         `long:"max-lag" env:"MAX_LAG" description:"maximum standby WAL lag in bytes for read-only routing" default:"0"`
+	NoFallback      bool                     `long:"no-fallback" env:"NO_FALLBACK" description:"do not route read-only connections to primary when no eligible standby exists" xor:"read-only-primary-policy"`
+	IncludePrimary  bool                     `long:"include-primary" env:"INCLUDE_PRIMARY" description:"include primary in the normal read-only backend pool" xor:"read-only-primary-policy"`
 }
 
 type writableOptions struct {
@@ -686,10 +686,10 @@ type RunOptions struct {
 	ListenAddress string
 	Port          string
 
-	DisableWritableListener bool
-
 	ReadOnlyListenAddress string
 	ReadOnlyPort          string
+
+	DisableWritableListener bool
 }
 
 // RunWithOptions executes proxy runtime without re-parsing component flags.

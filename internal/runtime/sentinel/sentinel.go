@@ -2958,14 +2958,15 @@ func runSentinelOnce(ctx context.Context, s *Sentinel) (err error) {
 // RunOptions provides typed sentinel runtime options for unified CLI.
 type RunOptions struct {
 	InitialClusterSpecFile string
-	ClusterSpecFiles       []string
 
-	WebListenAddress               string
-	WebBasePath                    string
-	WebAuthUsername                string
-	WebAuthPassword                string
-	WebReadTimeout                 string
-	WebWriteTimeout                string
+	WebListenAddress string
+	WebBasePath      string
+	WebAuthUsername  string
+	WebAuthPassword  string
+	WebReadTimeout   string
+	WebWriteTimeout  string
+	ClusterSpecFiles []string
+
 	WebAllowUnsafeAdminWithoutAuth bool
 }
 

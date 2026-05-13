@@ -17,60 +17,60 @@ package commands
 import "github.com/woozymasta/hysteron/internal/output"
 
 type rootCommand struct {
-	Keeper   keeperRuntimeCommand   `command:"keeper" command-group:"Runtime Commands" description:"Run keeper runtime components"`
-	Sentinel sentinelRuntimeCommand `command:"sentinel" command-group:"Runtime Commands" description:"Run sentinel runtime components"`
-	Proxy    proxyRuntimeCommand    `command:"proxy" command-group:"Runtime Commands" description:"Run proxy runtime components"`
+	Keeper   keeperRuntimeCommand   `command:"keeper"   command-group:"Runtime Commands"    description:"Run keeper runtime components"`
+	Sentinel sentinelRuntimeCommand `command:"sentinel" command-group:"Runtime Commands"    description:"Run sentinel runtime components"`
+	Proxy    proxyRuntimeCommand    `command:"proxy"    command-group:"Runtime Commands"    description:"Run proxy runtime components"`
 	Global   rootGlobalOptions      `group:"Global"`
 	Failover failoverCommand        `command:"failover" command-group:"Management Commands" description:"Manage failover operations"`
-	Cluster  clusterCommand         `command:"cluster" command-group:"Management Commands" description:"Manage cluster control operations"`
+	Cluster  clusterCommand         `command:"cluster"  command-group:"Management Commands" description:"Manage cluster control operations"`
 }
 
 type keeperRuntimeCommand struct {
-	Kubernetes keeperRuntimeKubernetesCommand `command:"kubernetes" alias:"k8s" description:"Run component with kubernetes backend"`
+	Kubernetes keeperRuntimeKubernetesCommand `command:"kubernetes" alias:"k8s"    description:"Run component with kubernetes backend"`
 	Component  string                         `no-flag:"true"`
 	Common     runtimeCommonOptions           `group:"Common"`
 	Keeper     keeperRuntimeOptions           `group:"Keeper"`
-	Etcd       keeperRuntimeEtcdCommand       `command:"etcd" alias:"etcdv3" description:"Run component with etcd backend"`
+	Etcd       keeperRuntimeEtcdCommand       `command:"etcd"       alias:"etcdv3" description:"Run component with etcd backend"`
 }
 
 type sentinelRuntimeCommand struct {
-	Kubernetes sentinelRuntimeKubernetesCommand `command:"kubernetes" alias:"k8s" description:"Run component with kubernetes backend"`
 	Component  string                           `no-flag:"true"`
 	Common     runtimeCommonOptions             `group:"Common"`
 	Sentinel   sentinelRuntimeOptions           `group:"Sentinel"`
-	Web        sentinelWebOptions               `group:"Web" namespace:"web" env-namespace:"WEB"`
-	Etcd       sentinelRuntimeEtcdCommand       `command:"etcd" alias:"etcdv3" description:"Run component with etcd backend"`
+	Etcd       sentinelRuntimeEtcdCommand       `command:"etcd"       alias:"etcdv3" description:"Run component with etcd backend"`
+	Kubernetes sentinelRuntimeKubernetesCommand `command:"kubernetes" alias:"k8s"    description:"Run component with kubernetes backend"`
+	Web        sentinelWebOptions               `group:"Web"      namespace:"web" env-namespace:"WEB"`
 }
 
 type proxyRuntimeCommand struct {
-	Kubernetes proxyRuntimeKubernetesCommand `command:"kubernetes" alias:"k8s" description:"Run component with kubernetes backend"`
+	Kubernetes proxyRuntimeKubernetesCommand `command:"kubernetes" alias:"k8s"    description:"Run component with kubernetes backend"`
 	Component  string                        `no-flag:"true"`
 	Common     runtimeCommonOptions          `group:"Common"`
 	Proxy      proxyRuntimeOptions           `group:"Proxy"`
-	Etcd       proxyRuntimeEtcdCommand       `command:"etcd" alias:"etcdv3" description:"Run component with etcd backend"`
+	Etcd       proxyRuntimeEtcdCommand       `command:"etcd"       alias:"etcdv3" description:"Run component with etcd backend"`
 }
 
 type clusterCommand struct {
-	Keeper        clusterKeeperCommand        `command:"keeper" description:"Manage keeper records in cluster data"`
-	List          clusterListCommand          `command:"list" alias:"ls" description:"List clusters in the configured store"`
-	Status        clusterStatusCommand        `command:"status" description:"Display current cluster status"`
-	Data          clusterDataCommand          `command:"data" description:"Read and mutate cluster data documents"`
-	Initialize    clusterInitializeCommand    `command:"initialize" alias:"init" description:"Initialize a new cluster"`
-	Update        clusterUpdateCommand        `command:"update" description:"Replace or patch the current cluster specification"`
-	Specification clusterSpecificationCommand `command:"specification" alias:"spec" description:"Retrieve the current cluster specification"`
+	Keeper        clusterKeeperCommand        `command:"keeper"        description:"Manage keeper records in cluster data"`
+	List          clusterListCommand          `command:"list"          description:"List clusters in the configured store"              alias:"ls"`
+	Status        clusterStatusCommand        `command:"status"        description:"Display current cluster status"`
+	Data          clusterDataCommand          `command:"data"          description:"Read and mutate cluster data documents"`
+	Initialize    clusterInitializeCommand    `command:"initialize"    description:"Initialize a new cluster"                           alias:"init"`
+	Update        clusterUpdateCommand        `command:"update"        description:"Replace or patch the current cluster specification"`
+	Specification clusterSpecificationCommand `command:"specification" description:"Retrieve the current cluster specification"         alias:"spec"`
 	Common        managementCommonOptions     `group:"Common"`
-	Promote       clusterPromoteCommand       `command:"promote" description:"Promote a standby cluster to primary"`
+	Promote       clusterPromoteCommand       `command:"promote"       description:"Promote a standby cluster to primary"`
 }
 
 type failoverCommand struct {
-	Force  failoverForceCommand    `command:"force" description:"Force failover to the best available candidate"`
+	Force  failoverForceCommand    `command:"force"  description:"Force failover to the best available candidate"`
 	Keeper failoverKeeperCommand   `command:"keeper" description:"Mark a keeper as failed"`
 	Common managementCommonOptions `group:"Common"`
 }
 
 type clusterDataCommand struct {
 	Patch clusterDataPatchCommand `command:"patch" description:"Patch current cluster data"`
-	Read  clusterDataReadCommand  `command:"read" description:"Read current cluster data"`
+	Read  clusterDataReadCommand  `command:"read"  description:"Read current cluster data"`
 	Write clusterDataWriteCommand `command:"write" description:"Replace current cluster data"`
 }
 
@@ -93,25 +93,25 @@ type keeperRuntimeEtcdCommand struct {
 }
 
 type keeperRuntimeKubernetesCommand struct {
+	Keeper    keeperRuntimeOptions `no-flag:"true"`
 	K8s       k8sStoreOptions      `group:"Kubernetes" namespace:"k8s" env-namespace:"K8S"`
 	Component string               `no-flag:"true"`
 	Common    runtimeCommonOptions `no-flag:"true"`
-	Keeper    keeperRuntimeOptions `no-flag:"true"`
 }
 
 type proxyRuntimeKubernetesCommand struct {
 	K8s       k8sStoreOptions      `group:"Kubernetes" namespace:"k8s" env-namespace:"K8S"`
+	Proxy     proxyRuntimeOptions  `no-flag:"true"`
 	Component string               `no-flag:"true"`
 	Common    runtimeCommonOptions `no-flag:"true"`
-	Proxy     proxyRuntimeOptions  `no-flag:"true"`
 }
 
 type sentinelRuntimeEtcdCommand struct {
+	Component string                 `no-flag:"true"`
 	Common    runtimeCommonOptions   `no-flag:"true"`
 	Sentinel  sentinelRuntimeOptions `no-flag:"true"`
-	Web       sentinelWebOptions     `no-flag:"true"`
-	Component string                 `no-flag:"true"`
 	Etcd      runtimeEtcdOptions     `group:"Etcd" namespace:"etcd" env-namespace:"ETCD"`
+	Web       sentinelWebOptions     `no-flag:"true"`
 }
 
 type sentinelRuntimeKubernetesCommand struct {
@@ -129,9 +129,9 @@ type clusterInitializeCommand struct {
 }
 
 type clusterUpdateCommand struct {
-	File  string                    `short:"f" long:"file" description:"file containing a complete cluster specification or a patch to apply to the current cluster specification"`
-	Patch bool                      `short:"p" long:"patch" description:"patch the current cluster specification instead of replacing it"`
+	File  string                    `short:"f" long:"file"  description:"file containing a complete cluster specification or a patch to apply to the current cluster specification"`
 	Args  clusterSpecPositionalArgs `positional-args:"true" required:"true"`
+	Patch bool                      `short:"p" long:"patch" description:"patch the current cluster specification instead of replacing it"`
 }
 
 type clusterStatusCommand struct {

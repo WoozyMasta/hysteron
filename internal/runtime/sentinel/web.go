@@ -49,9 +49,9 @@ type webOptions struct {
 }
 
 type sentinelWebRegistry struct {
+	runners map[string]*Sentinel
 	uid     string
 	mu      sync.RWMutex
-	runners map[string]*Sentinel
 }
 
 func newSentinelWebRegistry(uid string) *sentinelWebRegistry {
@@ -107,49 +107,49 @@ type webSentinelRow struct {
 }
 
 type webClusterStatus struct {
-	Name           string     `json:"name"`
-	Phase          string     `json:"phase"`
-	Generation     int64      `json:"generation"`
-	FormatVersion  uint64     `json:"format_version"`
-	MasterDBUID    string     `json:"master_db_uid"`
-	MasterKeeperUID string    `json:"master_keeper_uid"`
-	KeepersTotal   int        `json:"keepers_total"`
-	KeepersHealthy int        `json:"keepers_healthy"`
-	DBsTotal       int        `json:"dbs_total"`
-	DBsHealthy     int        `json:"dbs_healthy"`
-	ProxiesSeen    int        `json:"proxies_seen"`
-	Error          string     `json:"error,omitempty"`
-	KeeperRows     []webKeeperRow `json:"keeper_rows"`
-	DBRows         []webDBRow `json:"db_rows"`
-	ProxyRows      []webProxyRow `json:"proxy_rows"`
+	Name            string         `json:"name"`
+	Phase           string         `json:"phase"`
+	MasterDBUID     string         `json:"master_db_uid"`
+	MasterKeeperUID string         `json:"master_keeper_uid"`
+	Error           string         `json:"error,omitempty"`
+	KeeperRows      []webKeeperRow `json:"keeper_rows"`
+	DBRows          []webDBRow     `json:"db_rows"`
+	ProxyRows       []webProxyRow  `json:"proxy_rows"`
+	Generation      int64          `json:"generation"`
+	FormatVersion   uint64         `json:"format_version"`
+	KeepersTotal    int            `json:"keepers_total"`
+	KeepersHealthy  int            `json:"keepers_healthy"`
+	DBsTotal        int            `json:"dbs_total"`
+	DBsHealthy      int            `json:"dbs_healthy"`
+	ProxiesSeen     int            `json:"proxies_seen"`
 }
 
 type webKeeperRow struct {
 	UID                     string `json:"uid"`
+	ListenAddress           string `json:"listen_address"`
+	Generation              int64  `json:"generation"`
 	Healthy                 bool   `json:"healthy"`
 	CanBeMaster             bool   `json:"can_be_master"`
 	CanBeSynchronousReplica bool   `json:"can_be_synchronous_replica"`
 	PGHealthy               bool   `json:"pg_healthy"`
-	ListenAddress           string `json:"listen_address"`
-	Generation              int64  `json:"generation"`
 }
 
 type webDBRow struct {
 	UID       string `json:"uid"`
 	KeeperUID string `json:"keeper_uid"`
 	Role      string `json:"role"`
-	Healthy   bool   `json:"healthy"`
-	XLogPos   uint64 `json:"xlog_pos"`
 	LagBytes  string `json:"lag_bytes"`
 	Address   string `json:"address"`
+	XLogPos   uint64 `json:"xlog_pos"`
+	Healthy   bool   `json:"healthy"`
 }
 
 type webProxyRow struct {
 	UID          string `json:"uid"`
+	ProxyTimeout string `json:"proxy_timeout"`
+	Generation   int64  `json:"generation"`
 	Seen         bool   `json:"seen"`
 	Enabled      bool   `json:"enabled"`
-	Generation   int64  `json:"generation"`
-	ProxyTimeout string `json:"proxy_timeout"`
 }
 
 func validateWebConfig(cfg *config) error {

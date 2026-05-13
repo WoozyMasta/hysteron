@@ -4160,6 +4160,7 @@ type RunPostgresOptions struct {
 
 // RunOptions provides typed keeper runtime options for unified CLI.
 type RunOptions struct {
+	PG      RunPostgresOptions
 	UID     string
 	DataDir string
 
@@ -4167,8 +4168,6 @@ type RunOptions struct {
 	CanBeSynchronousReplica bool
 	DisableDataDirLocking   bool
 	AllowNewerPG            bool
-
-	PG RunPostgresOptions
 }
 
 // RunWithOptions executes keeper runtime without re-parsing component flags.

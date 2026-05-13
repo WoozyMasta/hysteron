@@ -7,11 +7,18 @@ failover, deterministic recovery, and operational clarity.
 It coordinates keeper, sentinel, and proxy runtimes
 using etcd v3 or Kubernetes as the distributed state store.
 
+![Hysteron Logo][logo]
+
+Pronunciation: `HIS-tuh-ron` (`/ˈhɪstərɒn/`).
+The name is inspired by hysteresis:
+systems where output depends on recent state history,
+not only on the latest input value.
+In Hysteron this maps to stable PostgreSQL failover decisions
+under noisy or partial failures.
+
 Inspired by the original [Stolon][] design,
 Hysteron continues the same HA spirit with modernized internals
 and new capabilities for current PostgreSQL releases.
-
-![Hysteron Logo][logo]
 
 ## Highlights
 

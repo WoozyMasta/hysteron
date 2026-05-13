@@ -6,434 +6,64 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog][], and this project adheres to
 [Semantic Versioning][].
 
-<!--
 ## Unreleased
 
 ### Added
+
+* New embedded Sentinel web status UI,
+  authenticated API endpoint, auto-refresh,
+  and multi-cluster status tables (sentinels, keepers, databases, proxies).
+* Expanded HA observability across sentinel/keeper/proxy/store:
+  failover, reconcile, DCS health, routing, PostgreSQL state,
+  and slot-related metrics, with updated `doc/metrics.md` examples.
+* Managed logical replication slots support in cluster spec and runtime
+  reconciliation (`managedLogicalReplicationSlots`) with strict validation.
+* Optional logical-slot failover feature gate (`enableLogicalSlotFailover`)
+  with PG-version-aware behavior and standby readiness/advance safeguards.
+* Multi-cluster sentinel operation in one process
+  (`--cluster-name` repeated, per-cluster initial spec overrides).
+* Cluster listing command (`stolon cluster list`).
+* Kubernetes store support for Secret-backed cluster data
+  (`--kube-resource-kind=secret`).
+* Optional sentinel-managed Kubernetes Service/EndpointSlice publishing
+  (writable and read-only endpoints).
+* Read-only proxy listener mode with standby selection controls
+  and primary fallback policy options.
+* Compose-based integration runners for PostgreSQL version matrix/smoke flows
+  and richer integration diagnostics.
+* New `examples/compose-basic` topology with two clusters on shared sentinels
+  (cluster `a` sync, cluster `b` async), Prometheus/Grafana, and web UI.
+
 ### Changed
+
+* CLI architecture was unified into a single `stolon` binary
+  with grouped runtime and management subcommands
+  (`keeper`, `sentinel`, `proxy`, `cluster`, `failover`) and typed flag parsing.
+* Runtime startup path was simplified to typed CLI options only
+  (legacy internal args passthrough removed).
+* Keepers now enforce explicit PostgreSQL major-version policy:
+  supported defaults plus controlled override for newer majors.
+* Sentinel election on Kubernetes now uses Lease objects
+  (`coordination.k8s.io/Lease`) instead of ConfigMap locks.
+* HA timing validation now uses effective values with guardrail
+  `sleepInterval + 2*requestTimeout <= failInterval`.
+* PITR recovery-target validation and promotion behavior were hardened.
+* Keeper before-stop hook behavior was aligned with managed restart paths.
+* Integration suite command wiring was updated
+  for unified runtime backend flags and no `--` separator.
+* Internal proxy stack was modernized (`internal/tcpproxy`)
+  and legacy pollon dependency removed.
+* Go/runtime/dependency baseline was modernized
+  (Go 1.26 line, updated PostgreSQL/Kubernetes/etcd client stacks).
+
 ### Removed
--->
 
-## Unreleased
-
-### Changes
-
-* Improve keeper data directory locking portability
-  and allow native Windows builds without CGO.
-* Replace the legacy multi-binary CLI model with one unified `stolon` CLI
-  (`keeper`, `sentinel`, `proxy`, `cluster`, `failover`).
-* Replace the legacy Makefile with loop-based native
-  and release builds for all Stolon binaries.
-* Add the first cluster contract and PostgreSQL connection string regression
-  tests.
-* Add initial sentinel, proxy, store, keeper, cluster data, and PostgreSQL
-  helper benchmarks.
-* Fix atomic file writes with absolute paths on Windows.
-* Raise the Go module baseline to Go 1.25 and fix stricter format-string vet
-  findings.
-* Update test and mock helper dependencies in the first controlled dependency
-  modernization batch.
-* Update the PostgreSQL driver dependency in a separate controlled runtime
-  modernization batch.
-* Update the Cobra and pflag CLI dependencies in a separate controlled runtime
-  modernization batch.
-* Update small utility dependencies in a separate controlled runtime
-  modernization batch.
-* Update Prometheus monitoring dependencies in a separate controlled runtime
-  modernization batch.
-* Internalize and modernize the TCP proxy previously provided by
-  `github.com/sorintlab/pollon` as `internal/tcpproxy`, removing the old
-  `pollon` and `tcpkeepalive` dependencies.
-* Drop the obsolete etcd v2 and Consul backends, remove the deprecated
-  register management command, and migrate the etcd v3 backend to
-  `go.etcd.io/etcd/client/v3` `v3.6.11`.
-* Update Kubernetes client libraries to `v0.36.0`, raise the Go module
-  baseline to Go 1.26, and move Kubernetes sentinel leader election from
-  ConfigMap locks to `coordination.k8s.io/Lease` locks.
-* Check PostgreSQL query row iteration errors and close prepared statements in
-  helper code.
-* Clean up correctness lint issues in common helpers, PostgreSQL file handling,
-  and store revision conversions.
-* Clean up command package correctness lint issues, including metrics server
-  timeouts, checked sentinel arithmetic, and CLI output flush errors.
-* Replace the integration test pseudo-terminal wrapper with a native
-  stdout/stderr pipe-based process runner and remove the `gexpect` dependency.
-* Move process-level integration tests behind an explicit `integration` build
-  tag, isolate Unix freeze/resume signals behind platform helpers, and add
-  package-level integration preflight checks that skip suites cleanly when
-  required env/tool prerequisites are missing.
-* Use `github.com/google/uuid` for project UUID generation and remove the
-  direct `github.com/gofrs/uuid` dependency.
-* Replace `github.com/mitchellh/copystructure` deep copies with explicit
-  typed `DeepCopy` implementations in cluster, keeper, sentinel, and
-  PostgreSQL code paths, and remove the `copystructure` dependency.
-* Add an explicit Docker Compose integration-test runner for PostgreSQL major
-  version smoke checks.
-* Add a strict PostgreSQL major-version support check with an explicit
-  `--allow-unsupported-postgres-version` keeper override.
-* Fix managed logical slot cleanup when
-  `managedLogicalReplicationSlots` is unset:
-  primary reconciliation now drops inactive unmanaged `hysteron_*`
-  logical slots instead of skipping cleanup entirely.
-* Replace `hysteron_sentinel_leader_count` with
-  `hysteron_sentinel_leader_elections_total` to model leader elections as
-  a monotonic counter.
-* Add sentinel reconciliation check observability metrics:
-  `hysteron_sentinel_check_duration_seconds` (histogram) and
-  `hysteron_sentinel_check_errors_total{stage=...}` (counter).
-* Add keeper reconciliation and DCS-health observability metrics:
-  `hysteron_keeper_reconcile_duration_seconds{phase=...}`,
-  `hysteron_keeper_reconcile_errors_total{phase=...,reason=...}`,
-  `hysteron_keeper_dcs_degraded`, and
-  `hysteron_keeper_dcs_last_success_seconds`.
-* Expand keeper reconcile error reason coverage for common failure paths in
-  `postgresKeeperSM` (state persistence, PostgreSQL lifecycle, init/restore,
-  and recovery readiness checks).
-* Add proxy observability metrics for writable and read-only routing:
-  `hysteron_proxy_check_duration_seconds`,
-  `hysteron_proxy_check_errors_total{stage=...}`,
-  `hysteron_proxy_backend_switches_total{mode=...}`,
-  `hysteron_proxy_route_state{mode=...,state=...}`,
-  `hysteron_proxy_read_only_destinations`,
-  and `hysteron_proxy_read_only_fallbacks_total`.
-* Add shared store (DCS) operation telemetry:
-  `hysteron_dcs_operation_duration_seconds{backend,operation}` and
-  `hysteron_dcs_operation_errors_total{backend,operation,code}`,
-  wired into high-level KV-backed and Kubernetes-backed store operations.
-* Add DCS watch/session reset telemetry:
-  `hysteron_dcs_watch_resets_total{backend,watcher}` for etcd and Kubernetes
-  election reset events.
-* Extend proxy check error stage telemetry to cover timeout/check-loop/runtime
-  listener failures, and document controlled metric label vocabularies.
-* Add sentinel master transition telemetry:
-  `hysteron_sentinel_failovers_total{reason=...}` and
-  `hysteron_sentinel_failover_duration_seconds{reason=...}`.
-* Add `cluster_name` label to shared DCS telemetry
-  (`hysteron_dcs_operation_duration_seconds`,
-  `hysteron_dcs_operation_errors_total`,
-  `hysteron_dcs_watch_resets_total`) and wire election reset metrics with
-  per-cluster context for multi-cluster sentinel deployments.
-* Add baseline PostgreSQL parity telemetry from keeper:
-  `hysteron_pg_running`, `hysteron_pg_in_recovery`,
-  `hysteron_pg_timeline`, `hysteron_pg_server_version`,
-  `hysteron_pg_pending_restart`, and `hysteron_pg_streaming`.
-* Add standby WAL parity telemetry from keeper:
-  `hysteron_pg_wal_receive_lsn_bytes`,
-  `hysteron_pg_wal_replay_lsn_bytes`,
-  and `hysteron_pg_replay_lag_seconds`.
-* Add proxy data-path telemetry:
-  `hysteron_proxy_active_connections{mode=...}` and
-  `hysteron_proxy_connect_errors_total{mode=...,reason=...}`,
-  wired from TCP proxy runtime connection hooks.
-* Add TCP proxy regression tests for connection telemetry hooks:
-  `OnConnectError` (`no_destination`, `dial`) and balanced
-  `OnActiveConnectionsDelta` lifecycle behavior.
-* Add keeper lifecycle operation telemetry for resync/bootstrap flows:
-  `hysteron_keeper_basebackup_total{result=...}`,
-  `hysteron_keeper_basebackup_duration_seconds`,
-  `hysteron_keeper_pgrewind_total{result=...}`,
-  `hysteron_keeper_pgrewind_duration_seconds`,
-  `hysteron_keeper_bootstrap_total{mode=...,result=...}`,
-  and `hysteron_keeper_bootstrap_duration_seconds{mode=...}`.
-* Add integration metric assertions for HA observability baselines:
-  sentinel failover counter increment, keeper pending-restart signal,
-  and keeper DCS degraded/recovery state transition.
-* Remove low-value keeper config/lifecycle echo gauges
+* Legacy multi-binary command model and Cobra/pflag command tree.
+* Store backends removed: etcd v2 and Consul.
+* Legacy internal cluster v0 compatibility package (`internal/cluster/v0`).
+* Low-value keeper metrics:
   `hysteron_keeper_sleep_interval` and
-  `hysteron_keeper_shutdown_seconds` from the default metric set.
-* Add practical PromQL examples for new HA/keeper/proxy metrics in
-  `doc/metrics.md`.
-* Check or explicitly discard remaining command, PostgreSQL, and store cleanup
-  errors so `errcheck` is clean.
-* Clean up initial style lint findings for whitespace, unconvert, gocritic,
-  predeclared, prealloc, and perfsprint.
-* Replace the internal string-slice membership helper with `slices.Contains`.
-* Remove unused internal parameters and move a keeper-only parser helper out of
-  production code.
-* Apply safe Go modernization for pointer defaults and build tags while leaving
-  cluster-data JSON tag changes for a dedicated migration pass.
-* Document the intentional specification JSON wrapper duplication used to
-  preserve default and non-default output shapes.
-* Clean up the first low-risk revive findings for unused parameters, blank
-  imports, and early-return control flow.
-* Clean up shared command and management command revive findings, including
-  comments and TLS naming.
-* Allow one sentinel process to run control loops for multiple clusters with
-  per-cluster initial spec overrides and per-cluster log and metrics labels.
-* Add cluster list command to enumerate clusters present in the configured
-  store.
-* Clean up keeper and sentinel command revive findings with package and exported
-  symbol comments.
-* Clean up cluster contract revive findings with documentation comments while
-  preserving existing public type names.
-* Clean up common, logging, flag utility, and legacy cluster v0 revive findings
-  with package and exported symbol comments.
-* Replace Cobra command parsing with `github.com/woozymasta/flags` and add
-  YAML/JSON cluster spec loading with guarded environment expansion through
-  `github.com/woozymasta/jamle`.
-* Centralize build metadata in the new `internal/buildflags` package and wire
-  it through the `flags` built-in `version` command via Makefile `ldflags`.
-* Reorganize CLI options into reflection-based groups (`Store`/`Logging`/
-  `Metrics`/`Kubernetes` for runtime command families, `PostgreSQL` with nested
-  `Replication User` and `Superuser` sub-groups for the keeper, and
-  `Writable Proxy`/`Read-Only Proxy`/`TCP Keep-Alive` for the proxy),
-  preserving the public flag and environment names while making help output and
-  generated docs easier to navigate.
-* Add convenient short flags for the most common options:
-  `-c/--cluster-name` (all runtime command families), `-i/--uid` and
-  `-d/--data-dir` (keeper),
-  `-p/--pg-port` (keeper), `-l/--listen-address` and `-p/--port` (proxy), and
-  `-f/--initial-cluster-spec` (sentinel).
-* Drop the static `IgnoreExpandPaths` allowlist from `internal/configfile` so
-  every string scalar in cluster spec/data documents accepts `${VAR}`
-  environment expansion uniformly; use `$${VAR}` to keep a literal `${VAR}`.
-* Define management subcommands declaratively through `command:` struct tags
-  on a single root, dropping the previous programmatic
-  `parser.AddCommand` plumbing.
-* Replace project logging with zerolog-based structured loggers, add
-  command-level logging setup, and remove production-path `panic` calls.
-* Migrate PostgreSQL `database/sql` access from `github.com/lib/pq` to
-  `github.com/jackc/pgx/v5/stdlib`.
-* Add an optional read-only proxy listener with standby lag filtering,
-  sync/async replica priority, round-robin standby routing, and explicit primary
-  fallback controls.
-* Add `--kube-resource-kind=secret` as a Kubernetes store option that stores
-  cluster data in an opaque Secret `data["clusterdata"]` field.
-* Add optional sentinel-managed Kubernetes Service publishing for the writable
-  PostgreSQL endpoint using a selectorless Service and EndpointSlice,
-  with collision-safe naming via `--kube-resource-name`
-  and configurable publishing options through
-  `--kube-service-name`/`--kube-service-port` (default writable name:
-  `{resource}`); add optional read-only
-  publishing with `--kube-read-only-service-*` flags and proxy-style standby
-  selection controls (`replica-priority`, `max-lag`, `no-fallback`,
-  `include-primary`).
-* Remove legacy internal cluster v0 model package (`internal/cluster/v0`) as
-  part of new cleanup; no backward-compatibility layer is kept in-tree.
-* Harden HA timing validation using effective values with explicit guardrail
-  `sleepInterval + 2*requestTimeout <= failInterval`, and add regression
-  tests for partial timing overrides.
-* Fix standby-cluster manual failover behavior so keeper-level forced failover
-  is not deferred by leader-race backoff in the same reconcile cycle.
-* Align integration fixtures with the HA timing guardrail where partial timing
-  overrides depended on now-invalid default combinations.
-* Add sentinel post-leadership sanity sweep on leader regain to reset
-  transient convergence caches before the next decision loop.
-* Harden keeper rewind policy with explicit decision reasons
-  (`not_initialized`, `system_id_mismatch`, `no_master`,
-  `wal_check_error`, `required_wal_missing`, `allowed`) and improved runtime
-  observability.
-* Extend PostgreSQL restart checks with detailed pending-restart parameter
-  reporting and wire these details into keeper restart decisions and logs.
-* Add slot-policy hardening features:
-  `ignoreMasterReplicationSlots`, stale physical slot `xmin` warning guard,
-  `memberReplicationSlotTTL` contract validation, sentinel orphan-member-slot
-  tracking, and keeper TTL-aware guarded slot cleanup that requires orphan age
-  threshold, inactivity, and no `xmin`.
-* Add integration coverage for new slot policies and rewind behavior,
-  including `TestAdditionalReplicationSlots`,
-  `TestMemberReplicationSlotTTLGuardsXmin`,
-  `TestMemberReplicationSlotTTLCleansRemovedMemberDBSlot`,
-  and `TestTimelineForkPgrewind`.
-* Start `managed logical slots` MVP with a new cluster-spec contract
-  `managedLogicalReplicationSlots` and strict validation for slot names,
-  duplicates, and required `database`/`plugin` fields.
-* Add PostgreSQL helper API for managed logical slots lifecycle:
-  list logical slots and create/drop logical replication slots.
-* Wire managed logical slots into runtime reconciliation:
-  sentinel now propagates `managedLogicalReplicationSlots` to primary DB spec,
-  and keeper reconciles them on primary by creating missing slots, warning on
-  plugin/database mismatches, skipping active-slot cleanup, and dropping only
-  inactive unmanaged `hysteron_*` logical slots.
-* Add integration coverage for managed logical slots lifecycle with
-  `TestManagedLogicalReplicationSlots`.
-* Add managed logical slot mismatch safety coverage:
-  when desired plugin/database mismatches an existing slot, keeper logs a
-  warning and does not perform destructive drop/recreate.
-* Validate managed logical slots configuration up front:
-  `managedLogicalReplicationSlots` now requires
-  `pgParameters.wal_level="logical"` to avoid repeated runtime creation errors.
-* Add integration test coverage for this guardrail:
-  managed logical slot updates are rejected unless `wal_level` is set to
-  `logical`.
-* Finalize HA timing guardrail behavior using effective values
-  (`sleepInterval + 2*requestTimeout <= failInterval`) and align defaults by
-  raising `failInterval` to `30s`.
-* Harden PITR recovery-target handling:
-  cluster spec now validates `recoveryTargetSettings` (single selector across
-  `recoveryTarget*`, and only `recoveryTarget="immediate"` when set), while
-  keeper sets `recovery_target_action=promote` only when a recovery target is
-  explicitly selected.
-* Add standby WAL replay safety hook:
-  keeper now detects paused standby replay and safely attempts
-  `pg_wal_replay_resume()`, with warning-level observability for check/resume
-  failures.
-* Add optional `beforeStopCommand` cluster setting propagated to DB spec and
-  executed by keeper as a best-effort pre-stop hook before managed PostgreSQL
-  stop operations.
-* Add sentinel leader-race backoff hardening:
-  failover election is deferred temporarily (bounded by `failInterval`) only
-  when a failed-master path still has candidate standbys with recently
-  observed WAL progress, reducing false elections during transient visibility
-  races.
-* Add integration coverage for pre-promote fencing semantics:
-  standby-cluster `promote` is blocked when `prePromoteCommand` exits non-zero,
-  and keeper keeps refusing promotion attempts until hook succeeds.
-* Add a default-off logical-slot-failover feature gate scaffold:
-  new cluster contract flag `enableLogicalSlotFailover` is propagated to DB
-  specs and validated to require `managedLogicalReplicationSlots`; current
-  runtime behavior is unchanged while the gate is reserved for staged rollout
-  of future standby-side failover semantics.
-* Extend logical-slot-failover gate with standby readiness observability:
-  when `enableLogicalSlotFailover` is enabled, standby DB specs receive managed
-  logical-slot definitions and keeper reports readiness gaps (`missing` or
-  `mismatch`) without creating or dropping logical slots on standby.
-* Add integration coverage for logical-slot-failover standby readiness mode:
-  under the gate, managed logical slots stay master-only before promotion,
-  standby emits readiness warnings, and failover remains successful.
-* Add integration chaos-lite coverage for repeated PG17+ native logical-slot
-  failover cycles (`TestLogicalSlotFailoverGateRepeatedFailoverCycles`) to
-  verify slot presence/consumption continuity on promoted masters.
-* Add opt-in long-run integration soak coverage for logical-slot failover
-  cycles (`TestLogicalSlotFailoverGateSoakFailoverCycles`) with configurable
-  cycle count via `HYSTERON_INTEGRATION_SOAK_FAILOVER_CYCLES`.
-* Forward soak-control environment variables through integration compose
-  runner so opt-in soak tests can be executed via `make integration-compose`
-  without local runner workarounds.
-* Add integration coverage for gate-disabled managed logical slot behavior:
-  with `managedLogicalReplicationSlots` configured and
-  `enableLogicalSlotFailover` disabled, slots remain master-only before
-  promotion and are created on the promoted node after failover.
-* Evolve logical-slot-failover implementation toward version-aware semantics:
-  PG17+ create path now requests native failover logical slots,
-  `enableLogicalSlotFailover` enforces `hot_standby_feedback=on`,
-  master publishes logical-slot `confirmed_flush_lsn` into cluster state,
-  and standby-side safe target computation/advance foundations are added
-  (`target = min(desired_lsn, replay_lsn)`, forward-only).
-* Add standby managed logical-slot advance decision flow:
-  standby now evaluates per-slot advance operations from master-published
-  logical-slot LSN state and applies safe `pg_replication_slot_advance`
-  calls with mismatch filtering and replay-bound targets.
-* Add integration negative coverage for logical-slot failover gate parameter
-  policy: updates are rejected when
-  `enableLogicalSlotFailover=true` and
-  `pgParameters.hot_standby_feedback` is explicitly disabled.
-* Add integration coverage that logical-slot failover gate runtime enforces
-  `hot_standby_feedback=on` when this parameter is not explicitly set in
-  cluster spec.
-* Guard standby logical-slot advance path by PostgreSQL major capability:
-  advance operations are now attempted only on PostgreSQL 16+ when
-  logical-slot failover gate is enabled.
-* Add integration coverage for standby logical-slot advance pipeline under
-  failover gate when a managed logical slot exists on standby
-  (PG16+ capability path).
-* Add explicit runtime warning when logical-slot failover gate is enabled on
-  PostgreSQL versions where standby logical-slot advance is unavailable
-  (PG<16).
-* Add complementary legacy integration coverage for PG<16:
-  with failover gate enabled and a standby logical slot present,
-  standby slot `confirmed_flush_lsn` remains stable (no advance attempts).
-* Add keeper Prometheus counters for standby logical-slot advance pipeline:
-  attempts, successes, and failures.
-* Add integration coverage for logical-slot-failover gate validation:
-  cluster updates now have explicit test coverage that
-  `enableLogicalSlotFailover` is rejected unless
-  `managedLogicalReplicationSlots` are configured.
-* Strengthen logical-slot guardrail integration assertions:
-  tests now verify the exact validation reason in command output for
-  `wal_level=logical` requirement and for the
-  `enableLogicalSlotFailover` + `managedLogicalReplicationSlots` coupling.
-* Add a consolidated logical-slot integration regression sweep that runs
-  guardrail, gate-disabled, and gate-enabled readiness scenarios together to
-  validate cross-scenario stability.
-* Improve integration command diagnostics:
-  `Hysteron`, `HysteronCluster`, and `HysteronFailover` error returns now
-  include command output context to speed up failure analysis.
-* Add integration coverage for logical-slot-failover gate transition:
-  switching `enableLogicalSlotFailover` from `true` to `false` while keeping
-  managed logical slots preserves primary lifecycle behavior and keeps
-  failover successful with slot creation on the promoted primary.
-* Extend logical-slot-failover gate transition coverage:
-  switching `enableLogicalSlotFailover` from `false` to `true` while keeping
-  managed logical slots now has explicit integration coverage, confirming
-  readiness-only standby behavior before promotion and slot creation on the
-  promoted node after failover.
-* Add a full logical-slot integration regression batch:
-  managed-slot lifecycle, mismatch safety, wal_level guardrail, gate
-  validation, gate-disabled and gate-enabled runtime behavior, and both
-  gate-transition directions are now exercised together in one integration
-  pass to catch cross-scenario regressions.
-* Add advanced integration compatibility coverage for recently introduced HA
-  controls by running pre-promote fencing failure handling, pg_rewind timeline
-  fork recovery, and logical-slot failover-gate scenarios together in one
-  targeted regression pass.
-* Align `beforeStopCommand` semantics with keeper-managed restarts:
-  keeper now runs the before-stop hook before all internal
-  `pgm.Restart(true)` paths (recovery-parameter restarts and automatic
-  pending-restart restarts), with new integration coverage in
-  `TestBeforeStopCommandHook`.
-* Deduplicate standby logical-slot readiness warnings:
-  keeper now logs gate readiness warnings only when `missing/mismatch` state
-  changes, reducing noisy repeated warnings during steady-state reconcile
-  loops.
-* Add explicit logical-slot-failover gate warning:
-  keeper now emits a one-time warning when `enableLogicalSlotFailover` is
-  enabled, clarifying that the mode is experimental and standby behavior is
-  currently readiness-only.
-* Automatically prune expired standby logical-slot advance retry-backoff
-  entries so retry backlog metrics reflect active waits.
-* Reset standby logical-slot advance retry state on gate/role transitions to
-  avoid stale retry backlog across mode changes.
-* Move standby logical-slot advance SQL execution to an async keeper worker
-  with deduplicating in-memory queueing, keeping reconcile-loop planning
-  non-blocking while preserving bounded retry/backoff behavior.
-* Fix keeper physical-slot reconcile input to use only physical slots, avoiding
-  accidental logical-slot churn when managed logical slots are enabled.
-* Reduce expected standby logical-slot advance log noise by downgrading
-  `SQLSTATE 55006` (slot active) events to debug level, and add dedicated
-  metric `hysteron_keeper_logical_slot_standby_advance_active_conflicts_total`
-  to track these conflicts explicitly.
-* Add keeper metric
-  `hysteron_keeper_logical_slot_standby_advance_pending_slots`
-  for async standby slot-advance queue depth/backlog visibility.
-* Add integration coverage for logical-slot standby-advance resilience during
-  temporary store (etcd) outage and recovery
-  (`TestLogicalSlotFailoverGateStandbyAdvanceRecoversAfterStoreOutage`).
-* Add PG17+ native failover logical-slot inconsistency cleanup on standby:
-  keeper now detects managed `hysteron_*` slots in broken state
-  (`failover=true`, `synced=false`) and performs best-effort guarded cleanup
-  with warning-level observability, plus unit coverage for candidate
-  selection.
-* Extend replication-slot ignore policy with structured matcher rules
-  (`name/type/database/plugin`) and apply matcher-aware filtering across
-  keeper physical and logical slot reconcile paths, including standby logical
-  slot advance and PG17 inconsistency cleanup.
-* Add validation and integration coverage for structured slot ignore matchers,
-  including logical managed-slot behavior where matcher-gated slots are
-  skipped until matcher removal.
-* Add cluster-spec failsafe contract scaffolding and validation guardrails
-  (`enableFailsafeMode`, probe interval/timeout, max missing peers, TTL) with
-  safe defaults and unit test coverage.
-* Add keeper-side failsafe runtime scaffold and Prometheus metrics for
-  failsafe enabled/state/enter/exit tracking, wired to cluster-spec runtime
-  config application while keeping behavior default-off.
-* Add DCS degraded/recovered coordination hooks in keeper and sentinel for
-  failsafe observability state transitions (active/expired/inactive), without
-  changing failover or leadership decision semantics.
-* Add integration validation for failsafe spec guardrails and update path:
-  invalid probe timeout/interval and ttl/interval combinations are rejected,
-  while a valid failsafe configuration patch is accepted.
-* Update cluster-spec docs for failsafe options and structured slot-ignore
-  matchers, including defaults and validation constraints.
-* Add explicit standby `noStream` contract propagation and disable standby
-  logical-slot sync/advance path under logical-slot-failover gate when
-  `noStream=true`, clarifying archive-recovery-only topology behavior.
-* Add integration coverage that `standbyConfig.noStream=true` suppresses
-  standby logical-slot advance under logical-slot-failover gate (PG16+
-  standby slot remains stable).
-* Clarify `memberReplicationSlotTTL` operational semantics in cluster-spec
-  docs: cleanup is age-gated and safety-guarded (`inactive`, no `xmin`), with
-  conservative behavior during degraded scenarios.
+  `hysteron_keeper_shutdown_seconds`.
 
 ## v0.17.0
 

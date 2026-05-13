@@ -142,13 +142,15 @@ type sentinelRuntimeKubernetesCommand struct {
 }
 
 type clusterInitializeCommand struct {
-	File string `short:"f" long:"file" description:"file containing the initial cluster specification"`
+	File string                    `short:"f" long:"file" description:"file containing the initial cluster specification"`
+	Args clusterSpecPositionalArgs `positional-args:"true"`
 	confirmationOptions
 }
 
 type clusterUpdateCommand struct {
-	File  string `short:"f" long:"file" description:"file containing a complete cluster specification or a patch to apply to the current cluster specification"`
-	Patch bool   `short:"p" long:"patch" description:"patch the current cluster specification instead of replacing it"`
+	File  string                    `short:"f" long:"file" description:"file containing a complete cluster specification or a patch to apply to the current cluster specification"`
+	Patch bool                      `short:"p" long:"patch" description:"patch the current cluster specification instead of replacing it"`
+	Args  clusterSpecPositionalArgs `positional-args:"true" required:"true"`
 }
 
 type clusterStatusCommand struct {
@@ -197,4 +199,8 @@ type confirmationOptions struct {
 
 type keeperUIDOptions struct {
 	KeeperUID string `long:"keeper-uid" validate-non-empty:"true" description:"keeper uid"`
+}
+
+type clusterSpecPositionalArgs struct {
+	Spec string `positional-arg-name:"spec" description:"cluster spec content provided directly as argument"`
 }

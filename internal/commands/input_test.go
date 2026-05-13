@@ -22,28 +22,31 @@ import (
 )
 
 func TestReadDataInputFromFileOrArgRequiresInput(t *testing.T) {
-	_, err := readDataInputFromFileOrArg("", nil)
+	_, err := readCommandInput("", "", true)
 	if !errors.Is(err, ErrCommandInputRequired) {
 		t.Fatalf("expected ErrCommandInputRequired, got %v", err)
 	}
 }
 
 func TestReadDataInputFromFileOrArgRejectsConflictingInput(t *testing.T) {
-	_, err := readDataInputFromFileOrArg("spec.json", []string{"{}"})
+	_, err := readCommandInput("spec.json", "{}", true)
 	if !errors.Is(err, ErrCommandInputConflict) {
 		t.Fatalf("expected ErrCommandInputConflict, got %v", err)
 	}
 }
 
-func TestReadDataInputFromFileOrArgRejectsExtraArgs(t *testing.T) {
-	_, err := readDataInputFromFileOrArg("", []string{"{}", "{}"})
-	if !errors.Is(err, ErrTooManyCommandArguments) {
-		t.Fatalf("expected ErrTooManyCommandArguments, got %v", err)
+func TestReadDataInputFromFileOrArgOptionalInputReturnsNil(t *testing.T) {
+	got, err := readCommandInput("", "", false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != nil {
+		t.Fatalf("expected nil input, got %q", string(got))
 	}
 }
 
 func TestReadDataInputFromFileOrArgFromPositionalArg(t *testing.T) {
-	got, err := readDataInputFromFileOrArg("", []string{`{"initMode":"new"}`})
+	got, err := readCommandInput("", `{"initMode":"new"}`, true)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -59,7 +62,7 @@ func TestReadDataInputFromFileOrArgFromFile(t *testing.T) {
 		t.Fatalf("write temp spec: %v", err)
 	}
 
-	got, err := readDataInputFromFileOrArg(specPath, nil)
+	got, err := readCommandInput(specPath, "", true)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

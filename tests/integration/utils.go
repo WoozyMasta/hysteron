@@ -404,8 +404,11 @@ func NewTestKeeperWithID(t *testing.T, dir, uid, clusterName, pgSUUsername, pgSU
 	args = append(args, fmt.Sprintf("--pg-listen-address=%s", pgListenAddress))
 	args = append(args, fmt.Sprintf("--pg-port=%s", pgPort))
 	args = append(args, fmt.Sprintf("--data-dir=%s", dataDir))
-	args = append(args, fmt.Sprintf("--store-backend=%s", storeBackend))
-	args = append(args, fmt.Sprintf("--store-endpoints=%s", storeEndpoints))
+	storeArgs, err := runtimeStoreArgs(storeBackend, storeEndpoints)
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, storeArgs...)
 	args = append(args, fmt.Sprintf("--pg-su-username=%s", pgSUUsername))
 	if pgSUPassword != "" {
 		args = append(args, fmt.Sprintf("--pg-su-password=%s", pgSUPassword))
@@ -848,8 +851,11 @@ func NewTestSentinel(t *testing.T, dir string, clusterName string, storeBackend 
 
 	args := []string{}
 	args = append(args, fmt.Sprintf("--cluster-name=%s", clusterName))
-	args = append(args, fmt.Sprintf("--store-backend=%s", storeBackend))
-	args = append(args, fmt.Sprintf("--store-endpoints=%s", storeEndpoints))
+	storeArgs, err := runtimeStoreArgs(storeBackend, storeEndpoints)
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, storeArgs...)
 	if os.Getenv("DEBUG") != "" {
 		args = append(args, "--debug")
 	}
@@ -899,8 +905,11 @@ func NewTestProxy(t *testing.T, dir string, clusterName, pgSUUsername, pgSUPassw
 	args = append(args, fmt.Sprintf("--cluster-name=%s", clusterName))
 	args = append(args, fmt.Sprintf("--listen-address=%s", listenAddress))
 	args = append(args, fmt.Sprintf("--port=%s", port))
-	args = append(args, fmt.Sprintf("--store-backend=%s", storeBackend))
-	args = append(args, fmt.Sprintf("--store-endpoints=%s", storeEndpoints))
+	storeArgs, err := runtimeStoreArgs(storeBackend, storeEndpoints)
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, storeArgs...)
 	if os.Getenv("DEBUG") != "" {
 		args = append(args, "--debug")
 	}
@@ -1161,7 +1170,7 @@ func wrapUnifiedRuntimeArgs(component string, backend store.Backend, componentAr
 	if err != nil {
 		return nil, err
 	}
-	args := []string{component, backendCmd, "--"}
+	args := []string{component, backendCmd}
 	args = append(args, componentArgs...)
 	return args, nil
 }
@@ -1174,6 +1183,17 @@ func runtimeBackendSubcommand(backend store.Backend) (string, error) {
 		return "kubernetes", nil
 	default:
 		return "", fmt.Errorf("unsupported runtime backend %q", backend)
+	}
+}
+
+func runtimeStoreArgs(backend store.Backend, storeEndpoints string) ([]string, error) {
+	switch backend {
+	case "etcd", "etcdv3":
+		return []string{fmt.Sprintf("--etcd-endpoints=%s", storeEndpoints)}, nil
+	case "kubernetes":
+		return nil, nil
+	default:
+		return nil, fmt.Errorf("unsupported runtime backend %q", backend)
 	}
 }
 

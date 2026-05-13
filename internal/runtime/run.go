@@ -53,7 +53,7 @@ func Run(target Target) error {
 	switch target.Component {
 	case "sentinel":
 		if target.Sentinel == nil {
-			return sentinelcmd.Run(*target.CommonConfig, target.ExtraArgs)
+			return fmt.Errorf("missing runtime options for component %q", target.Component)
 		}
 		return sentinelcmd.RunWithOptions(*target.CommonConfig, sentinelcmd.RunOptions{
 			InitialClusterSpecFile:         target.Sentinel.InitialClusterSpecFile,
@@ -69,7 +69,7 @@ func Run(target Target) error {
 
 	case "proxy":
 		if target.Proxy == nil {
-			return proxycmd.Run(*target.CommonConfig, target.ExtraArgs)
+			return fmt.Errorf("missing runtime options for component %q", target.Component)
 		}
 		return proxycmd.RunWithOptions(*target.CommonConfig, proxycmd.RunOptions{
 			ListenAddress:           target.Proxy.ListenAddress,
@@ -80,36 +80,36 @@ func Run(target Target) error {
 		})
 
 	case "keeper":
-		if target.Keeper != nil {
-			return keepercmd.RunWithOptions(*target.CommonConfig, keepercmd.RunOptions{
-				UID:                     target.Keeper.UID,
-				DataDir:                 target.Keeper.DataDir,
-				CanBeMaster:             target.Keeper.CanBeMaster,
-				CanBeSynchronousReplica: target.Keeper.CanBeSynchronousReplica,
-				DisableDataDirLocking:   target.Keeper.DisableDataDirLocking,
-				AllowNewerPG:            target.Keeper.AllowNewerPG,
-				PG: keepercmd.RunPostgresOptions{
-					ListenAddress:    target.Keeper.PG.ListenAddress,
-					AdvertiseAddress: target.Keeper.PG.AdvertiseAddress,
-					Port:             target.Keeper.PG.Port,
-					AdvertisePort:    target.Keeper.PG.AdvertisePort,
-					BinPath:          target.Keeper.PG.BinPath,
-					Repl: keepercmd.RunPostgresReplOptions{
-						AuthMethod:   target.Keeper.PG.Repl.AuthMethod,
-						Username:     target.Keeper.PG.Repl.Username,
-						Password:     target.Keeper.PG.Repl.Password,
-						PasswordFile: target.Keeper.PG.Repl.PasswordFile,
-					},
-					SU: keepercmd.RunPostgresSUOptions{
-						AuthMethod:   target.Keeper.PG.SU.AuthMethod,
-						Username:     target.Keeper.PG.SU.Username,
-						Password:     target.Keeper.PG.SU.Password,
-						PasswordFile: target.Keeper.PG.SU.PasswordFile,
-					},
-				},
-			})
+		if target.Keeper == nil {
+			return fmt.Errorf("missing runtime options for component %q", target.Component)
 		}
-		return keepercmd.Run(*target.CommonConfig, target.ExtraArgs)
+		return keepercmd.RunWithOptions(*target.CommonConfig, keepercmd.RunOptions{
+			UID:                     target.Keeper.UID,
+			DataDir:                 target.Keeper.DataDir,
+			CanBeMaster:             target.Keeper.CanBeMaster,
+			CanBeSynchronousReplica: target.Keeper.CanBeSynchronousReplica,
+			DisableDataDirLocking:   target.Keeper.DisableDataDirLocking,
+			AllowNewerPG:            target.Keeper.AllowNewerPG,
+			PG: keepercmd.RunPostgresOptions{
+				ListenAddress:    target.Keeper.PG.ListenAddress,
+				AdvertiseAddress: target.Keeper.PG.AdvertiseAddress,
+				Port:             target.Keeper.PG.Port,
+				AdvertisePort:    target.Keeper.PG.AdvertisePort,
+				BinPath:          target.Keeper.PG.BinPath,
+				Repl: keepercmd.RunPostgresReplOptions{
+					AuthMethod:   target.Keeper.PG.Repl.AuthMethod,
+					Username:     target.Keeper.PG.Repl.Username,
+					Password:     target.Keeper.PG.Repl.Password,
+					PasswordFile: target.Keeper.PG.Repl.PasswordFile,
+				},
+				SU: keepercmd.RunPostgresSUOptions{
+					AuthMethod:   target.Keeper.PG.SU.AuthMethod,
+					Username:     target.Keeper.PG.SU.Username,
+					Password:     target.Keeper.PG.SU.Password,
+					PasswordFile: target.Keeper.PG.SU.PasswordFile,
+				},
+			},
+		})
 
 	default:
 		return fmt.Errorf("unsupported runtime component %q", target.Component)

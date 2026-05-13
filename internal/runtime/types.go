@@ -24,7 +24,6 @@ type Target struct {
 	Sentinel     *SentinelOptions
 	Proxy        *ProxyOptions
 	Keeper       *KeeperOptions
-	ExtraArgs    []string
 }
 
 // SentinelOptions configures sentinel runtime options from unified CLI.

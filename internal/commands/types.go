@@ -25,13 +25,6 @@ type rootCommand struct {
 	Cluster  clusterCommand         `command:"cluster" command-group:"Management Commands" description:"Manage cluster control operations"`
 }
 
-type runtimeCommand struct {
-	Kubernetes runtimeKubernetesCommand `command:"kubernetes" alias:"k8s" description:"Run component with kubernetes backend"`
-	Component  string                   `no-flag:"true"`
-	Common     runtimeCommonOptions     `group:"Common"`
-	Etcd       runtimeEtcdCommand       `command:"etcd" alias:"etcdv3" description:"Run component with etcd backend"`
-}
-
 type keeperRuntimeCommand struct {
 	Kubernetes keeperRuntimeKubernetesCommand `command:"kubernetes" alias:"k8s" description:"Run component with kubernetes backend"`
 	Component  string                         `no-flag:"true"`
@@ -83,18 +76,6 @@ type clusterDataCommand struct {
 
 type clusterKeeperCommand struct {
 	Remove clusterKeeperRemoveCommand `command:"remove" description:"Remove a keeper from cluster data"`
-}
-
-type runtimeEtcdCommand struct {
-	Common    runtimeCommonOptions `no-flag:"true"`
-	Component string               `no-flag:"true"`
-	Etcd      runtimeEtcdOptions   `group:"Etcd" namespace:"etcd" env-namespace:"ETCD"`
-}
-
-type runtimeKubernetesCommand struct {
-	K8s       k8sStoreOptions      `group:"Kubernetes" namespace:"k8s" env-namespace:"K8S"`
-	Component string               `no-flag:"true"`
-	Common    runtimeCommonOptions `no-flag:"true"`
 }
 
 type proxyRuntimeEtcdCommand struct {

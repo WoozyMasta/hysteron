@@ -138,6 +138,8 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Remove low-value keeper config/lifecycle echo gauges
   `hysteron_keeper_sleep_interval` and
   `hysteron_keeper_shutdown_seconds` from the default metric set.
+* Add practical PromQL examples for new HA/keeper/proxy metrics in
+  `doc/metrics.md`.
 * Check or explicitly discard remaining command, PostgreSQL, and store cleanup
   errors so `errcheck` is clean.
 * Clean up initial style lint findings for whitespace, unconvert, gocritic,

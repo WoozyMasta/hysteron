@@ -95,3 +95,24 @@ Current `mode` values:
 
 This fork does not require strict backward compatibility for metric names.
 When a metric semantic is wrong, prefer replacing it with correct semantics.
+
+## PromQL examples
+
+Use these as starting points for alerts/dashboards.
+
+* Sentinel checks stalled:
+  `time() - max(hysteron_sentinel_last_cluster_check_success_seconds) > 30`
+* Failover happened recently:
+  `increase(hysteron_sentinel_failovers_total[10m]) > 0`
+* Keeper cannot reach DCS:
+  `max(hysteron_keeper_dcs_degraded) > 0`
+* Keeper pending restart signal:
+  `max(hysteron_pg_pending_restart) > 0`
+* Proxy data-path connect errors:
+  `sum by (mode, reason) (increase(hysteron_proxy_connect_errors_total[5m])) > 0`
+* Proxy route disabled unexpectedly:
+  `hysteron_proxy_route_state{mode="writable",state="disabled"} == 1`
+* Slow keeper resync operations (p95):
+  `histogram_quantile(0.95, sum by (le) (rate(hysteron_keeper_basebackup_duration_seconds_bucket[10m])))`
+* Slow sentinel failovers (p95):
+  `histogram_quantile(0.95, sum by (le) (rate(hysteron_sentinel_failover_duration_seconds_bucket[10m])))`

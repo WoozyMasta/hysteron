@@ -20,7 +20,7 @@ import (
 	"io"
 
 	"github.com/jedib0t/go-pretty/v6/table"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 // WriteClusterList renders cluster names with the selected format.

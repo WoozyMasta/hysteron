@@ -20,7 +20,7 @@ import (
 
 	"github.com/woozymasta/hysteron/internal/cluster"
 	"github.com/woozymasta/hysteron/internal/common"
-	pg "github.com/woozymasta/hysteron/internal/postgresql"
+	"github.com/woozymasta/hysteron/internal/postgresql"
 )
 
 func BenchmarkKeeperCreatePGParameters(b *testing.B) {
@@ -64,7 +64,7 @@ func BenchmarkKeeperCreateRecoveryOptions(b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		options := p.createRecoveryOptions(
-			pg.RecoveryModeStandby,
+			postgresql.RecoveryModeStandby,
 			standbySettings,
 			archiveRecoverySettings,
 			recoveryTargetSettings,

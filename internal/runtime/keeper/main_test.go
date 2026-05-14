@@ -26,11 +26,12 @@ import (
 
 	"github.com/golang/mock/gomock"
 	pgmocks "github.com/woozymasta/hysteron/internal/mock/postgresql"
-	pg "github.com/woozymasta/hysteron/internal/postgresql"
+	"github.com/woozymasta/hysteron/internal/postgresql"
 
 	"github.com/woozymasta/hysteron/internal/cluster"
 	"github.com/woozymasta/hysteron/internal/common"
-	slog "github.com/woozymasta/hysteron/internal/log"
+	"github.com/woozymasta/hysteron/internal/log"
+	"github.com/woozymasta/hysteron/internal/utils/units"
 )
 
 func parseSynchronousStandbyNames(s string) ([]string, error) {
@@ -127,7 +128,7 @@ func TestValidatePostgresVersion(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			p := &PostgresKeeper{
-				cfg: &config{AllowNewerPG: tt.allowNewer},
+				cfg: &runConfig{AllowNewerPG: tt.allowNewer},
 				pgBinaryVersion: func() (int, int, error) {
 					return tt.major, 0, nil
 				},
@@ -320,7 +321,7 @@ func TestGetTimeLinesHistory(t *testing.T) {
 			TimelineID: 1,
 		}
 
-		ctlsh, err := getTimeLinesHistory(pgState, nil, 3, slog.L())
+		ctlsh, err := getTimeLinesHistory(pgState, nil, 3, log.L())
 
 		if err != nil {
 			t.Errorf("err should be nil, but got %v", err)
@@ -340,8 +341,8 @@ func TestGetTimeLinesHistory(t *testing.T) {
 		defer ctrl.Finish()
 
 		pgm := pgmocks.NewMockPGManager(ctrl)
-		pgm.EXPECT().GetTimelinesHistory(timelineID).Return([]*pg.TimelineHistory{}, fmt.Errorf("failed to get timeline history"))
-		ctlsh, err := getTimeLinesHistory(pgState, pgm, 3, slog.L())
+		pgm.EXPECT().GetTimelinesHistory(timelineID).Return([]*postgresql.TimelineHistory{}, fmt.Errorf("failed to get timeline history"))
+		ctlsh, err := getTimeLinesHistory(pgState, pgm, 3, log.L())
 
 		if err == nil {
 			t.Errorf("err should be not be nil")
@@ -364,7 +365,7 @@ func TestGetTimeLinesHistory(t *testing.T) {
 		defer ctrl.Finish()
 
 		pgm := pgmocks.NewMockPGManager(ctrl)
-		timelineHistories := []*pg.TimelineHistory{
+		timelineHistories := []*postgresql.TimelineHistory{
 			{
 				TimelineID:  1,
 				SwitchPoint: 1,
@@ -377,7 +378,7 @@ func TestGetTimeLinesHistory(t *testing.T) {
 			},
 		}
 		pgm.EXPECT().GetTimelinesHistory(timelineID).Return(timelineHistories, nil)
-		ctlsh, err := getTimeLinesHistory(pgState, pgm, 3, slog.L())
+		ctlsh, err := getTimeLinesHistory(pgState, pgm, 3, log.L())
 
 		if err != nil {
 			t.Errorf("err should be not be nil")
@@ -416,7 +417,7 @@ func TestGetTimeLinesHistory(t *testing.T) {
 		defer ctrl.Finish()
 
 		pgm := pgmocks.NewMockPGManager(ctrl)
-		timelineHistories := []*pg.TimelineHistory{
+		timelineHistories := []*postgresql.TimelineHistory{
 			{
 				TimelineID:  1,
 				SwitchPoint: 1,
@@ -439,7 +440,7 @@ func TestGetTimeLinesHistory(t *testing.T) {
 			},
 		}
 		pgm.EXPECT().GetTimelinesHistory(timelineID).Return(timelineHistories, nil)
-		ctlsh, err := getTimeLinesHistory(pgState, pgm, 2, slog.L())
+		ctlsh, err := getTimeLinesHistory(pgState, pgm, 2, log.L())
 
 		if err != nil {
 			t.Errorf("err should be not be nil")
@@ -492,7 +493,7 @@ func TestParseWalKeepSizeBytes(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got, err := parseWalKeepSizeBytes(tt.value)
+			got, err := units.ParsePostgreSQLBytes(tt.value)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("expected error for %q", tt.value)
@@ -513,7 +514,7 @@ func TestCreateRecoveryOptions(t *testing.T) {
 	p := &PostgresKeeper{}
 
 	t.Run("defaults timeline to latest without recovery target action", func(t *testing.T) {
-		options := p.createRecoveryOptions(pg.RecoveryModeRecovery, nil, nil, &cluster.RecoveryTargetSettings{})
+		options := p.createRecoveryOptions(postgresql.RecoveryModeRecovery, nil, nil, &cluster.RecoveryTargetSettings{})
 		if got := options.RecoveryParameters["recovery_target_timeline"]; got != "latest" {
 			t.Fatalf("unexpected recovery_target_timeline: got %q want %q", got, "latest")
 		}
@@ -524,7 +525,7 @@ func TestCreateRecoveryOptions(t *testing.T) {
 
 	t.Run("sets promote action when recovery target selector is defined", func(t *testing.T) {
 		options := p.createRecoveryOptions(
-			pg.RecoveryModeRecovery,
+			postgresql.RecoveryModeRecovery,
 			nil,
 			nil,
 			&cluster.RecoveryTargetSettings{
@@ -561,7 +562,7 @@ func (f *fakeStandbyReplayController) ResumeWALReplay() error {
 }
 
 func TestEnsureStandbyWALReplayRunning(t *testing.T) {
-	p := &PostgresKeeper{cfg: &config{}}
+	p := &PostgresKeeper{cfg: &runConfig{}}
 
 	t.Run("no resume when replay is not paused", func(t *testing.T) {
 		replay := &fakeStandbyReplayController{paused: false}
@@ -589,7 +590,7 @@ func TestEnsureStandbyWALReplayRunning(t *testing.T) {
 }
 
 func TestRunPrePromoteHookEmpty(t *testing.T) {
-	p := &PostgresKeeper{cfg: &config{}}
+	p := &PostgresKeeper{cfg: &runConfig{}}
 	db := &cluster.DB{
 		UID: "db1",
 		Spec: &cluster.DBSpec{
@@ -603,7 +604,7 @@ func TestRunPrePromoteHookEmpty(t *testing.T) {
 }
 
 func TestRunPrePromoteHookFailure(t *testing.T) {
-	p := &PostgresKeeper{cfg: &config{}}
+	p := &PostgresKeeper{cfg: &runConfig{}}
 	db := &cluster.DB{
 		UID: "db1",
 		Spec: &cluster.DBSpec{

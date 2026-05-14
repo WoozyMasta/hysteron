@@ -23,7 +23,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/woozymasta/hysteron/internal/cluster"
 	"github.com/woozymasta/hysteron/internal/common"
-	pg "github.com/woozymasta/hysteron/internal/postgresql"
+	"github.com/woozymasta/hysteron/internal/postgresql"
 )
 
 func TestEvaluatePgrewindDecision(t *testing.T) {
@@ -138,7 +138,7 @@ func TestManagedReplicationSlotsRespectsIgnoreList(t *testing.T) {
 }
 
 func TestStaleSlotsWithXmin(t *testing.T) {
-	slots := []pg.PhysicalReplicationSlot{
+	slots := []postgresql.PhysicalReplicationSlot{
 		{Name: "hysteron_db2", Active: false, HasXmin: true},
 		{Name: "hysteron_db3", Active: true, HasXmin: true},
 		{Name: "hysteron_db4", Active: false, HasXmin: false},
@@ -223,7 +223,7 @@ func TestShouldDropUnmanagedHysteronSlot(t *testing.T) {
 
 	t.Run("tracked orphan respects ttl and state", func(t *testing.T) {
 		orphan := map[string]time.Time{slot: now.Add(-5 * time.Minute)}
-		state := map[string]pg.PhysicalReplicationSlot{
+		state := map[string]postgresql.PhysicalReplicationSlot{
 			slot: {Name: slot, Active: false, HasXmin: false},
 		}
 
@@ -252,7 +252,7 @@ func TestShouldDropUnmanagedHysteronSlot(t *testing.T) {
 			t.Fatalf("unexpected decision after ttl: drop=%v reason=%s", drop, reason)
 		}
 
-		state[slot] = pg.PhysicalReplicationSlot{Name: slot, Active: true, HasXmin: false}
+		state[slot] = postgresql.PhysicalReplicationSlot{Name: slot, Active: true, HasXmin: false}
 		drop, reason = shouldDropUnmanagedHysteronSlot(
 			slot,
 			10*time.Minute,
@@ -265,7 +265,7 @@ func TestShouldDropUnmanagedHysteronSlot(t *testing.T) {
 			t.Fatalf("unexpected active-slot decision: drop=%v reason=%s", drop, reason)
 		}
 
-		state[slot] = pg.PhysicalReplicationSlot{Name: slot, Active: false, HasXmin: true}
+		state[slot] = postgresql.PhysicalReplicationSlot{Name: slot, Active: false, HasXmin: true}
 		drop, reason = shouldDropUnmanagedHysteronSlot(
 			slot,
 			10*time.Minute,
@@ -299,7 +299,7 @@ func TestEvaluateManagedLogicalSlotsDecision(t *testing.T) {
 			[]cluster.ManagedLogicalReplicationSlot{
 				{Name: "hysteron_slot1", Database: "postgres", Plugin: "pgoutput"},
 			},
-			[]pg.LogicalReplicationSlot{
+			[]postgresql.LogicalReplicationSlot{
 				{Name: "hysteron_slot1", Database: "postgres", Plugin: "wal2json"},
 			},
 			nil,
@@ -314,7 +314,7 @@ func TestEvaluateManagedLogicalSlotsDecision(t *testing.T) {
 			[]cluster.ManagedLogicalReplicationSlot{
 				{Name: "hysteron_slot1", Database: "postgres", Plugin: "pgoutput"},
 			},
-			[]pg.LogicalReplicationSlot{
+			[]postgresql.LogicalReplicationSlot{
 				{Name: "hysteron_slot1", Database: "postgres", Plugin: "pgoutput", Active: true},
 				{Name: "hysteron_old", Database: "postgres", Plugin: "pgoutput", Active: false},
 				{Name: "hysteron_active", Database: "postgres", Plugin: "pgoutput", Active: true},
@@ -372,7 +372,7 @@ func TestEvaluateManagedLogicalSlotReadiness(t *testing.T) {
 				{Name: "hysteron_slot1", Database: "postgres", Plugin: "pgoutput"},
 				{Name: "hysteron_slot2", Database: "postgres", Plugin: "pgoutput"},
 			},
-			[]pg.LogicalReplicationSlot{
+			[]postgresql.LogicalReplicationSlot{
 				{Name: "hysteron_slot1", Database: "postgres", Plugin: "wal2json"},
 			},
 			nil,
@@ -411,7 +411,7 @@ func TestEvaluateBrokenNativeFailoverLogicalSlots(t *testing.T) {
 		{Name: "hysteron_slot1", Database: "postgres", Plugin: "pgoutput"},
 		{Name: "hysteron_slot2", Database: "postgres", Plugin: "pgoutput"},
 	}
-	current := []pg.LogicalReplicationSlot{
+	current := []postgresql.LogicalReplicationSlot{
 		{
 			Name:     "hysteron_slot1",
 			Database: "postgres",
@@ -549,7 +549,7 @@ func TestLogicalSlotLSNMap(t *testing.T) {
 	})
 
 	t.Run("returns slot lsns map", func(t *testing.T) {
-		got := logicalSlotLSNMap([]pg.LogicalReplicationSlot{
+		got := logicalSlotLSNMap([]postgresql.LogicalReplicationSlot{
 			{Name: "slot1", ConfirmedFlushLSN: 10},
 			{Name: "slot2", ConfirmedFlushLSN: 99},
 		})
@@ -592,7 +592,7 @@ func TestEvaluateManagedLogicalSlotAdvanceOperations(t *testing.T) {
 		{Name: "slot1", Database: "postgres", Plugin: "pgoutput"},
 		{Name: "slot2", Database: "postgres", Plugin: "pgoutput"},
 	}
-	current := []pg.LogicalReplicationSlot{
+	current := []postgresql.LogicalReplicationSlot{
 		{Name: "slot1", Database: "postgres", Plugin: "pgoutput", ConfirmedFlushLSN: 100},
 		{Name: "slot2", Database: "postgres", Plugin: "test_decoding", ConfirmedFlushLSN: 100},
 	}
@@ -815,7 +815,7 @@ func TestApplyFailsafeRuntimeConfig(t *testing.T) {
 		failsafeMaxMissingPeers: cluster.DefaultFailsafeMaxMissingPeers,
 		failsafeTTL:             cluster.DefaultFailsafeTTL,
 		failsafeState:           failsafeStateDisabled,
-		cfg:                     &config{},
+		cfg:                     &runConfig{},
 	}
 	spec := (&cluster.ClusterSpec{
 		EnableFailsafeMode:      cluster.BoolP(true),
@@ -856,7 +856,7 @@ func TestApplyFailsafeRuntimeConfig(t *testing.T) {
 func TestHandleDCSDegradedAndRecovered(t *testing.T) {
 	now := time.Unix(1000, 0).UTC()
 	p := &PostgresKeeper{
-		cfg:              &config{},
+		cfg:              &runConfig{},
 		failsafeEnabled:  true,
 		failsafeTTL:      10 * time.Second,
 		failsafeState:    failsafeStateInactive,

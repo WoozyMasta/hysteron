@@ -19,7 +19,7 @@ import (
 	"strconv"
 	"strings"
 
-	humanize "github.com/dustin/go-humanize"
+	"github.com/dustin/go-humanize"
 )
 
 // BytesValue parses human-readable byte values for CLI flags.
@@ -36,10 +36,16 @@ func (v *BytesValue) UnmarshalFlag(value string) error {
 	if trimmed == "" {
 		return fmt.Errorf("%w: empty value", ErrInvalidBytesValue)
 	}
-	parsed, err := humanize.ParseBytes(trimmed)
+
+	parsed, err := parseBytesStrict(trimmed)
 	if err != nil {
 		return fmt.Errorf("%w %q: %v", ErrInvalidBytesValue, value, err)
 	}
+
 	*v = BytesValue(parsed)
 	return nil
+}
+
+func parseBytesStrict(value string) (uint64, error) {
+	return humanize.ParseBytes(value)
 }

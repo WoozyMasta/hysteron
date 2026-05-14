@@ -139,14 +139,18 @@ func (p *PostgresKeeper) generateHBA(
 
 	if !onlyInternal {
 		// By default, if no custom pg_hba entries are provided, accept
-		// connections for all databases and users with md5 auth
+		// connections for all databases and users with default client auth.
+		defaultClientAuthMethod := "md5"
+		if p.pgSUAuthMethod == "scram-sha-256" || p.pgReplAuthMethod == "scram-sha-256" {
+			defaultClientAuthMethod = "scram-sha-256"
+		}
 		if db.Spec.PGHBA != nil {
 			computedHBA = append(computedHBA, db.Spec.PGHBA...)
 		} else {
 			computedHBA = append(
 				computedHBA,
-				"host all all 0.0.0.0/0 md5",
-				"host all all ::0/0 md5",
+				fmt.Sprintf("host all all 0.0.0.0/0 %s", defaultClientAuthMethod),
+				fmt.Sprintf("host all all ::0/0 %s", defaultClientAuthMethod),
 			)
 		}
 	}

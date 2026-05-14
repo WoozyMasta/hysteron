@@ -24,8 +24,14 @@ type Status struct {
 	Sentinels  []SentinelStatus `json:"sentinels"`
 	Proxies    []ProxyStatus    `json:"proxies"`
 	Keepers    []KeeperStatus   `json:"keepers"`
-	KeeperTree []string         `json:"-"` // KeeperTree contains human-readable keeper hierarchy lines for text output.
+	KeeperTree []KeeperTreeNode `json:"-"` // KeeperTree stores hierarchical keeper nodes for text output rendering.
 	Cluster    ClusterStatus    `json:"cluster"`
+}
+
+// KeeperTreeNode is one node in keeper hierarchy output.
+type KeeperTreeNode struct {
+	Label string // Label is the user-facing node text.
+	Level int    // Level is zero-based nesting depth.
 }
 
 // SentinelStatus is the status output for one sentinel.

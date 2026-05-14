@@ -37,7 +37,7 @@ import (
 	stconfig "github.com/woozymasta/hysteron/internal/config"
 	"github.com/woozymasta/hysteron/internal/configfile"
 	slog "github.com/woozymasta/hysteron/internal/log"
-	pg "github.com/woozymasta/hysteron/internal/postgresql"
+	"github.com/woozymasta/hysteron/internal/postgresql"
 	runtimecommon "github.com/woozymasta/hysteron/internal/runtime/common"
 	"github.com/woozymasta/hysteron/internal/store"
 	"github.com/woozymasta/hysteron/internal/utils/id"
@@ -737,8 +737,8 @@ func (s *Sentinel) dbCanSync(
 		return true, nil
 	}
 
-	required := pg.XlogPosToWalFileNameNoTimeline(db.Status.XLogPos, pg.WalSegSize)
-	older, err := pg.WalFileNameNoTimeLine(masterDB.Status.OlderWalFile)
+	required := postgresql.XlogPosToWalFileNameNoTimeline(db.Status.XLogPos, postgresql.WalSegSize)
+	older, err := postgresql.WalFileNameNoTimeLine(masterDB.Status.OlderWalFile)
 	if err != nil {
 		// warn on wrong file name (shouldn't happen...)
 		s.log.Warn().
@@ -754,10 +754,10 @@ func (s *Sentinel) dbCanSync(
 			"xlog pos isn't advancing on standby, checking if the master " +
 				"has the required wals",
 		)
-	walAvailable, walErr := pg.IsRequiredWalAvailable(
+	walAvailable, walErr := postgresql.IsRequiredWalAvailable(
 		db.Status.XLogPos,
 		masterDB.Status.OlderWalFile,
-		pg.WalSegSize,
+		postgresql.WalSegSize,
 	)
 	if walErr != nil {
 		return false, walErr
@@ -3004,7 +3004,7 @@ func runSentinel() error {
 		return fmt.Errorf("logging: %w", err)
 	}
 	log = slog.WithComponent("sentinel")
-	pg.SetLogger(slog.L())
+	postgresql.SetLogger(slog.L())
 	defer runtimecommon.CloseLogging(closer, &log)
 
 	clusterNames, err := runtimecommon.CheckClusterNames(&cfg.CommonConfig)

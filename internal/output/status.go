@@ -18,7 +18,9 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"strings"
 
+	"github.com/jedib0t/go-pretty/v6/list"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/woozymasta/hysteron/internal/app"
 )
@@ -122,15 +124,49 @@ func writeStatusTable(w io.Writer, status app.Status) error {
 		if err := writeLine(w); err != nil {
 			return err
 		}
+		treeLines := renderKeeperTree(status.KeeperTree)
 		treeTable := newStatusTable(w, "Keeper Tree")
 		treeTable.AppendHeader(table.Row{"Line"})
-		for _, line := range status.KeeperTree {
+		for _, line := range treeLines {
 			treeTable.AppendRow(table.Row{line})
 		}
-		treeTable.AppendFooter(table.Row{"Rows: " + strconv.Itoa(len(status.KeeperTree))})
+		treeTable.AppendFooter(table.Row{"Rows: " + strconv.Itoa(len(treeLines))})
 		treeTable.Render()
 	}
 	return nil
+}
+
+func renderKeeperTree(nodes []app.KeeperTreeNode) []string {
+	if len(nodes) == 0 {
+		return nil
+	}
+
+	w := list.NewWriter()
+	w.SetStyle(list.StyleConnectedLight)
+	currentLevel := 0
+
+	for _, node := range nodes {
+		for currentLevel < node.Level {
+			w.Indent()
+			currentLevel++
+		}
+		for currentLevel > node.Level {
+			w.UnIndent()
+			currentLevel--
+		}
+		w.AppendItem(node.Label)
+	}
+	w.UnIndentAll()
+
+	lines := strings.Split(w.Render(), "\n")
+	out := make([]string, 0, len(lines))
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		out = append(out, line)
+	}
+	return out
 }
 
 func newStatusTable(w io.Writer, title string) table.Writer {

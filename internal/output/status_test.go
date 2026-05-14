@@ -67,7 +67,7 @@ func TestWriteStatusPlain(t *testing.T) {
 			PgWantedGeneration:  3,
 			PgCurrentGeneration: 3,
 		}},
-		KeeperTree: []string{"keeper-1 (master)"},
+		KeeperTree: []app.KeeperTreeNode{{Label: "keeper-1 (master)", Level: 0}},
 	}
 	if err := WriteStatus(&b, FormatPlain, status); err != nil {
 		t.Fatalf("write status: %v", err)

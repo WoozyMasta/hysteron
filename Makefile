@@ -5,6 +5,7 @@ LINTER      ?= golangci-lint
 ALIGNER     ?= betteralign
 BENCHSTAT   ?= benchstat
 VULNCHECK   ?= govulncheck
+MOCKGEN     ?= mockgen
 CRI         ?= docker
 BENCH_COUNT ?= 6
 BENCH_REF   ?= bench_baseline.txt
@@ -63,10 +64,10 @@ LDFLAGS_X := \
 	-X '$(LDFLAGS_PKG).Date=$(DATE)' \
 	-X '$(LDFLAGS_PKG).URL=$(URL)'
 
-.PHONY: all build cli-docs release clean check ci verify tidy tidy-check download fmt \
+.PHONY: all build generate cli-docs release clean check ci verify tidy tidy-check download fmt \
 	fmt-check vet lint lint-fix align align-fix test test-race test-short bench \
 	bench-fast bench-reset integration integration-compose integration-matrix integration-matrix-ci vulncheck tools tools-ci tool-golangci-lint \
-	tool-betteralign tool-benchstat tool-vulncheck container-build
+	tool-betteralign tool-benchstat tool-vulncheck tool-mockgen container-build
 
 all: build
 
@@ -76,7 +77,7 @@ ci: download tools-ci verify vulncheck tidy-check fmt-check vet lint align test
 clean:
 	rm -rf $(OUTPUT_DIR)
 
-build: clean
+build: clean generate
 	@mkdir -p $(OUTPUT_DIR)
 	@out="$(OUTPUT_DIR)/$(BINARY)$(NATIVE_EXTENSION)"; \
 	echo ">> building $$out"; \
@@ -242,8 +243,8 @@ integration-matrix-ci:
 		cat "$$log_file"; if [ $$status -ne 0 ]; then exit $$status; fi; \
 	done
 
-tools: tool-golangci-lint tool-betteralign tool-benchstat tool-govulncheck
-tools-ci: tool-golangci-lint tool-betteralign tool-govulncheck
+tools: tool-golangci-lint tool-betteralign tool-benchstat tool-govulncheck tool-mockgen
+tools-ci: tool-golangci-lint tool-betteralign tool-govulncheck tool-mockgen
 
 tool-golangci-lint:
 	$(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
@@ -256,6 +257,9 @@ tool-benchstat:
 
 tool-govulncheck:
 	$(GO) install golang.org/x/vuln/cmd/govulncheck@latest
+
+tool-mockgen:
+	$(GO) install go.uber.org/mock/mockgen@latest
 
 tool-cyclonedx:
 	$(GO) install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@latest
@@ -283,3 +287,5 @@ container-build:
 	$(CRI) build --build-arg PGVERSION=$${PGVERSION} -t $${TAG} \
 		-f examples/kubernetes/image/docker/Dockerfile .
 
+generate:
+	$(GO) generate ./...

@@ -7,7 +7,7 @@ RUN make download
 COPY .git ./.git
 COPY cmd ./cmd
 COPY internal ./internal
-RUN make build
+RUN make tool-mockgen build
 
 FROM scratch
 

@@ -24,9 +24,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	pgmocks "github.com/woozymasta/hysteron/internal/mock/postgresql"
 	"github.com/woozymasta/hysteron/internal/postgresql"
+	"go.uber.org/mock/gomock"
 
 	"github.com/woozymasta/hysteron/internal/cluster"
 	"github.com/woozymasta/hysteron/internal/common"

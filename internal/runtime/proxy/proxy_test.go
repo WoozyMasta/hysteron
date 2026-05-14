@@ -22,20 +22,20 @@ import (
 
 	"github.com/woozymasta/hysteron/internal/cluster"
 	"github.com/woozymasta/hysteron/internal/common"
-	readonly "github.com/woozymasta/hysteron/internal/utils/readonly"
+	"github.com/woozymasta/hysteron/internal/utils/readonly"
 )
 
 func TestValidateProxyListeners(t *testing.T) {
 	tests := []struct {
 		name         string
-		cfg          config
+		cfg          proxyConfig
 		wantWritable bool
 		wantReadOnly bool
 		wantErr      bool
 	}{
 		{
 			name: "writable only",
-			cfg: config{
+			cfg: proxyConfig{
 				Writable: writableOptions{
 					ListenAddress: "127.0.0.1",
 					Port:          "5432",
@@ -45,7 +45,7 @@ func TestValidateProxyListeners(t *testing.T) {
 		},
 		{
 			name: "read only only",
-			cfg: config{
+			cfg: proxyConfig{
 				Writable: writableOptions{
 					ListenAddress:   "127.0.0.1",
 					Port:            "5432",
@@ -59,7 +59,7 @@ func TestValidateProxyListeners(t *testing.T) {
 		},
 		{
 			name: "both listeners",
-			cfg: config{
+			cfg: proxyConfig{
 				Writable: writableOptions{
 					ListenAddress: "127.0.0.1",
 					Port:          "5432",
@@ -73,7 +73,7 @@ func TestValidateProxyListeners(t *testing.T) {
 		},
 		{
 			name: "same listener address",
-			cfg: config{
+			cfg: proxyConfig{
 				Writable: writableOptions{
 					ListenAddress: "127.0.0.1",
 					Port:          "5432",
@@ -86,7 +86,7 @@ func TestValidateProxyListeners(t *testing.T) {
 		},
 		{
 			name: "no listener",
-			cfg: config{
+			cfg: proxyConfig{
 				Writable: writableOptions{
 					DisableListener: true,
 				},

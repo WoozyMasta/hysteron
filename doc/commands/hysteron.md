@@ -600,7 +600,7 @@ Run keeper runtime components
   postgres replication user auth method
   * Defaults: `md5`
   * Environment: `$HYSTERON_PG_REPL_AUTH_METHOD`
-  * Choices: `md5, trust`
+  * Choices: `md5, scram-sha-256, trust`
 * `--pg-repl-username` -
   postgres replication user name. Required. It'll be created on db
   initialization. Must be the same for all keepers.
@@ -620,7 +620,7 @@ Run keeper runtime components
   postgres superuser auth method
   * Defaults: `md5`
   * Environment: `$HYSTERON_PG_SU_AUTH_METHOD`
-  * Choices: `md5, trust`
+  * Choices: `md5, scram-sha-256, trust`
 * `--pg-su-username` -
   postgres superuser user name. Defaults to the effective user running keeper.
   Must be the same for all keepers.
@@ -752,6 +752,24 @@ Run proxy runtime components
 * `--disable-writable-listener` -
   disable the writable proxy listener
   * Environment: `$HYSTERON_DISABLE_WRITABLE_LISTENER`
+
+#### Read-Only Routing
+
+* `--read-only-replica-priority` -
+  read-only replica priority policy
+  * Defaults: `sync`
+  * Environment: `$HYSTERON_READ_ONLY_REPLICA_PRIORITY`
+  * Choices: `sync, async, any`
+* `--read-only-max-lag` -
+  maximum standby WAL lag in bytes for read-only routing
+  * Defaults: `0`
+  * Environment: `$HYSTERON_READ_ONLY_MAX_LAG`
+* `--read-only-no-fallback` -
+  do not route read-only connections to primary when no eligible standby exists
+  * Environment: `$HYSTERON_READ_ONLY_NO_FALLBACK`
+* `--read-only-include-primary` -
+  include primary in the normal read-only backend pool
+  * Environment: `$HYSTERON_READ_ONLY_INCLUDE_PRIMARY`
 
 #### Help Options
 

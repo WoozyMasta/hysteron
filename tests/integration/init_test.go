@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -508,6 +509,19 @@ func TestInitUsersSCRAMSHA256(t *testing.T) {
 	}
 	if err := tk.expectConnect(replUsername, replPassword); err != nil {
 		t.Fatalf("expected replication user password auth to work: %v", err)
+	}
+
+	pgHBAPath := filepath.Join(tk.dataDir, "postgres", "pg_hba.conf")
+	pgHBABytes, err := os.ReadFile(pgHBAPath)
+	if err != nil {
+		t.Fatalf("unexpected err reading pg_hba.conf: %v", err)
+	}
+	pgHBA := string(pgHBABytes)
+	if !strings.Contains(pgHBA, "host all all 0.0.0.0/0 scram-sha-256") {
+		t.Fatalf("expected default IPv4 pg_hba rule with scram-sha-256, got:\n%s", pgHBA)
+	}
+	if !strings.Contains(pgHBA, "host all all ::0/0 scram-sha-256") {
+		t.Fatalf("expected default IPv6 pg_hba rule with scram-sha-256, got:\n%s", pgHBA)
 	}
 
 	var suHash string

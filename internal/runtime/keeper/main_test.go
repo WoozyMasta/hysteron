@@ -197,6 +197,8 @@ func TestGenerateHBA(t *testing.T) {
 		DefaultSUReplAccessMode cluster.SUReplAccessMode
 		dbUID                   string
 		pgHBA                   []string
+		pgSUAuthMethod          string
+		pgReplAuthMethod        string
 		out                     []string
 	}{
 		{
@@ -283,13 +285,37 @@ func TestGenerateHBA(t *testing.T) {
 				"host all all ::0/0 md5",
 			},
 		},
+		{
+			DefaultSUReplAccessMode: cluster.SUReplAccessAll,
+			dbUID:                   "db1",
+			pgSUAuthMethod:          "scram-sha-256",
+			pgReplAuthMethod:        "scram-sha-256",
+			out: []string{
+				"local postgres superuser scram-sha-256",
+				"local replication repluser scram-sha-256",
+				"host all superuser 0.0.0.0/0 scram-sha-256",
+				"host all superuser ::0/0 scram-sha-256",
+				"host replication repluser 0.0.0.0/0 scram-sha-256",
+				"host replication repluser ::0/0 scram-sha-256",
+				"host all all 0.0.0.0/0 scram-sha-256",
+				"host all all ::0/0 scram-sha-256",
+			},
+		},
 	}
 
 	for i, tt := range tests {
+		suAuthMethod := tt.pgSUAuthMethod
+		if suAuthMethod == "" {
+			suAuthMethod = "md5"
+		}
+		replAuthMethod := tt.pgReplAuthMethod
+		if replAuthMethod == "" {
+			replAuthMethod = "md5"
+		}
 		p := &PostgresKeeper{
-			pgSUAuthMethod:   "md5",
+			pgSUAuthMethod:   suAuthMethod,
 			pgSUUsername:     "superuser",
-			pgReplAuthMethod: "md5",
+			pgReplAuthMethod: replAuthMethod,
 			pgReplUsername:   "repluser",
 		}
 

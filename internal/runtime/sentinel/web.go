@@ -101,10 +101,10 @@ type webBuildInfo struct {
 
 type webSentinelRow struct {
 	UID            string   `json:"uid"`
-	IsLocal        bool     `json:"is_local"`
-	IsLeader       bool     `json:"is_leader"`
 	Clusters       []string `json:"clusters"`
 	LeaderClusters []string `json:"leader_clusters"`
+	IsLocal        bool     `json:"is_local"`
+	IsLeader       bool     `json:"is_leader"`
 }
 
 type webClusterStatus struct {
@@ -149,11 +149,11 @@ type webProxyRow struct {
 	UID          string `json:"uid"`
 	Mode         string `json:"mode"`
 	RWAddress    string `json:"rw_address"`
-	RWActive     bool   `json:"rw_active"`
 	ROAddress    string `json:"ro_address"`
-	ROActive     bool   `json:"ro_active"`
 	ProxyTimeout string `json:"proxy_timeout"`
 	Generation   int64  `json:"generation"`
+	RWActive     bool   `json:"rw_active"`
+	ROActive     bool   `json:"ro_active"`
 	Seen         bool   `json:"seen"`
 	Enabled      bool   `json:"enabled"`
 }

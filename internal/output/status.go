@@ -54,7 +54,7 @@ func writeStatusTable(w io.Writer, status app.Status) error {
 	clusterTable.AppendFooter(table.Row{"Rows", 9})
 	clusterTable.Render()
 
-	if err := writeLine(w, ""); err != nil {
+	if err := writeLine(w); err != nil {
 		return err
 	}
 	sentinelTable := newStatusTable(w, "Sentinels")
@@ -65,7 +65,7 @@ func writeStatusTable(w io.Writer, status app.Status) error {
 	sentinelTable.AppendFooter(table.Row{"Rows", len(status.Sentinels)})
 	sentinelTable.Render()
 
-	if err := writeLine(w, ""); err != nil {
+	if err := writeLine(w); err != nil {
 		return err
 	}
 	proxyTable := newStatusTable(w, "Proxies")
@@ -81,7 +81,7 @@ func writeStatusTable(w io.Writer, status app.Status) error {
 	proxyTable.AppendFooter(table.Row{"Rows", "", "", len(status.Proxies)})
 	proxyTable.Render()
 
-	if err := writeLine(w, ""); err != nil {
+	if err := writeLine(w); err != nil {
 		return err
 	}
 	keeperTable := newStatusTable(w, "Keepers")
@@ -119,7 +119,7 @@ func writeStatusTable(w io.Writer, status app.Status) error {
 	keeperTable.Render()
 
 	if len(status.KeeperTree) > 0 {
-		if err := writeLine(w, ""); err != nil {
+		if err := writeLine(w); err != nil {
 			return err
 		}
 		treeTable := newStatusTable(w, "Keeper Tree")
@@ -141,8 +141,8 @@ func newStatusTable(w io.Writer, title string) table.Writer {
 	return t
 }
 
-func writeLine(w io.Writer, value string) error {
-	_, err := fmt.Fprintln(w, value)
+func writeLine(w io.Writer) error {
+	_, err := fmt.Fprintln(w)
 	return err
 }
 

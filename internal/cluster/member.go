@@ -172,6 +172,10 @@ type ProxyInfo struct {
 
 	// UID is the proxy UID.
 	UID string
+
+	// Listeners describes proxy listeners and their runtime state.
+	Listeners []ProxyListenerInfo `json:"listeners,omitempty"`
+
 	// Generation is the proxy generation.
 	Generation int64
 
@@ -181,8 +185,6 @@ type ProxyInfo struct {
 	// proxy should be considered active.
 	// ProxyTimeout is timeout used by sentinel to consider the proxy active.
 	ProxyTimeout time.Duration
-	// Listeners describes proxy listeners and their runtime state.
-	Listeners []ProxyListenerInfo `json:"listeners,omitempty"`
 }
 
 // ProxyListenerInfo describes one proxy listener endpoint and mode.

@@ -21,13 +21,11 @@ type RuntimeTarget = runtimex.Target
 
 // Status is the `hysteron cluster status` output model.
 type Status struct {
-	Cluster   ClusterStatus    `json:"cluster"`
-	Sentinels []SentinelStatus `json:"sentinels"`
-	Proxies   []ProxyStatus    `json:"proxies"`
-	Keepers   []KeeperStatus   `json:"keepers"`
-
-	// KeeperTree contains human-readable keeper hierarchy lines for text output.
-	KeeperTree []string `json:"-"`
+	Sentinels  []SentinelStatus `json:"sentinels"`
+	Proxies    []ProxyStatus    `json:"proxies"`
+	Keepers    []KeeperStatus   `json:"keepers"`
+	KeeperTree []string         `json:"-"` // KeeperTree contains human-readable keeper hierarchy lines for text output.
+	Cluster    ClusterStatus    `json:"cluster"`
 }
 
 // SentinelStatus is the status output for one sentinel.

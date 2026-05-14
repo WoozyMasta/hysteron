@@ -25,7 +25,6 @@ import (
 	slog "github.com/woozymasta/hysteron/internal/log"
 	runtimecommon "github.com/woozymasta/hysteron/internal/runtime/common"
 	"github.com/woozymasta/hysteron/internal/utils/id"
-	"github.com/woozymasta/hysteron/internal/utils/timer"
 
 	"github.com/rs/zerolog"
 )
@@ -206,8 +205,8 @@ func NewSentinel(
 		sleepInterval:  cluster.DefaultSleepInterval,
 		requestTimeout: cluster.DefaultRequestTimeout,
 
-		dbIncreasingXLogPosObservedAt: make(map[string]int64),
-		leaderRaceBackoffTimers:       make(map[string]int64),
+		dbIncreasingXLogPosObservedAt: make(map[string]time.Time),
+		leaderRaceBackoffTimers:       make(map[string]time.Time),
 	}, nil
 }
 
@@ -414,8 +413,8 @@ func (s *Sentinel) clusterSentinelCheck(pctx context.Context) {
 
 			var duration time.Duration
 			if prevMasterUID != "" {
-				if ts, ok := s.dbErrorTimers[prevMasterUID]; ok && ts > 0 {
-					duration = timer.Since(ts)
+				if ts, ok := s.dbErrorTimers[prevMasterUID]; ok && !ts.IsZero() {
+					duration = time.Since(ts)
 				} else if prevMaster, ok := cd.DBs[prevMasterUID]; ok &&
 					!prevMaster.ChangeTime.IsZero() {
 					duration = time.Since(prevMaster.ChangeTime)

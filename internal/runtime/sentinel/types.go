@@ -57,22 +57,22 @@ type Sentinel struct {
 	RandFn func(int) int
 
 	// Keeper unhealthy timers keyed by keeper UID.
-	keeperErrorTimers map[string]int64
+	keeperErrorTimers map[string]time.Time
 
 	// DB unhealthy timers keyed by DB UID.
-	dbErrorTimers map[string]int64
+	dbErrorTimers map[string]time.Time
 
 	// Timers for DBs not advancing WAL position.
 	dbNotIncreasingXLogPos map[string]int64
 
 	// Last observed timestamps of DB WAL position increases.
-	dbIncreasingXLogPosObservedAt map[string]int64
+	dbIncreasingXLogPosObservedAt map[string]time.Time
 
 	// Cached convergence tracking keyed by DB UID.
 	dbConvergenceInfos map[string]*DBConvergenceInfo
 
 	// Backoff timers for delayed leader race keyed by failed master DB UID.
-	leaderRaceBackoffTimers map[string]int64
+	leaderRaceBackoffTimers map[string]time.Time
 
 	// Keepers force-failed in the current reconciliation cycle.
 	forceFailedKeeperUIDs map[string]struct{}
@@ -118,7 +118,7 @@ type KeeperInfoHistory struct {
 	// Seen reports whether keeper was seen in current loop.
 	Seen bool
 	// Timer is monotonic timestamp used for failure tracking.
-	Timer int64
+	Timer time.Time
 }
 
 // KeeperInfoHistories maps keeper UID to keeper info history.
@@ -149,7 +149,7 @@ type DBConvergenceInfo struct {
 	// Generation is DB generation being tracked.
 	Generation int64
 	// Timer is monotonic timestamp when convergence tracking started.
-	Timer int64
+	Timer time.Time
 }
 
 // ProxyInfoHistory tracks the latest proxy info observed by the sentinel.
@@ -157,7 +157,7 @@ type ProxyInfoHistory struct {
 	// ProxyInfo is last proxy info snapshot.
 	ProxyInfo *cluster.ProxyInfo
 	// Timer is monotonic timestamp for proxy liveness tracking.
-	Timer int64
+	Timer time.Time
 }
 
 // ProxyInfoHistories maps proxy UID to proxy info history.

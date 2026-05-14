@@ -21,7 +21,6 @@ import (
 
 	"github.com/woozymasta/hysteron/internal/cluster"
 	slog "github.com/woozymasta/hysteron/internal/log"
-	"github.com/woozymasta/hysteron/internal/utils/timer"
 )
 
 // updateKeepersStatus merges observed keeper/db state into cluster data and
@@ -68,7 +67,7 @@ func (s *Sentinel) updateKeepersStatus(
 				if !kih.Seen {
 					// Remove since it was already there and wasn't updated
 					delete(tmpKeepersInfo, ki.UID)
-				} else if kih.Seen && timer.Since(kih.Timer) > s.sleepInterval {
+				} else if kih.Seen && time.Since(kih.Timer) > s.sleepInterval {
 					// Remove since it wasn't updated
 					delete(tmpKeepersInfo, ki.UID)
 				}
@@ -78,11 +77,11 @@ func (s *Sentinel) updateKeepersStatus(
 				kihs[keeperUID] = &KeeperInfoHistory{
 					KeeperInfo: ki,
 					Seen:       true,
-					Timer:      timer.Now(),
+					Timer:      time.Now(),
 				}
 			}
 		} else {
-			kihs[keeperUID] = &KeeperInfoHistory{KeeperInfo: ki, Seen: true, Timer: timer.Now()}
+			kihs[keeperUID] = &KeeperInfoHistory{KeeperInfo: ki, Seen: true, Timer: time.Now()}
 		}
 	}
 	keepersInfo = tmpKeepersInfo
@@ -184,9 +183,9 @@ func (s *Sentinel) updateKeepersStatus(
 		} else {
 			s.CleanDBNotIncreasingXLogPos(db.UID)
 			if s.dbIncreasingXLogPosObservedAt == nil {
-				s.dbIncreasingXLogPosObservedAt = make(map[string]int64)
+				s.dbIncreasingXLogPosObservedAt = make(map[string]time.Time)
 			}
-			s.dbIncreasingXLogPosObservedAt[db.UID] = timer.Now()
+			s.dbIncreasingXLogPosObservedAt[db.UID] = time.Now()
 		}
 
 		db.Status.ListenAddress = dbs.ListenAddress
@@ -244,15 +243,15 @@ func (s *Sentinel) activeProxiesInfos(proxiesInfo cluster.ProxiesInfo) (cluster.
 	for _, pi := range proxiesInfo {
 		if pih, ok := pihs[pi.UID]; ok {
 			if pih.ProxyInfo.InfoUID == pi.InfoUID {
-				if timer.Since(pih.Timer) > 2*pi.ProxyTimeout {
+				if time.Since(pih.Timer) > 2*pi.ProxyTimeout {
 					delete(activeProxiesInfo, pi.UID)
 				}
 			} else {
-				pihs[pi.UID] = &ProxyInfoHistory{ProxyInfo: pi, Timer: timer.Now()}
+				pihs[pi.UID] = &ProxyInfoHistory{ProxyInfo: pi, Timer: time.Now()}
 			}
 		} else {
 			// add proxyInfo if not in the history
-			pihs[pi.UID] = &ProxyInfoHistory{ProxyInfo: pi, Timer: timer.Now()}
+			pihs[pi.UID] = &ProxyInfoHistory{ProxyInfo: pi, Timer: time.Now()}
 		}
 	}
 

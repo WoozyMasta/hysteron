@@ -20,7 +20,6 @@ import (
 
 	"github.com/woozymasta/hysteron/internal/cluster"
 	slog "github.com/woozymasta/hysteron/internal/log"
-	"github.com/woozymasta/hysteron/internal/utils/timer"
 )
 
 // ConvergenceState describes database convergence progress.
@@ -38,7 +37,7 @@ const (
 // SetKeeperError marks a keeper as having a recent error.
 func (s *Sentinel) SetKeeperError(uid string) {
 	if _, ok := s.keeperErrorTimers[uid]; !ok {
-		s.keeperErrorTimers[uid] = timer.Now()
+		s.keeperErrorTimers[uid] = time.Now()
 	}
 }
 
@@ -50,7 +49,7 @@ func (s *Sentinel) CleanKeeperError(uid string) {
 // SetDBError marks a database as having a recent error.
 func (s *Sentinel) SetDBError(uid string) {
 	if _, ok := s.dbErrorTimers[uid]; !ok {
-		s.dbErrorTimers[uid] = timer.Now()
+		s.dbErrorTimers[uid] = time.Now()
 	}
 }
 
@@ -79,7 +78,7 @@ func (s *Sentinel) isKeeperHealthy(cd *cluster.ClusterData, keeper *cluster.Keep
 		return true
 	}
 
-	if timer.Since(t) > cd.Cluster.DefSpec().FailInterval.Duration {
+	if time.Since(t) > cd.Cluster.DefSpec().FailInterval.Duration {
 		return false
 	}
 
@@ -92,7 +91,7 @@ func (s *Sentinel) isDBHealthy(cd *cluster.ClusterData, db *cluster.DB) bool {
 		return true
 	}
 
-	if timer.Since(t) > cd.Cluster.DefSpec().FailInterval.Duration {
+	if time.Since(t) > cd.Cluster.DefSpec().FailInterval.Duration {
 		return false
 	}
 
@@ -121,7 +120,7 @@ func (s *Sentinel) updateDBConvergenceInfos(cd *cluster.ClusterData) {
 
 		nd := &DBConvergenceInfo{
 			Generation: db.Generation,
-			Timer:      timer.Now(),
+			Timer:      time.Now(),
 		}
 
 		d, ok := s.dbConvergenceInfos[db.UID]
@@ -143,7 +142,7 @@ func (s *Sentinel) dbConvergenceState(db *cluster.DB, timeout time.Duration) Con
 		if !ok {
 			d = &DBConvergenceInfo{
 				Generation: db.Generation,
-				Timer:      timer.Now(),
+				Timer:      time.Now(),
 			}
 			s.dbConvergenceInfos[db.UID] = d
 			s.log.Debug().
@@ -151,7 +150,7 @@ func (s *Sentinel) dbConvergenceState(db *cluster.DB, timeout time.Duration) Con
 				Msg("database convergence tracking initialized")
 		}
 
-		if timer.Since(d.Timer) > timeout {
+		if time.Since(d.Timer) > timeout {
 			return ConvergenceFailed
 		}
 	}

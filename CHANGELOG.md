@@ -42,6 +42,8 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Keeper PostgreSQL auth method support now includes `scram-sha-256`
   (alongside `md5` and `trust`),
   including `initdb --auth` handling and SCRAM-compatible role password setup.
+* Sentinel timing internals now use Go stdlib monotonic `time` tracking
+  instead of `internal/utils/timer`.
 * Runtime startup path was simplified to typed CLI options only
   (legacy internal args passthrough removed).
 * Keepers now enforce explicit PostgreSQL major-version policy:

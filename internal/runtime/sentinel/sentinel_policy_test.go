@@ -21,7 +21,6 @@ import (
 
 	"github.com/woozymasta/hysteron/internal/cluster"
 	"github.com/woozymasta/hysteron/internal/common"
-	"github.com/woozymasta/hysteron/internal/utils/timer"
 )
 
 func TestComputeOrphanMemberSlots(t *testing.T) {
@@ -83,10 +82,10 @@ func TestShouldDelayLeaderRace(t *testing.T) {
 	t.Run("starts backoff when wal is increasing", func(t *testing.T) {
 		s := &Sentinel{
 			dbNotIncreasingXLogPos: map[string]int64{},
-			dbIncreasingXLogPosObservedAt: map[string]int64{
-				candidate.UID: timer.Now(),
+			dbIncreasingXLogPosObservedAt: map[string]time.Time{
+				candidate.UID: time.Now(),
 			},
-			leaderRaceBackoffTimers: map[string]int64{},
+			leaderRaceBackoffTimers: map[string]time.Time{},
 		}
 		if !s.shouldDelayLeaderRace(failedMaster, []*cluster.DB{candidate}, window) {
 			t.Fatalf("expected leader race delay on first observation")
@@ -99,11 +98,11 @@ func TestShouldDelayLeaderRace(t *testing.T) {
 	t.Run("stops delaying after window elapses", func(t *testing.T) {
 		s := &Sentinel{
 			dbNotIncreasingXLogPos: map[string]int64{},
-			dbIncreasingXLogPosObservedAt: map[string]int64{
-				candidate.UID: timer.Now(),
+			dbIncreasingXLogPosObservedAt: map[string]time.Time{
+				candidate.UID: time.Now(),
 			},
-			leaderRaceBackoffTimers: map[string]int64{
-				failedMaster.UID: timer.Now() - int64(window) - int64(time.Second),
+			leaderRaceBackoffTimers: map[string]time.Time{
+				failedMaster.UID: time.Now().Add(-window - time.Second),
 			},
 		}
 		if s.shouldDelayLeaderRace(failedMaster, []*cluster.DB{candidate}, window) {
@@ -119,11 +118,11 @@ func TestShouldDelayLeaderRace(t *testing.T) {
 			dbNotIncreasingXLogPos: map[string]int64{
 				candidate.UID: cluster.DefaultDBNotIncreasingXLogPosTimes + 1,
 			},
-			dbIncreasingXLogPosObservedAt: map[string]int64{
-				candidate.UID: timer.Now(),
+			dbIncreasingXLogPosObservedAt: map[string]time.Time{
+				candidate.UID: time.Now(),
 			},
-			leaderRaceBackoffTimers: map[string]int64{
-				failedMaster.UID: timer.Now(),
+			leaderRaceBackoffTimers: map[string]time.Time{
+				failedMaster.UID: time.Now(),
 			},
 		}
 		if s.shouldDelayLeaderRace(failedMaster, []*cluster.DB{candidate}, window) {

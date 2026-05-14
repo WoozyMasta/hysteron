@@ -22,19 +22,18 @@ import (
 	"github.com/woozymasta/hysteron/internal/cluster"
 	slog "github.com/woozymasta/hysteron/internal/log"
 	slicesutil "github.com/woozymasta/hysteron/internal/utils/slices"
-	"github.com/woozymasta/hysteron/internal/utils/timer"
 )
 
 // runLeadershipSanitySweep resets in-memory leader-loop caches after
 // leadership pauses and rebuilds convergence tracking from current cluster data.
 func (s *Sentinel) runLeadershipSanitySweep(cd *cluster.ClusterData) {
-	s.keeperErrorTimers = make(map[string]int64)
-	s.dbErrorTimers = make(map[string]int64)
+	s.keeperErrorTimers = make(map[string]time.Time)
+	s.dbErrorTimers = make(map[string]time.Time)
 	s.dbNotIncreasingXLogPos = make(map[string]int64)
-	s.dbIncreasingXLogPosObservedAt = make(map[string]int64)
+	s.dbIncreasingXLogPosObservedAt = make(map[string]time.Time)
 	s.keeperInfoHistories = make(KeeperInfoHistories)
 	s.dbConvergenceInfos = make(map[string]*DBConvergenceInfo)
-	s.leaderRaceBackoffTimers = make(map[string]int64)
+	s.leaderRaceBackoffTimers = make(map[string]time.Time)
 	s.forceFailedKeeperUIDs = make(map[string]struct{})
 	s.proxyInfoHistories = make(ProxyInfoHistories)
 
@@ -51,10 +50,10 @@ func (s *Sentinel) shouldDelayLeaderRace(
 	window time.Duration,
 ) bool {
 	if s.leaderRaceBackoffTimers == nil {
-		s.leaderRaceBackoffTimers = make(map[string]int64)
+		s.leaderRaceBackoffTimers = make(map[string]time.Time)
 	}
 	if s.dbIncreasingXLogPosObservedAt == nil {
-		s.dbIncreasingXLogPosObservedAt = make(map[string]int64)
+		s.dbIncreasingXLogPosObservedAt = make(map[string]time.Time)
 	}
 
 	if failedMaster == nil || failedMaster.UID == "" {
@@ -73,16 +72,16 @@ func (s *Sentinel) shouldDelayLeaderRace(
 		if !s.isDBIncreasingXLogPos(candidate) {
 			continue
 		}
-		if timer.Since(lastIncreaseAt) >= window {
+		if time.Since(lastIncreaseAt) >= window {
 			continue
 		}
 
 		startedAt, ok := s.leaderRaceBackoffTimers[failedMaster.UID]
 		if !ok {
-			s.leaderRaceBackoffTimers[failedMaster.UID] = timer.Now()
+			s.leaderRaceBackoffTimers[failedMaster.UID] = time.Now()
 			return true
 		}
-		if timer.Since(startedAt) < window {
+		if time.Since(startedAt) < window {
 			return true
 		}
 

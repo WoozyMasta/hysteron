@@ -39,6 +39,9 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * CLI architecture was unified into a single `stolon` binary
   with grouped runtime and management subcommands
   (`keeper`, `sentinel`, `proxy`, `cluster`, `failover`) and typed flag parsing.
+* Keeper PostgreSQL auth method support now includes `scram-sha-256`
+  (alongside `md5` and `trust`),
+  including `initdb --auth` handling and SCRAM-compatible role password setup.
 * Runtime startup path was simplified to typed CLI options only
   (legacy internal args passthrough removed).
 * Keepers now enforce explicit PostgreSQL major-version policy:

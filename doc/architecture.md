@@ -172,8 +172,8 @@ The replication user is used for:
 * managing/querying the keepers' controlled instances
 * replication between postgres instances
 
-Currently trust (password-less) and md5 password based authentication are
-supported. In the future, different authentication mechanisms will be added.
+Currently trust (password-less), md5,
+and scram-sha-256 password based authentication are supported.
 
 To avoid security problems (user credentials cannot be globally defined in
 the cluster specification since if not correctly secured it could be read by

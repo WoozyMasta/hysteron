@@ -1,5 +1,4 @@
-// Copyright 2015 Sorint.lab
-// Copyright 2026 WoozyMasta
+// Copyright 20[0-9][0-9](?:-20[0-9][0-9])? (?:Sorint\.lab|WoozyMasta)(?:\nCopyright 2026 WoozyMasta)?
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,7 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package postgresql provides local PostgreSQL manager primitives used by
-// keeper runtime: lifecycle control, configuration rendering, replication
-// orchestration, and instance introspection helpers.
 package postgresql
+
+import (
+	"io"
+	"os"
+)
+
+func ignoreClose(closer io.Closer) {
+	_ = closer.Close()
+}
+
+func ignoreRemove(name string) {
+	_ = os.Remove(name)
+}

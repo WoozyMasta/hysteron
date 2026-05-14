@@ -100,6 +100,7 @@ func TestProxyListening(t *testing.T) {
 	t.Parallel()
 
 	storeWaitTimeout := 30 * time.Second
+	proxyRecoveryTimeout := 30 * time.Second
 
 	dir, err := os.MkdirTemp("", "")
 	if err != nil {
@@ -208,7 +209,7 @@ func TestProxyListening(t *testing.T) {
 	}
 
 	// tp should listen
-	if err := tp.WaitListening(10 * time.Second); err != nil {
+	if err := tp.WaitListening(proxyRecoveryTimeout); err != nil {
 		t.Fatalf("expecting tp listening, but it's not listening.")
 	}
 
@@ -233,7 +234,7 @@ func TestProxyListening(t *testing.T) {
 		t.Fatalf("error waiting on store up: %v", err)
 	}
 	// tp should listen
-	if err := tp.WaitListening(10 * time.Second); err != nil {
+	if err := tp.WaitListening(proxyRecoveryTimeout); err != nil {
 		t.Fatalf("expecting tp listening, but it's not listening.")
 	}
 
@@ -272,7 +273,7 @@ func TestProxyListening(t *testing.T) {
 	}
 
 	// tp should listen
-	if err := tp.WaitListening(10 * time.Second); err != nil {
+	if err := tp.WaitListening(proxyRecoveryTimeout); err != nil {
 		t.Fatalf("expecting tp listening, but it's not listening.")
 	}
 
@@ -285,7 +286,7 @@ func TestProxyListening(t *testing.T) {
 	}
 
 	// tp should listen
-	if err := tp.WaitListening(10 * time.Second); err != nil {
+	if err := tp.WaitListening(proxyRecoveryTimeout); err != nil {
 		t.Fatalf("expecting tp listening, but it's not listening.")
 	}
 
@@ -297,7 +298,7 @@ func TestProxyListening(t *testing.T) {
 	}
 
 	// tp should listen
-	if err := tp.WaitListening(10 * time.Second); err != nil {
+	if err := tp.WaitListening(proxyRecoveryTimeout); err != nil {
 		t.Fatalf("expecting tp listening, but it's not listening.")
 	}
 

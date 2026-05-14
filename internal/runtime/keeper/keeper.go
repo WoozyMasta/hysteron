@@ -17,135 +17,15 @@ package keeper
 
 import (
 	"context"
-	"fmt"
-	"os"
-	"path/filepath"
 	"reflect"
 	"time"
 
 	"github.com/woozymasta/hysteron/internal/cluster"
 	"github.com/woozymasta/hysteron/internal/common"
-	slog "github.com/woozymasta/hysteron/internal/log"
-	pg "github.com/woozymasta/hysteron/internal/postgresql"
-	rtcommon "github.com/woozymasta/hysteron/internal/runtime/common"
-	"github.com/woozymasta/hysteron/internal/utils/id"
+	"github.com/woozymasta/hysteron/internal/log"
+	"github.com/woozymasta/hysteron/internal/postgresql"
 	slicesutil "github.com/woozymasta/hysteron/internal/utils/slices"
-
-	"github.com/rs/zerolog"
 )
-
-// baseLog is the structured logger with stable keeper identity (use for all
-// PostgresKeeper events).
-func (p *PostgresKeeper) baseLog() *zerolog.Logger {
-	uid := ""
-	if p.keeperLocalState != nil {
-		uid = p.keeperLocalState.UID
-	}
-	l := slog.L().With().
-		Str(slog.FieldComponent, "keeper").
-		Str(slog.FieldClusterName, p.cfg.ClusterName()).
-		Str(slog.FieldKeeperUID, uid).
-		Str("boot_uuid", p.bootUUID).
-		Logger()
-	return &l
-}
-
-// NewPostgresKeeper creates a PostgreSQL keeper from command configuration.
-func NewPostgresKeeper(
-	cfg *runConfig,
-	end chan error,
-) (*PostgresKeeper, error) {
-	e, err := rtcommon.NewStore(&cfg.CommonConfig, true)
-	if err != nil {
-		return nil, fmt.Errorf("create store: %w", err)
-	}
-
-	// Clean and get absolute datadir path
-	dataDir, err := filepath.Abs(cfg.DataDir)
-	if err != nil {
-		return nil, fmt.Errorf("resolve absolute datadir path for %q: %w", cfg.DataDir, err)
-	}
-
-	p := &PostgresKeeper{
-		cfg: cfg,
-
-		bootUUID: id.UUID(),
-
-		dataDir: dataDir,
-
-		pgListenAddress:    cfg.PG.ListenAddress,
-		pgAdvertiseAddress: cfg.PG.AdvertiseAddress,
-		pgPort:             cfg.PG.Port,
-		pgAdvertisePort:    cfg.PG.AdvertisePort,
-		pgBinPath:          cfg.PG.BinPath,
-		pgReplAuthMethod:   cfg.PG.Repl.AuthMethod,
-		pgReplUsername:     cfg.PG.Repl.Username,
-		pgReplPassword:     cfg.PG.Repl.Password,
-		pgSUAuthMethod:     cfg.PG.SU.AuthMethod,
-		pgSUUsername:       cfg.PG.SU.Username,
-		pgSUPassword:       cfg.PG.SU.Password,
-
-		sleepInterval:  cluster.DefaultSleepInterval,
-		requestTimeout: cluster.DefaultRequestTimeout,
-
-		keeperLocalState: &LocalState{},
-		dbLocalState:     &DBLocalState{},
-
-		canBeMaster:             &cfg.CanBeMaster,
-		canBeSynchronousReplica: &cfg.CanBeSynchronousReplica,
-
-		e:   e,
-		end: end,
-
-		logicalSlotStandbyAdvanceRetryAfter: make(map[string]time.Time),
-		logicalSlotStandbyAdvanceRetryDelay: 10 * time.Second,
-		logicalSlotAdvancePending:           make(map[string]queuedLogicalSlotAdvanceOperation),
-		logicalSlotAdvanceNotify:            make(chan struct{}, 1),
-		failsafeEnabled:                     cluster.DefaultEnableFailsafeMode,
-		failsafeProbeInterval:               cluster.DefaultFailsafeProbeInterval,
-		failsafeProbeTimeout:                cluster.DefaultFailsafeProbeTimeout,
-		failsafeMaxMissingPeers:             cluster.DefaultFailsafeMaxMissingPeers,
-		failsafeTTL:                         cluster.DefaultFailsafeTTL,
-		failsafeState:                       failsafeStateDisabled,
-	}
-
-	err = p.loadKeeperLocalState()
-	if err != nil && !os.IsNotExist(err) {
-		return nil, fmt.Errorf("load keeper local state: %w", err)
-	}
-	if p.keeperLocalState.UID != "" && p.cfg.UID != "" &&
-		p.keeperLocalState.UID != p.cfg.UID {
-		return nil, fmt.Errorf(
-			"refusing to start: uid in local state file %q does not match --uid %q",
-			p.keeperLocalState.UID,
-			cfg.UID,
-		)
-	}
-	if p.keeperLocalState.UID == "" {
-		p.keeperLocalState.UID = cfg.UID
-		if cfg.UID == "" {
-			p.keeperLocalState.UID = id.UID()
-			p.baseLog().
-				Info().
-				Str(slog.FieldKeeperUID, p.keeperLocalState.UID).
-				Msg("generated a new keeper UID (none was configured on the command line)")
-		}
-		if err = p.saveKeeperLocalState(); err != nil {
-			return nil, fmt.Errorf("could not write keeper local state file: %w", err)
-		}
-	}
-
-	p.baseLog().
-		Info().
-		Str(slog.FieldKeeperUID, p.keeperLocalState.UID).
-		Msg("keeper identity loaded; continuing startup")
-
-	err = p.loadDBLocalState()
-	if err != nil && !os.IsNotExist(err) {
-		return nil, fmt.Errorf("load db local state: %w", err)
-	}
-	return p, nil
-}
 
 // Start runs keeper reconciliation loops until the context is canceled.
 func (p *PostgresKeeper) Start(ctx context.Context) {
@@ -176,7 +56,7 @@ func (p *PostgresKeeper) Start(ctx context.Context) {
 		Fields(cluster.LogSummaryClusterData(cd)).
 		Msg("cluster data snapshot at keeper start")
 
-	pgManager := pg.NewManager(
+	pgManager := postgresql.NewManager(
 		p.pgBinPath,
 		p.dataDir,
 		p.getLocalConnParams(),
@@ -328,7 +208,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 	if !ok {
 		p.baseLog().
 			Info().
-			Str(slog.FieldKeeperUID, p.keeperLocalState.UID).
+			Str(log.FieldKeeperUID, p.keeperLocalState.UID).
 			Msg("this keeper is not listed in cluster data yet; waiting")
 		return
 	}
@@ -337,7 +217,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 	if db == nil {
 		p.baseLog().
 			Info().
-			Str(slog.FieldKeeperUID, k.UID).
+			Str(log.FieldKeeperUID, k.UID).
 			Msg("no database is assigned to this keeper yet; stopping PostgreSQL if it is running")
 		if err = p.stopPostgresIfStarted(pgManager, db); err != nil {
 			reconcileErrorsTotal.WithLabelValues(reconcilePhase, "stop_postgres").Inc()
@@ -368,7 +248,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 	pgManager.SetHba(p.generateHBA(cd, db, p.waitSyncStandbysSynced))
 
 	p.baseLog().Debug().
-		Str(slog.FieldDBUID, db.UID).
+		Str(log.FieldDBUID, db.UID).
 		Int64("db_generation", db.Generation).
 		Int64("db_status_generation", db.Status.CurrentGeneration).
 		Str("db_role", string(db.Spec.Role)).
@@ -430,7 +310,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 		}
 		p.baseLog().Info().
 			Str("local_db_uid", p.dbLocalState.UID).
-			Str(slog.FieldDBUID, db.UID).
+			Str(log.FieldDBUID, db.UID).
 			Msg("local database UID does not match cluster assignment; will re-initialize or resync as required")
 
 		pgManager.SetRecoveryOptions(nil)
@@ -459,7 +339,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 			// update pgManager postgres parameters
 			pgManager.SetParameters(pgParameters)
 
-			initConfig := &pg.InitConfig{}
+			initConfig := &postgresql.InitConfig{}
 
 			if db.Spec.NewConfig != nil {
 				initConfig.Locale = db.Spec.NewConfig.Locale
@@ -610,11 +490,11 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 			bootstrapDurationSeconds.WithLabelValues("pitr").Observe(time.Since(bootstrapStart).Seconds())
 			bootstrapTotal.WithLabelValues("pitr", "success").Inc()
 
-			recoveryMode := pg.RecoveryModeRecovery
+			recoveryMode := postgresql.RecoveryModeRecovery
 			var standbySettings *cluster.StandbySettings
 			if db.Spec.FollowConfig != nil &&
 				db.Spec.FollowConfig.Type == cluster.FollowTypeExternal {
-				recoveryMode = pg.RecoveryModeStandby
+				recoveryMode = postgresql.RecoveryModeStandby
 				standbySettings = db.Spec.FollowConfig.StandbySettings
 			}
 
@@ -636,24 +516,24 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 				return
 			}
 
-			if recoveryMode == pg.RecoveryModeRecovery {
+			if recoveryMode == postgresql.RecoveryModeRecovery {
 				// wait for the db having replyed all the wals
 				p.baseLog().
 					Info().
-					Str(slog.FieldDBUID, db.UID).
+					Str(log.FieldDBUID, db.UID).
 					Msg("waiting for PostgreSQL to finish replaying WAL (PITR)")
 				if err = pgManager.WaitRecoveryDone(cd.Cluster.DefSpec().SyncTimeout.Duration); err != nil {
 					reconcileErrorsTotal.WithLabelValues(reconcilePhase, "wait_recovery_done").Inc()
 					p.baseLog().
 						Error().
 						Err(err).
-						Str(slog.FieldDBUID, db.UID).
+						Str(log.FieldDBUID, db.UID).
 						Msg("point-in-time recovery did not finish within the configured timeout")
 					return
 				}
 				p.baseLog().
 					Info().
-					Str(slog.FieldDBUID, db.UID).
+					Str(log.FieldDBUID, db.UID).
 					Msg("point-in-time recovery replay completed")
 			}
 			if err = pgManager.WaitReady(cd.Cluster.DefSpec().SyncTimeout.Duration); err != nil {
@@ -1031,7 +911,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 				p.baseLog().
 					Error().
 					Err(err).
-					Str(slog.FieldDBUID, db.UID).
+					Str(log.FieldDBUID, db.UID).
 					Msg("pre-promote hook failed; refusing promote")
 				return
 			}
@@ -1106,7 +986,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 			if !started {
 				pgManager.SetRecoveryOptions(
 					p.createRecoveryOptions(
-						pg.RecoveryModeStandby,
+						postgresql.RecoveryModeStandby,
 						standbySettings,
 						nil,
 						nil,
@@ -1136,7 +1016,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 				newReplConnParams := p.getReplConnParams(db, followedDB)
 				p.baseLog().
 					Debug().
-					Fields(pg.LogSummaryConnParams(newReplConnParams)).
+					Fields(postgresql.LogSummaryConnParams(newReplConnParams)).
 					Msg("standby replication connection parameters updated")
 
 				standbySettings := &cluster.StandbySettings{
@@ -1146,7 +1026,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 
 				curRecoveryOptions := pgManager.CurRecoveryOptions()
 				newRecoveryOptions := p.createRecoveryOptions(
-					pg.RecoveryModeStandby,
+					postgresql.RecoveryModeStandby,
 					standbySettings,
 					nil,
 					nil,
@@ -1157,8 +1037,8 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 					newRecoveryOptions.RecoveryParameters,
 				) {
 					p.baseLog().Info().
-						Interface("recovery_prev", pg.LogSummaryRecoveryParameters(curRecoveryOptions.RecoveryParameters)).
-						Interface("recovery_new", pg.LogSummaryRecoveryParameters(newRecoveryOptions.RecoveryParameters)).
+						Interface("recovery_prev", postgresql.LogSummaryRecoveryParameters(curRecoveryOptions.RecoveryParameters)).
+						Interface("recovery_new", postgresql.LogSummaryRecoveryParameters(newRecoveryOptions.RecoveryParameters)).
 						Msg("recovery parameters changed; restarting PostgreSQL")
 					pgManager.SetRecoveryOptions(newRecoveryOptions)
 					p.runBeforeStopHook(db)
@@ -1182,7 +1062,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 			case cluster.FollowTypeExternal:
 				curRecoveryOptions := pgManager.CurRecoveryOptions()
 				newRecoveryOptions := p.createRecoveryOptions(
-					pg.RecoveryModeStandby,
+					postgresql.RecoveryModeStandby,
 					db.Spec.FollowConfig.StandbySettings,
 					db.Spec.FollowConfig.ArchiveRecoverySettings,
 					nil,
@@ -1193,8 +1073,8 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 					newRecoveryOptions.RecoveryParameters,
 				) {
 					p.baseLog().Info().
-						Interface("recovery_prev", pg.LogSummaryRecoveryParameters(curRecoveryOptions.RecoveryParameters)).
-						Interface("recovery_new", pg.LogSummaryRecoveryParameters(newRecoveryOptions.RecoveryParameters)).
+						Interface("recovery_prev", postgresql.LogSummaryRecoveryParameters(curRecoveryOptions.RecoveryParameters)).
+						Interface("recovery_new", postgresql.LogSummaryRecoveryParameters(newRecoveryOptions.RecoveryParameters)).
 						Msg("recovery parameters changed; restarting PostgreSQL")
 					pgManager.SetRecoveryOptions(newRecoveryOptions)
 					p.runBeforeStopHook(db)

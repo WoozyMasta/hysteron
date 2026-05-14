@@ -24,6 +24,93 @@ import (
 	"github.com/woozymasta/hysteron/internal/store"
 )
 
+// Sentinel computes and writes cluster state from observed keepers and proxies.
+type Sentinel struct {
+	// External cluster store client.
+	e store.Store
+
+	// Leader election backend.
+	election store.Election
+
+	// Optional Kubernetes Service publisher.
+	kubeServicePublisher *kubeServicePublisher
+
+	// Cluster name served by this sentinel runner.
+	clusterName string
+
+	// Parsed sentinel command configuration.
+	cfg *config
+
+	// Per-cluster sentinel logger.
+	log zerolog.Logger
+
+	// Completion channel for sentinel run loop.
+	end chan bool
+
+	// Optional bootstrap spec used for first cluster initialization.
+	initialClusterSpec *cluster.ClusterSpec
+
+	// Injectable UID generator for deterministic tests.
+	UIDFn func() string
+
+	// Injectable random chooser for deterministic tests.
+	RandFn func(int) int
+
+	// Keeper unhealthy timers keyed by keeper UID.
+	keeperErrorTimers map[string]int64
+
+	// DB unhealthy timers keyed by DB UID.
+	dbErrorTimers map[string]int64
+
+	// Timers for DBs not advancing WAL position.
+	dbNotIncreasingXLogPos map[string]int64
+
+	// Last observed timestamps of DB WAL position increases.
+	dbIncreasingXLogPosObservedAt map[string]int64
+
+	// Cached convergence tracking keyed by DB UID.
+	dbConvergenceInfos map[string]*DBConvergenceInfo
+
+	// Backoff timers for delayed leader race keyed by failed master DB UID.
+	leaderRaceBackoffTimers map[string]int64
+
+	// Keepers force-failed in the current reconciliation cycle.
+	forceFailedKeeperUIDs map[string]struct{}
+
+	// History of keeper heartbeats and state transitions.
+	keeperInfoHistories KeeperInfoHistories
+
+	// History of proxy heartbeats and state transitions.
+	proxyInfoHistories ProxyInfoHistories
+
+	// Sentinel instance UID.
+	uid string
+
+	// Previously observed leadership epoch counter.
+	lastLeadershipCount uint
+
+	// Current leadership epoch counter.
+	leadershipCount uint
+
+	// Main reconciliation loop sleep interval.
+	sleepInterval time.Duration
+
+	// Timeout for store and component requests.
+	requestTimeout time.Duration
+
+	// Guards cluster update/reconciliation execution.
+	updateMutex sync.Mutex
+
+	// Guards leader state and leadership counters.
+	leaderMutex sync.Mutex
+
+	// Current local leadership flag.
+	leader bool
+
+	// Marks whether DCS retrieval failures happened in current leadership epoch.
+	dcsDegradedSeen bool
+}
+
 // KeeperInfoHistory tracks the latest keeper info observed by the sentinel.
 type KeeperInfoHistory struct {
 	// KeeperInfo is last keeper info snapshot.
@@ -42,6 +129,7 @@ func (k KeeperInfoHistories) DeepCopy() (KeeperInfoHistories, error) {
 	if k == nil {
 		return nil, nil
 	}
+
 	out := make(KeeperInfoHistories, len(k))
 	for uid, history := range k {
 		if history == nil {
@@ -52,6 +140,7 @@ func (k KeeperInfoHistories) DeepCopy() (KeeperInfoHistories, error) {
 		hCopy.KeeperInfo = history.KeeperInfo.DeepCopy()
 		out[uid] = &hCopy
 	}
+
 	return out, nil
 }
 
@@ -79,12 +168,14 @@ func (p ProxyInfoHistories) DeepCopy() (ProxyInfoHistories, error) {
 	if p == nil {
 		return nil, nil
 	}
+
 	out := make(ProxyInfoHistories, len(p))
 	for uid, history := range p {
 		if history == nil {
 			out[uid] = nil
 			continue
 		}
+
 		hCopy := *history
 		if history.ProxyInfo != nil {
 			piCopy := *history.ProxyInfo
@@ -92,74 +183,6 @@ func (p ProxyInfoHistories) DeepCopy() (ProxyInfoHistories, error) {
 		}
 		out[uid] = &hCopy
 	}
+
 	return out, nil
-}
-
-// Sentinel computes and writes cluster state from observed keepers and proxies.
-type Sentinel struct {
-	// External cluster store client.
-	e store.Store
-	// Leader election backend.
-	election store.Election
-	// Optional Kubernetes Service publisher.
-	kubeServicePublisher *kubeServicePublisher
-	// Cluster name served by this sentinel runner.
-	clusterName string
-	// Parsed sentinel command configuration.
-	cfg *config
-	// Per-cluster sentinel logger.
-	log zerolog.Logger
-	// Completion channel for sentinel run loop.
-	end chan bool
-
-	// Optional bootstrap spec used for first cluster initialization.
-	initialClusterSpec *cluster.ClusterSpec
-
-	// Injectable UID generator for deterministic tests.
-	UIDFn func() string
-	// Injectable random chooser for deterministic tests.
-	RandFn func(int) int
-
-	// Keeper unhealthy timers keyed by keeper UID.
-	keeperErrorTimers map[string]int64
-	// DB unhealthy timers keyed by DB UID.
-	dbErrorTimers map[string]int64
-	// Timers for DBs not advancing WAL position.
-	dbNotIncreasingXLogPos map[string]int64
-	// Last observed timestamps of DB WAL position increases.
-	dbIncreasingXLogPosObservedAt map[string]int64
-	// Cached convergence tracking keyed by DB UID.
-	dbConvergenceInfos map[string]*DBConvergenceInfo
-	// Backoff timers for delayed leader race keyed by failed master DB UID.
-	leaderRaceBackoffTimers map[string]int64
-	// Keepers force-failed in the current reconciliation cycle.
-	forceFailedKeeperUIDs map[string]struct{}
-
-	// History of keeper heartbeats and state transitions.
-	keeperInfoHistories KeeperInfoHistories
-	// History of proxy heartbeats and state transitions.
-	proxyInfoHistories ProxyInfoHistories
-	// Sentinel instance UID.
-	uid string
-
-	// Previously observed leadership epoch counter.
-	lastLeadershipCount uint
-
-	// Current leadership epoch counter.
-	leadershipCount uint
-
-	// Main reconciliation loop sleep interval.
-	sleepInterval time.Duration
-	// Timeout for store and component requests.
-	requestTimeout time.Duration
-
-	// Guards cluster update/reconciliation execution.
-	updateMutex sync.Mutex
-	// Guards leader state and leadership counters.
-	leaderMutex sync.Mutex
-
-	// Current local leadership flag.
-	leader bool
-	// Marks whether DCS retrieval failures happened in current leadership epoch.
-	dcsDegradedSeen bool
 }

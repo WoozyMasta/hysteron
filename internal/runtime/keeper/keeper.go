@@ -29,108 +29,17 @@ import (
 
 // Start runs keeper reconciliation loops until the context is canceled.
 func (p *PostgresKeeper) Start(ctx context.Context) {
-	endSMCh := make(chan struct{})
-	endPgStatecheckerCh := make(chan struct{})
-	endUpdateKeeperInfo := make(chan struct{})
+	cd := p.loadInitialClusterData()
+	p.logInitialClusterData(cd)
 
-	var err error
-	var cd *cluster.ClusterData
-	cd, _, err = p.e.GetClusterData(context.TODO())
-	if err != nil {
-		p.baseLog().
-			Error().
-			Err(err).
-			Msg("error retrieving cluster data")
-	} else if cd != nil {
-		if cd.FormatVersion != cluster.CurrentCDFormatVersion {
-			p.baseLog().
-				Error().
-				Uint64("version", cd.FormatVersion).
-				Msg("unsupported clusterdata format version")
-		}
-		p.applyRuntimeConfigFromClusterData(cd)
-	}
-
-	p.baseLog().
-		Debug().
-		Fields(cluster.LogSummaryClusterData(cd)).
-		Msg("cluster data snapshot at keeper start")
-
-	pgManager := postgresql.NewManager(
-		p.pgBinPath,
-		p.dataDir,
-		p.getLocalConnParams(),
-		p.getLocalReplConnParams(),
-		p.pgSUAuthMethod,
-		p.pgSUUsername,
-		p.pgSUPassword,
-		p.pgReplAuthMethod,
-		p.pgReplUsername,
-		p.pgReplPassword,
-		p.requestTimeout,
-	)
-	p.pgm = pgManager
-	p.pgBinaryVersion = pgManager.BinaryVersion
-
-	if err = p.validatePostgresVersion(); err != nil {
+	if err := p.setupPostgresManager(); err != nil {
 		p.end <- err
 		return
 	}
 
 	_ = p.pgm.StopIfStarted(true)
 	go p.standbyLogicalSlotAdvanceWorker(ctx)
-
-	smTimerCh := time.NewTimer(0).C
-	updatePGStateTimerCh := time.NewTimer(0).C
-	updateKeeperInfoTimerCh := time.NewTimer(0).C
-	for {
-		select {
-		case <-ctx.Done():
-			p.baseLog().Debug().Msg("shutting down keeper")
-			if err = p.pgm.StopIfStarted(true); err != nil {
-				p.baseLog().
-					Error().
-					Err(err).
-					Msg("failed to stop pg instance")
-			}
-			p.end <- nil
-			return
-
-		case <-smTimerCh:
-			go func() {
-				p.postgresKeeperSM(ctx)
-				endSMCh <- struct{}{}
-			}()
-
-		case <-endSMCh:
-			smTimerCh = time.NewTimer(p.sleepInterval).C
-
-		case <-updatePGStateTimerCh:
-			// updateKeeperInfo two times faster than the sleep interval
-			go func() {
-				p.updatePGState(ctx)
-				endPgStatecheckerCh <- struct{}{}
-			}()
-
-		case <-endPgStatecheckerCh:
-			// updateKeeperInfo two times faster than the sleep interval
-			updatePGStateTimerCh = time.NewTimer(p.sleepInterval / 2).C
-
-		case <-updateKeeperInfoTimerCh:
-			go func() {
-				if err := p.updateKeeperInfo(); err != nil {
-					p.baseLog().
-						Error().
-						Err(err).
-						Msg("failed to update keeper info")
-				}
-				endUpdateKeeperInfo <- struct{}{}
-			}()
-
-		case <-endUpdateKeeperInfo:
-			updateKeeperInfoTimerCh = time.NewTimer(p.sleepInterval).C
-		}
-	}
+	p.runStartLoops(ctx)
 }
 
 func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {

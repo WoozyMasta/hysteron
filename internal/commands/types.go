@@ -43,11 +43,11 @@ type sentinelRuntimeCommand struct {
 }
 
 type proxyRuntimeCommand struct {
-	Kubernetes proxyRuntimeKubernetesCommand `command:"kubernetes" alias:"k8s"    description:"Run component with kubernetes backend"`
 	Component  string                        `no-flag:"true"`
+	Kubernetes proxyRuntimeKubernetesCommand `command:"kubernetes" alias:"k8s"    description:"Run component with kubernetes backend"`
 	Common     runtimeCommonOptions          `group:"Common"`
-	Proxy      proxyRuntimeOptions           `group:"Proxy"`
 	Etcd       proxyRuntimeEtcdCommand       `command:"etcd"       alias:"etcdv3" description:"Run component with etcd backend"`
+	Proxy      proxyRuntimeOptions           `group:"Proxy"`
 }
 
 type clusterCommand struct {
@@ -79,10 +79,10 @@ type clusterKeeperCommand struct {
 }
 
 type proxyRuntimeEtcdCommand struct {
-	Common    runtimeCommonOptions `no-flag:"true"`
-	Proxy     proxyRuntimeOptions  `no-flag:"true"`
 	Component string               `no-flag:"true"`
+	Common    runtimeCommonOptions `no-flag:"true"`
 	Etcd      runtimeEtcdOptions   `group:"Etcd" namespace:"etcd" env-namespace:"ETCD"`
+	Proxy     proxyRuntimeOptions  `no-flag:"true"`
 }
 
 type keeperRuntimeEtcdCommand struct {
@@ -101,9 +101,9 @@ type keeperRuntimeKubernetesCommand struct {
 
 type proxyRuntimeKubernetesCommand struct {
 	K8s       k8sStoreOptions      `group:"Kubernetes" namespace:"k8s" env-namespace:"K8S"`
-	Proxy     proxyRuntimeOptions  `no-flag:"true"`
 	Component string               `no-flag:"true"`
 	Common    runtimeCommonOptions `no-flag:"true"`
+	Proxy     proxyRuntimeOptions  `no-flag:"true"`
 }
 
 type sentinelRuntimeEtcdCommand struct {

@@ -47,11 +47,11 @@ const (
 )
 
 type config struct {
-	InitialClusterSpecFile string                       `short:"f" long:"initial-cluster-spec" env:"INITIAL_CLUSTER_SPEC" description:"a file providing the initial cluster specification, used only at cluster initialization, ignored if cluster is already initialized"`
-	ClusterSpecFiles       []string                     `long:"cluster-spec" env:"CLUSTER_SPEC" description:"per-cluster initial cluster specification override as <cluster-name>=<path>; can be repeated"`
-	KubeService            kubeServicePublishingOptions `group:"Kubernetes Service Publishing"`
-	Web                    webOptions                   `group:"Web" namespace:"web" env-namespace:"WEB"`
+	InitialClusterSpecFile string   `short:"f" long:"initial-cluster-spec" env:"INITIAL_CLUSTER_SPEC" description:"a file providing the initial cluster specification, used only at cluster initialization, ignored if cluster is already initialized"`
+	ClusterSpecFiles       []string `long:"cluster-spec" env:"CLUSTER_SPEC" description:"per-cluster initial cluster specification override as <cluster-name>=<path>; can be repeated"`
 	runtimecommon.CommonConfig
+	Web         webOptions                   `group:"Web" namespace:"web" env-namespace:"WEB"`
+	KubeService kubeServicePublishingOptions `group:"Kubernetes Service Publishing"`
 }
 
 var cfg config

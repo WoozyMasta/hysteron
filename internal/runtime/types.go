@@ -46,8 +46,12 @@ type ProxyOptions struct {
 	ListenAddress string
 	Port          string
 
-	ReadOnlyListenAddress string
-	ReadOnlyPort          string
+	ReadOnlyListenAddress   string
+	ReadOnlyPort            string
+	ReadOnlyReplicaPriority string
+	ReadOnlyMaxLagBytes     uint64
+	ReadOnlyNoFallback      bool
+	ReadOnlyIncludePrimary  bool
 
 	DisableWritableListener bool
 }

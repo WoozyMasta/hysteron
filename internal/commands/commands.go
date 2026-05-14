@@ -264,6 +264,10 @@ func proxyRuntimeOpts(opts proxyRuntimeOptions) *runtime.ProxyOptions {
 		DisableWritableListener: opts.DisableWritableListener,
 		ReadOnlyListenAddress:   opts.ReadOnlyListenAddress,
 		ReadOnlyPort:            opts.ReadOnlyPort,
+		ReadOnlyReplicaPriority: string(opts.ReadOnly.ReplicaPriority),
+		ReadOnlyMaxLagBytes:     uint64(opts.ReadOnly.MaxLag),
+		ReadOnlyNoFallback:      opts.ReadOnly.NoFallback,
+		ReadOnlyIncludePrimary:  opts.ReadOnly.IncludePrimary,
 	}
 }
 

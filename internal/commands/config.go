@@ -19,6 +19,7 @@ import (
 
 	stconfig "github.com/woozymasta/hysteron/internal/config"
 	stlog "github.com/woozymasta/hysteron/internal/log"
+	"github.com/woozymasta/hysteron/internal/utils/readonly"
 )
 
 type runtimeCommonOptions struct {
@@ -30,9 +31,11 @@ type proxyRuntimeOptions struct {
 	ListenAddress string `long:"listen-address" env:"LISTEN_ADDRESS" description:"proxy listening address"`
 	Port          string `long:"port"           env:"PORT"           description:"proxy listening port"`
 
-	ReadOnlyListenAddress   string `long:"read-only-listen-address"  env:"READ_ONLY_LISTEN_ADDRESS"  description:"read-only proxy listening address"`
-	ReadOnlyPort            string `long:"read-only-port"            env:"READ_ONLY_PORT"            description:"read-only proxy listening port"`
-	DisableWritableListener bool   `long:"disable-writable-listener" env:"DISABLE_WRITABLE_LISTENER" description:"disable the writable proxy listener"`
+	ReadOnlyListenAddress string                 `long:"read-only-listen-address"  env:"READ_ONLY_LISTEN_ADDRESS"  description:"read-only proxy listening address"`
+	ReadOnlyPort          string                 `long:"read-only-port"            env:"READ_ONLY_PORT"            description:"read-only proxy listening port"`
+	ReadOnly              readonly.PolicyOptions `group:"Read-Only Routing" namespace:"read-only" env-namespace:"READ_ONLY"`
+
+	DisableWritableListener bool `long:"disable-writable-listener" env:"DISABLE_WRITABLE_LISTENER" description:"disable the writable proxy listener"`
 }
 
 type keeperRuntimeOptions struct {

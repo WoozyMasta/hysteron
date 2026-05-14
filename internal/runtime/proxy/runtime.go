@@ -26,6 +26,8 @@ import (
 	runtimecommon "github.com/woozymasta/hysteron/internal/runtime/common"
 	"github.com/woozymasta/hysteron/internal/tcpproxy"
 	"github.com/woozymasta/hysteron/internal/utils/id"
+	"github.com/woozymasta/hysteron/internal/utils/readonly"
+	"github.com/woozymasta/hysteron/internal/utils/units"
 )
 
 // RunOptions provides typed proxy runtime options for unified CLI.
@@ -34,6 +36,10 @@ type RunOptions struct {
 	Port                    string // Writable listener bind port.
 	ReadOnlyListenAddress   string // Read-only listener bind address.
 	ReadOnlyPort            string // Read-only listener bind port.
+	ReadOnlyReplicaPriority string // Read-only replica priority: sync, async, any.
+	ReadOnlyMaxLagBytes     uint64 // Maximum eligible read-only lag in bytes.
+	ReadOnlyNoFallback      bool   // Disable fallback to primary for read-only routing.
+	ReadOnlyIncludePrimary  bool   // Include primary in regular read-only destination pool.
 	DisableWritableListener bool   // Disables writable listener when true.
 }
 
@@ -46,6 +52,10 @@ func RunWithOptions(commonConfig stconfig.CommonConfig, opts RunOptions) error {
 	cfg.Writable.DisableListener = opts.DisableWritableListener
 	cfg.ReadOnly.ListenAddress = opts.ReadOnlyListenAddress
 	cfg.ReadOnly.Port = opts.ReadOnlyPort
+	cfg.ReadOnly.ReplicaPriority = readonly.ReplicaPriority(opts.ReadOnlyReplicaPriority)
+	cfg.ReadOnly.MaxLag = units.BytesValue(opts.ReadOnlyMaxLagBytes)
+	cfg.ReadOnly.NoFallback = opts.ReadOnlyNoFallback
+	cfg.ReadOnly.IncludePrimary = opts.ReadOnlyIncludePrimary
 	return runProxy()
 }
 

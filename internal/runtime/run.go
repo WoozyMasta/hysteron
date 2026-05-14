@@ -77,6 +77,10 @@ func Run(target Target) error {
 			DisableWritableListener: target.Proxy.DisableWritableListener,
 			ReadOnlyListenAddress:   target.Proxy.ReadOnlyListenAddress,
 			ReadOnlyPort:            target.Proxy.ReadOnlyPort,
+			ReadOnlyReplicaPriority: target.Proxy.ReadOnlyReplicaPriority,
+			ReadOnlyMaxLagBytes:     target.Proxy.ReadOnlyMaxLagBytes,
+			ReadOnlyNoFallback:      target.Proxy.ReadOnlyNoFallback,
+			ReadOnlyIncludePrimary:  target.Proxy.ReadOnlyIncludePrimary,
 		})
 
 	case "keeper":

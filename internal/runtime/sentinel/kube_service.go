@@ -49,16 +49,13 @@ const (
 )
 
 type kubeServicePublishingOptions struct {
-	ServiceName             string                   `long:"kube-service-name" env:"KUBE_SERVICE_NAME" default:"{resource}" validate-non-empty:"true" description:"Kubernetes Service name used for writable PostgreSQL traffic; {cluster} and {resource} are replaced with the cluster name and Kubernetes resource name"`
-	ReadOnlyServiceName     string                   `long:"kube-read-only-service-name" env:"KUBE_READ_ONLY_SERVICE_NAME" default:"{resource}-ro" validate-non-empty:"true" description:"Kubernetes Service name used for read-only PostgreSQL traffic; {cluster} and {resource} are replaced with the cluster name and Kubernetes resource name"`
-	ReadOnlyReplicaPriority readonly.ReplicaPriority `long:"kube-read-only-replica-priority" env:"KUBE_READ_ONLY_REPLICA_PRIORITY" default:"sync" choices:"sync;async;any" description:"read-only replica priority policy"`
-	ReadOnlyMaxLag          units.BytesValue         `long:"kube-read-only-max-lag" env:"KUBE_READ_ONLY_MAX_LAG" default:"0" description:"maximum standby WAL lag in bytes for read-only Service publishing"`
-	ServicePort             int32                    `long:"kube-service-port" env:"KUBE_SERVICE_PORT" default:"5432" validate-min:"1" validate-max:"65535" description:"Kubernetes Service port exposed for writable PostgreSQL traffic"`
-	ReadOnlyServicePort     int32                    `long:"kube-read-only-service-port" env:"KUBE_READ_ONLY_SERVICE_PORT" default:"5432" validate-min:"1" validate-max:"65535" description:"Kubernetes Service port exposed for read-only PostgreSQL traffic"`
-	Enabled                 bool                     `long:"kube-service-publishing" env:"KUBE_SERVICE_PUBLISHING" description:"publish the current writable PostgreSQL endpoint through a Kubernetes Service and EndpointSlice"`
-	ReadOnlyEnabled         bool                     `long:"kube-read-only-service-publishing" env:"KUBE_READ_ONLY_SERVICE_PUBLISHING" description:"publish read-only PostgreSQL endpoints through a Kubernetes Service and EndpointSlice"`
-	ReadOnlyNoFallback      bool                     `long:"kube-read-only-no-fallback" env:"KUBE_READ_ONLY_NO_FALLBACK" xor:"kube-read-only-primary-policy" description:"do not publish primary as read-only endpoint when no eligible standby exists"`
-	ReadOnlyIncludePrimary  bool                     `long:"kube-read-only-include-primary" env:"KUBE_READ_ONLY_INCLUDE_PRIMARY" xor:"kube-read-only-primary-policy" description:"include primary in the normal read-only endpoint pool"`
+	ServiceName         string                 `long:"kube-service-name" env:"KUBE_SERVICE_NAME" default:"{resource}" validate-non-empty:"true" description:"Kubernetes Service name used for writable PostgreSQL traffic; {cluster} and {resource} are replaced with the cluster name and Kubernetes resource name"`
+	ReadOnlyServiceName string                 `long:"kube-read-only-service-name" env:"KUBE_READ_ONLY_SERVICE_NAME" default:"{resource}-ro" validate-non-empty:"true" description:"Kubernetes Service name used for read-only PostgreSQL traffic; {cluster} and {resource} are replaced with the cluster name and Kubernetes resource name"`
+	ServicePort         int32                  `long:"kube-service-port" env:"KUBE_SERVICE_PORT" default:"5432" validate-min:"1" validate-max:"65535" description:"Kubernetes Service port exposed for writable PostgreSQL traffic"`
+	ReadOnlyServicePort int32                  `long:"kube-read-only-service-port" env:"KUBE_READ_ONLY_SERVICE_PORT" default:"5432" validate-min:"1" validate-max:"65535" description:"Kubernetes Service port exposed for read-only PostgreSQL traffic"`
+	Enabled             bool                   `long:"kube-service-publishing" env:"KUBE_SERVICE_PUBLISHING" description:"publish the current writable PostgreSQL endpoint through a Kubernetes Service and EndpointSlice"`
+	ReadOnlyEnabled     bool                   `long:"kube-read-only-service-publishing" env:"KUBE_READ_ONLY_SERVICE_PUBLISHING" description:"publish read-only PostgreSQL endpoints through a Kubernetes Service and EndpointSlice"`
+	ReadOnly            readonly.PolicyOptions `group:"Read-Only Routing" namespace:"kube-read-only" env-namespace:"KUBE_READ_ONLY"`
 }
 
 type kubeServicePublisher struct {
@@ -129,10 +126,10 @@ func newKubeServicePublisher(cfg *config, clusterName string, logger zerolog.Log
 		readOnlyEnabled:        cfg.KubeService.ReadOnlyEnabled,
 		readOnlyServiceName:    readOnlyServiceName,
 		readOnlyServicePort:    cfg.KubeService.ReadOnlyServicePort,
-		readOnlyPriority:       cfg.KubeService.ReadOnlyReplicaPriority,
-		readOnlyMaxLag:         cfg.KubeService.ReadOnlyMaxLag,
-		readOnlyNoFallback:     cfg.KubeService.ReadOnlyNoFallback,
-		readOnlyIncludePrimary: cfg.KubeService.ReadOnlyIncludePrimary,
+		readOnlyPriority:       cfg.KubeService.ReadOnly.ReplicaPriority,
+		readOnlyMaxLag:         cfg.KubeService.ReadOnly.MaxLag,
+		readOnlyNoFallback:     cfg.KubeService.ReadOnly.NoFallback,
+		readOnlyIncludePrimary: cfg.KubeService.ReadOnly.IncludePrimary,
 	}, nil
 }
 

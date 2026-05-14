@@ -46,7 +46,7 @@ type postgresOptions struct {
 
 // postgresReplOptions configures the postgres replication user.
 type postgresReplOptions struct {
-	AuthMethod   string `long:"auth-method"  env:"AUTH_METHOD"  choices:"md5;trust" default:"md5" description:"postgres replication user auth method"`
+	AuthMethod   string `long:"auth-method"  env:"AUTH_METHOD"  choices:"md5;scram-sha-256;trust" default:"md5" description:"postgres replication user auth method"`
 	Username     string `long:"username"     env:"USERNAME"     description:"postgres replication user name. Required. It'll be created on db initialization. Must be the same for all keepers."`
 	Password     string `long:"password"     env:"PASSWORD"     description:"postgres replication user password. Mutually exclusive with --pg-repl-passwordfile. Must be the same for all keepers."  xor:"pg-repl-secret"`
 	PasswordFile string `long:"passwordfile" env:"PASSWORDFILE" description:"postgres replication user password file. Mutually exclusive with --pg-repl-password. Must be the same for all keepers." xor:"pg-repl-secret"`
@@ -54,7 +54,7 @@ type postgresReplOptions struct {
 
 // postgresSUOptions configures the postgres superuser.
 type postgresSUOptions struct {
-	AuthMethod   string `long:"auth-method"  env:"AUTH_METHOD"  choices:"md5;trust" default:"md5" description:"postgres superuser auth method"`
+	AuthMethod   string `long:"auth-method"  env:"AUTH_METHOD"  choices:"md5;scram-sha-256;trust" default:"md5" description:"postgres superuser auth method"`
 	Username     string `long:"username"     env:"USERNAME"     description:"postgres superuser user name. Defaults to the effective user running keeper. Must be the same for all keepers."`
 	Password     string `long:"password"     env:"PASSWORD"     description:"postgres superuser password. Mutually exclusive with --pg-su-passwordfile. Must be the same for all keepers."   xor:"pg-su-secret"`
 	PasswordFile string `long:"passwordfile" env:"PASSWORDFILE" description:"postgres superuser password file. Mutually exclusive with --pg-su-password. Must be the same for all keepers."  xor:"pg-su-secret"`

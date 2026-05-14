@@ -100,7 +100,13 @@ func ping(ctx context.Context, connParams ConnParams) error {
 	return nil
 }
 
-func setPassword(ctx context.Context, connParams ConnParams, username, password string) error {
+func setPassword(
+	ctx context.Context,
+	connParams ConnParams,
+	username string,
+	password string,
+	authMethod string,
+) error {
 	db, err := openDB(connParams)
 	if err != nil {
 		return err
@@ -114,6 +120,10 @@ func setPassword(ctx context.Context, connParams ConnParams, username, password 
 
 	query := fmt.Sprintf("set local log_statement = %s", quoteLiteral("none")) //nolint:perfsprint
 	if _, err = tx.ExecContext(ctx, query); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	if err = setPasswordEncryptionForAuthMethod(ctx, tx, authMethod); err != nil {
 		_ = tx.Rollback()
 		return err
 	}
@@ -126,7 +136,27 @@ func setPassword(ctx context.Context, connParams ConnParams, username, password 
 	return tx.Commit()
 }
 
-func createRole(ctx context.Context, connParams ConnParams, username, password string) error {
+func setPasswordEncryptionForAuthMethod(
+	ctx context.Context,
+	tx *sql.Tx,
+	authMethod string,
+) error {
+	if authMethod != "scram-sha-256" {
+		return nil
+	}
+
+	query := "set local password_encryption = 'scram-sha-256'"
+	_, err := tx.ExecContext(ctx, query)
+	return err
+}
+
+func createRole(
+	ctx context.Context,
+	connParams ConnParams,
+	username string,
+	password string,
+	authMethod string,
+) error {
 	db, err := openDB(connParams)
 	if err != nil {
 		return err
@@ -140,6 +170,10 @@ func createRole(ctx context.Context, connParams ConnParams, username, password s
 
 	query := fmt.Sprintf("set local log_statement = %s", quoteLiteral("none")) //nolint:perfsprint
 	if _, err = tx.ExecContext(ctx, query); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	if err = setPasswordEncryptionForAuthMethod(ctx, tx, authMethod); err != nil {
 		_ = tx.Rollback()
 		return err
 	}
@@ -163,7 +197,13 @@ func createPasswordlessRole(ctx context.Context, connParams ConnParams, username
 	return err
 }
 
-func alterRole(ctx context.Context, connParams ConnParams, username, password string) error {
+func alterRole(
+	ctx context.Context,
+	connParams ConnParams,
+	username string,
+	password string,
+	authMethod string,
+) error {
 	db, err := openDB(connParams)
 	if err != nil {
 		return err
@@ -177,6 +217,10 @@ func alterRole(ctx context.Context, connParams ConnParams, username, password st
 
 	query := fmt.Sprintf("set local log_statement = %s", quoteLiteral("none")) //nolint:perfsprint
 	if _, err = tx.ExecContext(ctx, query); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	if err = setPasswordEncryptionForAuthMethod(ctx, tx, authMethod); err != nil {
 		_ = tx.Rollback()
 		return err
 	}

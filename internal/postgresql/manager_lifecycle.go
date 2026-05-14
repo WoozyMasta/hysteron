@@ -46,7 +46,8 @@ func (p *Manager) Init(initConfig *InitConfig) error {
 
 	name := filepath.Join(p.pgBinPath, "initdb")
 	cmd := exec.Command(name, "-D", p.dataDir, "-U", p.suUsername)
-	if p.suAuthMethod == "md5" {
+	if p.suAuthMethod == "md5" || p.suAuthMethod == "scram-sha-256" {
+		cmd.Args = append(cmd.Args, "--auth", p.suAuthMethod)
 		cmd.Args = append(cmd.Args, "--pwfile", pwfile.Name())
 	}
 	zl().Debug().Str("path", name).Strs("args", cmd.Args).Msg("execing cmd")
@@ -405,7 +406,7 @@ func (p *Manager) SetupRoles() error {
 				return fmt.Errorf("error adding replication role to superuser: %v", err)
 			}
 		} else {
-			if err := alterRole(ctx, p.localConnParams, p.suUsername, p.suPassword); err != nil {
+			if err := alterRole(ctx, p.localConnParams, p.suUsername, p.suPassword, p.suAuthMethod); err != nil {
 				return fmt.Errorf("error adding replication role to superuser: %v", err)
 			}
 		}
@@ -414,14 +415,14 @@ func (p *Manager) SetupRoles() error {
 		// Configure superuser role password if auth method is not trust.
 		if p.suAuthMethod != "trust" && p.suPassword != "" {
 			zl().Info().Msg("setting superuser password")
-			if err := setPassword(ctx, p.localConnParams, p.suUsername, p.suPassword); err != nil {
+			if err := setPassword(ctx, p.localConnParams, p.suUsername, p.suPassword, p.suAuthMethod); err != nil {
 				return fmt.Errorf("error setting superuser password: %v", err)
 			}
 			zl().Info().Msg("superuser password set")
 		}
 		zl().Info().Msg("creating replication role")
 		if p.replAuthMethod != "trust" {
-			if err := createRole(ctx, p.localConnParams, p.replUsername, p.replPassword); err != nil {
+			if err := createRole(ctx, p.localConnParams, p.replUsername, p.replPassword, p.replAuthMethod); err != nil {
 				return fmt.Errorf("error creating replication role: %v", err)
 			}
 		} else {

@@ -421,6 +421,136 @@ func TestInitUsers(t *testing.T) {
 	}
 }
 
+func TestInitUsersSCRAMSHA256(t *testing.T) {
+	t.Parallel()
+
+	dir, err := os.MkdirTemp("", "")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	tstore := setupStore(t, dir)
+	defer tstore.Stop()
+
+	storeEndpoints := fmt.Sprintf("%s:%s", tstore.listenAddress, tstore.port)
+	clusterName := uuid.NewString()
+	storePath := filepath.Join(common.StorePrefix, clusterName)
+	sm := store.NewKVBackedStore(tstore.store, storePath)
+
+	initialClusterSpec := &cluster.ClusterSpec{
+		InitMode:           cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
+		SleepInterval:      &cluster.Duration{Duration: 2 * time.Second},
+		RequestTimeout:     &cluster.Duration{Duration: 1 * time.Second},
+		FailInterval:       &cluster.Duration{Duration: 5 * time.Second},
+		ConvergenceTimeout: &cluster.Duration{Duration: 30 * time.Second},
+		PGParameters:       defaultPGParameters,
+	}
+	initialClusterSpecFile, err := writeClusterSpec(dir, initialClusterSpec)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	ts, err := NewTestSentinel(
+		t,
+		dir,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		fmt.Sprintf("--initial-cluster-spec=%s", initialClusterSpecFile),
+	)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := ts.Start(); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer ts.Stop()
+
+	if err := WaitClusterPhase(sm, cluster.ClusterPhaseInitializing, 60*time.Second); err != nil {
+		t.Fatal("expected cluster in initializing phase")
+	}
+
+	suUsername := "scramsu"
+	suPassword := "scram-su-password"
+	replUsername := "scramrepl"
+	replPassword := "scram-repl-password"
+	tk, err := NewTestKeeper(
+		t,
+		dir,
+		clusterName,
+		suUsername,
+		suPassword,
+		replUsername,
+		replPassword,
+		tstore.storeBackend,
+		storeEndpoints,
+		"--pg-su-auth-method=scram-sha-256",
+		"--pg-repl-auth-method=scram-sha-256",
+	)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := tk.Start(); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer tk.Stop()
+
+	if err := WaitClusterPhase(sm, cluster.ClusterPhaseNormal, 60*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := tk.WaitDBUp(60 * time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	if err := tk.expectConnect(suUsername, suPassword); err != nil {
+		t.Fatalf("expected superuser password auth to work: %v", err)
+	}
+	if err := tk.expectConnect(replUsername, replPassword); err != nil {
+		t.Fatalf("expected replication user password auth to work: %v", err)
+	}
+
+	var suHash string
+	rows, err := tk.Query("select rolpassword from pg_authid where rolname = $1", suUsername)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if !rows.Next() {
+		rows.Close()
+		t.Fatalf("role %q not found", suUsername)
+	}
+	if err := rows.Scan(&suHash); err != nil {
+		rows.Close()
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := rows.Close(); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if len(suHash) < len("SCRAM-SHA-256$") || suHash[:len("SCRAM-SHA-256$")] != "SCRAM-SHA-256$" {
+		t.Fatalf("expected %q password hash to be SCRAM, got %q", suUsername, suHash)
+	}
+
+	var replHash string
+	rows, err = tk.Query("select rolpassword from pg_authid where rolname = $1", replUsername)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if !rows.Next() {
+		rows.Close()
+		t.Fatalf("role %q not found", replUsername)
+	}
+	if err := rows.Scan(&replHash); err != nil {
+		rows.Close()
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := rows.Close(); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if len(replHash) < len("SCRAM-SHA-256$") || replHash[:len("SCRAM-SHA-256$")] != "SCRAM-SHA-256$" {
+		t.Fatalf("expected %q password hash to be SCRAM, got %q", replUsername, replHash)
+	}
+}
+
 func TestInitialClusterSpec(t *testing.T) {
 	t.Parallel()
 

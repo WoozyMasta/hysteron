@@ -31,6 +31,7 @@ func TestManagerIsStartedMissingDataDir(t *testing.T) {
 		"replication",
 		"",
 		0,
+		nil,
 	)
 
 	started, err := manager.IsStarted()

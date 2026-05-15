@@ -40,6 +40,17 @@ func (p *Manager) validateManagedDirs() error {
 			return fmt.Errorf("postgres data dir %q cannot be inside configured wal dir %q", p.dataDir, p.walDir)
 		}
 	}
+	for _, root := range p.tablespaceDirRoots {
+		if err := validateRemovablePath(root, "tablespace dir root"); err != nil {
+			return err
+		}
+		if hasPathPrefix(root, p.dataDir) || hasPathPrefix(p.dataDir, root) {
+			return fmt.Errorf("tablespace dir root %q cannot overlap postgres data dir %q", root, p.dataDir)
+		}
+		if hasPathPrefix(root, p.walDir) || hasPathPrefix(p.walDir, root) {
+			return fmt.Errorf("tablespace dir root %q cannot overlap wal dir %q", root, p.walDir)
+		}
+	}
 	return nil
 }
 
@@ -80,6 +91,13 @@ func (p *Manager) removeManagedDirs() error {
 			return err
 		}
 	}
+	return nil
+}
+
+func (p *Manager) removeManagedTablespaceDirs() error {
+	// Tablespace targets may be shared across nodes in single-host setups.
+	// Removing them during keeper-side cleanup can corrupt an active master.
+	// Cleanup responsibility stays with PostgreSQL operators.
 	return nil
 }
 

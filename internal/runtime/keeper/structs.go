@@ -70,6 +70,8 @@ type PostgresKeeper struct {
 	pgBinPath string
 	// PostgreSQL WAL directory path (optional external path).
 	pgWALDir string
+	// Managed tablespace directory roots (cleanup is limited to these paths).
+	pgTablespaceDirs []string
 	// Replication user auth method.
 	pgReplAuthMethod string
 	// Replication user name.

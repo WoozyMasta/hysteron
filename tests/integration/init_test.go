@@ -783,6 +783,142 @@ func TestReinitWithCustomWALDirCleansWalDir(t *testing.T) {
 	}
 }
 
+func TestReinitCleansManagedTablespaceDir(t *testing.T) {
+	t.Parallel()
+
+	clusterName := uuid.NewString()
+
+	dir, err := os.MkdirTemp("", "")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	tstore := setupStore(t, dir)
+	defer tstore.Stop()
+
+	storeEndpoints := fmt.Sprintf("%s:%s", tstore.listenAddress, tstore.port)
+	storePath := filepath.Join(common.StorePrefix, clusterName)
+	sm := store.NewKVBackedStore(tstore.store, storePath)
+
+	initialClusterSpec := &cluster.ClusterSpec{
+		InitMode:           cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
+		SleepInterval:      &cluster.Duration{Duration: 2 * time.Second},
+		RequestTimeout:     &cluster.Duration{Duration: 1 * time.Second},
+		FailInterval:       &cluster.Duration{Duration: 5 * time.Second},
+		ConvergenceTimeout: &cluster.Duration{Duration: 30 * time.Second},
+		PGParameters:       defaultPGParameters,
+	}
+	initialClusterSpecFile, err := writeClusterSpec(dir, initialClusterSpec)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	ts, err := NewTestSentinel(
+		t,
+		dir,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		fmt.Sprintf("--initial-cluster-spec=%s", initialClusterSpecFile),
+	)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := ts.Start(); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer ts.Stop()
+
+	tablespaceRoot := filepath.Join(dir, "managed-tblspc")
+	tablespacePath := filepath.Join(tablespaceRoot, "ts1")
+	if err := os.MkdirAll(tablespacePath, 0700); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	tk, err := NewTestKeeper(
+		t,
+		dir,
+		clusterName,
+		pgSUUsername,
+		pgSUPassword,
+		pgReplUsername,
+		pgReplPassword,
+		tstore.storeBackend,
+		storeEndpoints,
+		fmt.Sprintf("--pg-tablespace-dir=%s", tablespaceRoot),
+	)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := tk.Start(); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer tk.Stop()
+
+	if err := WaitClusterPhase(sm, cluster.ClusterPhaseNormal, 60*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := tk.WaitDBUp(60 * time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	tablespacePathLiteral := strings.ReplaceAll(tablespacePath, "'", "''")
+	if _, err := tk.Exec(
+		fmt.Sprintf("CREATE TABLESPACE ts1 LOCATION '%s'", tablespacePathLiteral),
+	); err != nil {
+		t.Fatalf("unexpected err creating tablespace: %v", err)
+	}
+
+	markerPath := filepath.Join(tablespacePath, "reinit-ts-marker")
+	if err := os.WriteFile(markerPath, []byte("stale"), 0600); err != nil {
+		t.Fatalf("unexpected err creating tablespace marker: %v", err)
+	}
+	if _, err := os.Stat(markerPath); err != nil {
+		t.Fatalf("expected marker to exist before reinit: %v", err)
+	}
+
+	reinitClusterSpec := &cluster.ClusterSpec{
+		InitMode:           cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
+		SleepInterval:      &cluster.Duration{Duration: 2 * time.Second},
+		RequestTimeout:     &cluster.Duration{Duration: 1 * time.Second},
+		FailInterval:       &cluster.Duration{Duration: 5 * time.Second},
+		ConvergenceTimeout: &cluster.Duration{Duration: 30 * time.Second},
+		PGParameters:       defaultPGParameters,
+	}
+	reinitClusterSpecFile, err := writeClusterSpec(dir, reinitClusterSpec)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	if err := HysteronCluster(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		"initialize",
+		"-y",
+		"-f",
+		reinitClusterSpecFile,
+	); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	if err := WaitClusterPhase(sm, cluster.ClusterPhaseInitializing, 60*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := WaitClusterPhase(sm, cluster.ClusterPhaseNormal, 60*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := tk.WaitDBUp(60 * time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	if _, err := os.Stat(markerPath); !os.IsNotExist(err) {
+		t.Fatalf("expected stale tablespace marker to be removed during reinit, got: %v", err)
+	}
+}
+
 func TestInitialClusterSpec(t *testing.T) {
 	t.Parallel()
 

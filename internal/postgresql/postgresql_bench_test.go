@@ -175,7 +175,7 @@ func benchmarkManager(b *testing.B) *Manager {
 	if err := os.MkdirAll(dataDir, 0700); err != nil {
 		b.Fatal(err)
 	}
-	return NewManager("", filepath.Dir(dataDir), "", nil, nil, "trust", "postgres", "", "trust", "repl", "", 0)
+	return NewManager("", filepath.Dir(dataDir), "", nil, nil, "trust", "postgres", "", "trust", "repl", "", 0, nil)
 }
 
 func benchmarkPGParameters() common.Parameters {

@@ -44,7 +44,11 @@ The format is based on [Keep a Changelog][], and this project adheres to
   including `initdb --auth` handling and SCRAM-compatible role password setup.
 * Keeper PostgreSQL lifecycle now supports optional `--pg-wal-dir`:
   `initdb`/`pg_basebackup` receive `--waldir`, PITR restore command supports
-  `%w` expansion, and manager cleanup removes external WAL directory too.
+  `%w` expansion, and manager cleanup removes external WAL directory too with
+  managed-path safety validation for destructive cleanup paths.
+* Keeper now supports repeatable `--pg-tablespace-dir` managed roots to
+  run PostgreSQL clusters with user-managed tablespace locations while
+  keeping keeper reinit/resync flows tablespace-aware and safe.
 * Sentinel timing internals now use Go stdlib monotonic `time` tracking
   instead of `internal/utils/timer`.
 * Runtime startup path was simplified to typed CLI options only

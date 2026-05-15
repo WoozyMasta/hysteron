@@ -67,6 +67,18 @@ func NewPostgresKeeper(
 			return nil, fmt.Errorf("resolve absolute waldir path for %q: %w", cfg.PG.WALDir, err)
 		}
 	}
+	tablespaceDirs := make([]string, 0, len(cfg.PG.TablespaceDirs))
+	for _, tablespaceDir := range cfg.PG.TablespaceDirs {
+		absTablespaceDir, absErr := filepath.Abs(tablespaceDir)
+		if absErr != nil {
+			return nil, fmt.Errorf(
+				"resolve absolute tablespace dir path for %q: %w",
+				tablespaceDir,
+				absErr,
+			)
+		}
+		tablespaceDirs = append(tablespaceDirs, absTablespaceDir)
+	}
 
 	p := &PostgresKeeper{
 		cfg: cfg,
@@ -81,6 +93,7 @@ func NewPostgresKeeper(
 		pgAdvertisePort:    cfg.PG.AdvertisePort,
 		pgBinPath:          cfg.PG.BinPath,
 		pgWALDir:           walDir,
+		pgTablespaceDirs:   tablespaceDirs,
 		pgReplAuthMethod:   cfg.PG.Repl.AuthMethod,
 		pgReplUsername:     cfg.PG.Repl.Username,
 		pgReplPassword:     cfg.PG.Repl.Password,

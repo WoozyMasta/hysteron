@@ -68,6 +68,7 @@ func (p *PostgresKeeper) setupPostgresManager() error {
 		p.pgReplUsername,
 		p.pgReplPassword,
 		p.requestTimeout,
+		p.pgTablespaceDirs,
 	)
 	p.pgm = pgManager
 	p.pgBinaryVersion = pgManager.BinaryVersion

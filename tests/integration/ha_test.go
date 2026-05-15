@@ -198,6 +198,31 @@ func setupServersCustom(t *testing.T, clusterName, dir string, numKeepers, numSe
 }
 
 func setupServersCustomWithProxyArgs(t *testing.T, clusterName, dir string, numKeepers, numSentinels uint8, initialClusterSpec *cluster.ClusterSpec, proxyArgs ...string) (testKeepers, testSentinels, *TestProxy, *TestStore) {
+	return setupServersCustomWithArgs(t, clusterName, dir, numKeepers, numSentinels, initialClusterSpec, nil, proxyArgs)
+}
+
+func setupServersCustomWithKeeperArgs(
+	t *testing.T,
+	clusterName,
+	dir string,
+	numKeepers,
+	numSentinels uint8,
+	initialClusterSpec *cluster.ClusterSpec,
+	keeperArgs ...string,
+) (testKeepers, testSentinels, *TestProxy, *TestStore) {
+	return setupServersCustomWithArgs(t, clusterName, dir, numKeepers, numSentinels, initialClusterSpec, keeperArgs, nil)
+}
+
+func setupServersCustomWithArgs(
+	t *testing.T,
+	clusterName,
+	dir string,
+	numKeepers,
+	numSentinels uint8,
+	initialClusterSpec *cluster.ClusterSpec,
+	keeperArgs []string,
+	proxyArgs []string,
+) (testKeepers, testSentinels, *TestProxy, *TestStore) {
 	tstore := setupStore(t, dir)
 
 	storeEndpoints := fmt.Sprintf("%s:%s", tstore.listenAddress, tstore.port)
@@ -224,7 +249,18 @@ func setupServersCustomWithProxyArgs(t *testing.T, clusterName, dir string, numK
 
 	// Start other keepers
 	for i := uint8(0); i < numKeepers; i++ {
-		tk, err := NewTestKeeper(t, dir, clusterName, pgSUUsername, pgSUPassword, pgReplUsername, pgReplPassword, tstore.storeBackend, storeEndpoints)
+		tk, err := NewTestKeeper(
+			t,
+			dir,
+			clusterName,
+			pgSUUsername,
+			pgSUPassword,
+			pgReplUsername,
+			pgReplPassword,
+			tstore.storeBackend,
+			storeEndpoints,
+			keeperArgs...,
+		)
 		if err != nil {
 			t.Fatalf("unexpected err: %v", err)
 		}
@@ -234,7 +270,18 @@ func setupServersCustomWithProxyArgs(t *testing.T, clusterName, dir string, numK
 		tks[tk.uid] = tk
 	}
 
-	tp, err := NewTestProxy(t, dir, clusterName, pgSUUsername, pgSUPassword, pgReplUsername, pgReplPassword, tstore.storeBackend, storeEndpoints, proxyArgs...)
+	tp, err := NewTestProxy(
+		t,
+		dir,
+		clusterName,
+		pgSUUsername,
+		pgSUPassword,
+		pgReplUsername,
+		pgReplPassword,
+		tstore.storeBackend,
+		storeEndpoints,
+		proxyArgs...,
+	)
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -264,6 +311,69 @@ func getLines(t *testing.T, q Querier) (int, error) {
 		c++
 	}
 	return c, rows.Err()
+}
+
+func getTable01Fingerprint(q Querier) (string, error) {
+	rows, err := q.Query(
+		`SELECT COALESCE(md5(string_agg(format('%s:%s', id, value), ',' ORDER BY id)), '')
+		FROM table01`,
+	)
+	if err != nil {
+		return "", err
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		return "", fmt.Errorf("no rows returned")
+	}
+	var fingerprint string
+	if err := rows.Scan(&fingerprint); err != nil {
+		return "", err
+	}
+	return fingerprint, rows.Err()
+}
+
+func getTableTSFingerprint(q Querier) (string, error) {
+	rows, err := q.Query(
+		`SELECT COALESCE(md5(string_agg(format('%s:%s', id, value), ',' ORDER BY id)), '')
+		FROM table_ts`,
+	)
+	if err != nil {
+		return "", err
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		return "", fmt.Errorf("no rows returned")
+	}
+	var fingerprint string
+	if err := rows.Scan(&fingerprint); err != nil {
+		return "", err
+	}
+	return fingerprint, rows.Err()
+}
+
+func getTableTSLines(q Querier) (int, error) {
+	rows, err := q.Query("SELECT FROM table_ts")
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+	count := 0
+	for rows.Next() {
+		count++
+	}
+	return count, rows.Err()
+}
+
+func waitTableTSLines(q Querier, num int, timeout time.Duration) error {
+	start := time.Now()
+	for time.Now().Add(-timeout).Before(start) {
+		lines, err := getTableTSLines(q)
+		if err == nil && lines == num {
+			return nil
+		}
+		time.Sleep(2 * time.Second)
+	}
+	return fmt.Errorf("timeout waiting for %d lines in table_ts", num)
 }
 
 func waitLines(t *testing.T, q Querier, num int, timeout time.Duration) error {
@@ -361,17 +471,37 @@ func testMasterStandby(t *testing.T, syncRepl bool) {
 	if err := populate(t, master); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if err := write(t, master, 1, 1); err != nil {
-		t.Fatalf("unexpected err: %v", err)
+	for i := 1; i <= 25; i++ {
+		if err := write(t, master, i, i*10); err != nil {
+			t.Fatalf("unexpected err: %v", err)
+		}
 	}
 	c, err := getLines(t, master)
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if c != 1 {
-		t.Fatalf("wrong number of lines, want: %d, got: %d", 1, c)
+	if c != 25 {
+		t.Fatalf("wrong number of lines, want: %d, got: %d", 25, c)
 	}
-	if err := waitLines(t, standby, 1, 30*time.Second); err != nil {
+	if err := waitLines(t, standby, 25, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	masterFingerprint, err := getTable01Fingerprint(master)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	standbyFingerprint, err := getTable01Fingerprint(standby)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if standbyFingerprint != masterFingerprint {
+		t.Fatalf(
+			"data integrity mismatch: standby fingerprint %q differs from master %q",
+			standbyFingerprint,
+			masterFingerprint,
+		)
+	}
+	if err := waitLines(t, tp, 25, 30*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 }
@@ -430,7 +560,13 @@ func testFailover(t *testing.T, syncRepl bool, standbyCluster bool) {
 	if err := populate(t, primary); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if err := write(t, primary, 1, 1); err != nil {
+	for i := 1; i <= 25; i++ {
+		if err := write(t, primary, i, i*10); err != nil {
+			t.Fatalf("unexpected err: %v", err)
+		}
+	}
+	primaryFingerprintBeforeFailover, err := getTable01Fingerprint(primary)
+	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
@@ -465,8 +601,19 @@ func testFailover(t *testing.T, syncRepl bool, standbyCluster bool) {
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if c != 1 {
-		t.Fatalf("wrong number of lines, want: %d, got: %d", 1, c)
+	if c != 25 {
+		t.Fatalf("wrong number of lines, want: %d, got: %d", 25, c)
+	}
+	standbyFingerprintAfterFailover, err := getTable01Fingerprint(standby)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if standbyFingerprintAfterFailover != primaryFingerprintBeforeFailover {
+		t.Fatalf(
+			"data integrity mismatch after failover: got %q, want %q",
+			standbyFingerprintAfterFailover,
+			primaryFingerprintBeforeFailover,
+		)
 	}
 
 	// the proxy should connect to the right master
@@ -493,6 +640,237 @@ func TestFailoverStandbyCluster(t *testing.T) {
 func TestFailoverSyncReplStandbyCluster(t *testing.T) {
 	t.Parallel()
 	testFailover(t, true, true)
+}
+
+func TestTablespaceFailoverDataIntegrity(t *testing.T) {
+	dir, err := os.MkdirTemp("", "hysteron")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	clusterName := uuid.NewString()
+	tablespaceRoot := filepath.Join(dir, "managed-tblspc")
+	tablespacePath := filepath.Join(tablespaceRoot, "ts1")
+	if err := os.MkdirAll(tablespacePath, 0700); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	initialClusterSpec := &cluster.ClusterSpec{
+		InitMode:               cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
+		SleepInterval:          &cluster.Duration{Duration: 2 * time.Second},
+		RequestTimeout:         &cluster.Duration{Duration: 1 * time.Second},
+		FailInterval:           &cluster.Duration{Duration: 5 * time.Second},
+		ConvergenceTimeout:     &cluster.Duration{Duration: 30 * time.Second},
+		MaxStandbyLag:          cluster.Uint32P(50 * 1024),
+		SynchronousReplication: cluster.BoolP(false),
+		PGParameters:           defaultPGParameters,
+	}
+
+	tks, tss, tp, tstore := setupServersCustomWithKeeperArgs(
+		t,
+		clusterName,
+		dir,
+		2,
+		1,
+		initialClusterSpec,
+		fmt.Sprintf("--pg-tablespace-dir=%s", tablespaceRoot),
+	)
+	defer shutdown(tks, tss, tp, tstore)
+
+	storePath := filepath.Join(common.StorePrefix, clusterName)
+	sm := store.NewKVBackedStore(tstore.store, storePath)
+	master, standbys := waitMasterStandbysReady(t, sm, tks)
+	standby := standbys[0]
+
+	tablespacePathLiteral := strings.ReplaceAll(tablespacePath, "'", "''")
+	if _, err := master.Exec(fmt.Sprintf("CREATE TABLESPACE ts1 LOCATION '%s'", tablespacePathLiteral)); err != nil {
+		t.Fatalf("unexpected err creating tablespace: %v", err)
+	}
+	if _, err := master.Exec("CREATE TABLE table_ts(id INT PRIMARY KEY, value INT NOT NULL) TABLESPACE ts1"); err != nil {
+		t.Fatalf("unexpected err creating table_ts: %v", err)
+	}
+	for i := 1; i <= 30; i++ {
+		if _, err := master.Exec("INSERT INTO table_ts VALUES ($1, $2)", i, i*100); err != nil {
+			t.Fatalf("unexpected err inserting table_ts rows: %v", err)
+		}
+	}
+
+	if err := waitTableTSLines(standby, 30, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	fingerprintBeforeFailover, err := getTableTSFingerprint(master)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	t.Logf("Stopping current master keeper: %s", master.uid)
+	master.Stop()
+
+	if err := WaitClusterDataMaster(standby.uid, sm, 30*time.Second); err != nil {
+		t.Fatalf("expected master %q in cluster view", standby.uid)
+	}
+	if err := standby.WaitDBRole(common.RoleMaster, nil, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	if err := waitTableTSLines(standby, 30, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	fingerprintAfterFailover, err := getTableTSFingerprint(standby)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if fingerprintAfterFailover != fingerprintBeforeFailover {
+		t.Fatalf("tablespace data integrity mismatch after failover: got %q, want %q", fingerprintAfterFailover, fingerprintBeforeFailover)
+	}
+}
+
+func TestTablespaceResyncDataIntegrity(t *testing.T) {
+	t.Skip("single-host integration uses shared tablespace path; full resync requires per-node tablespace mapping to avoid pg_basebackup non-empty target conflicts")
+
+	dir, err := os.MkdirTemp("", "hysteron")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	clusterName := uuid.NewString()
+	tablespaceRoot := filepath.Join(dir, "managed-tblspc")
+	tablespacePath := filepath.Join(tablespaceRoot, "ts1")
+	if err := os.MkdirAll(tablespacePath, 0700); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	initialClusterSpec := &cluster.ClusterSpec{
+		InitMode:               cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
+		SleepInterval:          &cluster.Duration{Duration: 2 * time.Second},
+		RequestTimeout:         &cluster.Duration{Duration: 1 * time.Second},
+		FailInterval:           &cluster.Duration{Duration: 5 * time.Second},
+		ConvergenceTimeout:     &cluster.Duration{Duration: 30 * time.Second},
+		MaxStandbyLag:          cluster.Uint32P(50 * 1024),
+		SynchronousReplication: cluster.BoolP(false),
+		PGParameters:           defaultPGParameters,
+	}
+
+	tks, tss, tp, tstore := setupServersCustomWithKeeperArgs(
+		t,
+		clusterName,
+		dir,
+		3,
+		1,
+		initialClusterSpec,
+		fmt.Sprintf("--pg-tablespace-dir=%s", tablespaceRoot),
+	)
+	defer shutdown(tks, tss, tp, tstore)
+
+	storePath := filepath.Join(common.StorePrefix, clusterName)
+	sm := store.NewKVBackedStore(tstore.store, storePath)
+	master, standbys := waitMasterStandbysReady(t, sm, tks)
+	standby0 := standbys[0]
+	standby1 := standbys[1]
+
+	tablespacePathLiteral := strings.ReplaceAll(tablespacePath, "'", "''")
+	if _, err := master.Exec(fmt.Sprintf("CREATE TABLESPACE ts1 LOCATION '%s'", tablespacePathLiteral)); err != nil {
+		t.Fatalf("unexpected err creating tablespace: %v", err)
+	}
+	if _, err := master.Exec("CREATE TABLE table_ts(id INT PRIMARY KEY, value INT NOT NULL) TABLESPACE ts1"); err != nil {
+		t.Fatalf("unexpected err creating table_ts: %v", err)
+	}
+	for i := 1; i <= 30; i++ {
+		if _, err := master.Exec("INSERT INTO table_ts VALUES ($1, $2)", i, i*100); err != nil {
+			t.Fatalf("unexpected err inserting table_ts rows: %v", err)
+		}
+	}
+
+	if err := waitTableTSLines(standby0, 30, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := waitTableTSLines(standby1, 30, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	fingerprintBeforeResync, err := getTableTSFingerprint(master)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	cd, _, err := sm.GetClusterData(context.TODO())
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	var standby0DBUID string
+	for _, db := range cd.DBs {
+		if db.Spec.KeeperUID == standby0.uid {
+			standby0DBUID = db.UID
+		}
+	}
+	if standby0DBUID == "" {
+		t.Fatalf("expected standby db uid for keeper %q", standby0.uid)
+	}
+
+	t.Logf("Stopping standby keeper: %s", standby0.uid)
+	standby0.Stop()
+
+	if err := master.SwitchWals(10); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := standby1.CheckPoint(); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	t.Logf("Stopping current master keeper: %s", master.uid)
+	master.Stop()
+	if err := WaitClusterDataMaster(standby1.uid, sm, 30*time.Second); err != nil {
+		t.Fatalf("expected master %q in cluster view", standby1.uid)
+	}
+	if err := standby1.WaitDBRole(common.RoleMaster, nil, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	t.Logf("Starting standby keeper to trigger full resync: %s", standby0.uid)
+	if err := standby0.Start(); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	if _, err := standby1.Exec("INSERT INTO table_ts VALUES ($1, $2)", 31, 3100); err != nil {
+		t.Fatalf("unexpected err writing after failover: %v", err)
+	}
+	if err := waitTableTSLines(standby0, 31, 120*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	fingerprintAfterResync, err := getTableTSFingerprint(standby0)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	fingerprintOnNewMaster, err := getTableTSFingerprint(standby1)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if fingerprintAfterResync != fingerprintOnNewMaster {
+		t.Fatalf("tablespace data integrity mismatch after standby resync: got %q, want %q", fingerprintAfterResync, fingerprintOnNewMaster)
+	}
+	if fingerprintBeforeResync == fingerprintAfterResync {
+		t.Fatalf("expected fingerprint to change after post-failover write")
+	}
+
+	cd, _, err = sm.GetClusterData(context.TODO())
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	var newStandby0DBUID string
+	for _, db := range cd.DBs {
+		if db.Spec.KeeperUID == standby0.uid {
+			newStandby0DBUID = db.UID
+		}
+	}
+	t.Logf("previous standby dbUID: %s, current standby dbUID: %s", standby0DBUID, newStandby0DBUID)
+	if newStandby0DBUID == "" {
+		t.Fatalf("expected standby db uid for keeper %q after resync", standby0.uid)
+	}
+	if newStandby0DBUID == standby0DBUID {
+		t.Fatalf("expected different dbuid for standby after full resync, got same: %q", newStandby0DBUID)
+	}
 }
 
 // Tests standby elected as new master but fails to become master. Then old

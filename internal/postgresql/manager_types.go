@@ -81,6 +81,8 @@ type Manager struct {
 	walDir string
 	// Whether WAL directory is explicitly configured.
 	walDirConfigured bool
+	// Managed tablespace roots for cleanup guardrails.
+	tablespaceDirRoots []string
 	// Superuser auth method.
 	suAuthMethod string
 	// Superuser username.
@@ -211,6 +213,7 @@ func NewManager(
 	replUsername,
 	replPassword string,
 	requestTimeout time.Duration,
+	tablespaceDirRoots []string,
 ) *Manager {
 	pgDataDir := filepath.Join(dataDir, "postgres")
 	effectiveWALDir := filepath.Join(pgDataDir, "pg_wal")
@@ -224,6 +227,7 @@ func NewManager(
 		dataDir:            pgDataDir,
 		walDir:             effectiveWALDir,
 		walDirConfigured:   walDirConfigured,
+		tablespaceDirRoots: append([]string(nil), tablespaceDirRoots...),
 		parameters:         make(common.Parameters),
 		recoveryOptions:    NewRecoveryOptions(),
 		curParameters:      make(common.Parameters),

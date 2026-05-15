@@ -101,6 +101,7 @@ func Run(target Target) error {
 				AdvertisePort:    target.Keeper.PG.AdvertisePort,
 				BinPath:          target.Keeper.PG.BinPath,
 				WALDir:           target.Keeper.PG.WALDir,
+				TablespaceDirs:   target.Keeper.PG.TablespaceDirs,
 				Repl: keepercmd.RunPostgresReplOptions{
 					AuthMethod:   target.Keeper.PG.Repl.AuthMethod,
 					Username:     target.Keeper.PG.Repl.Username,

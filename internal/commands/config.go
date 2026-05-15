@@ -51,12 +51,13 @@ type keeperRuntimeOptions struct {
 }
 
 type keeperPostgresOptions struct {
-	ListenAddress    string `long:"listen-address" env:"LISTEN_ADDRESS" description:"postgresql instance listening address, local address used for the postgres instance. For all network interface, you can set the value to '*'."`
-	AdvertiseAddress string `long:"advertise-address" env:"ADVERTISE_ADDRESS" description:"postgresql instance address from outside. Use it to expose ip different than local ip with a NAT networking config"`
-	Port             string `long:"port" env:"PORT" description:"postgresql instance listening port" short:"p" default:"5432"`
-	AdvertisePort    string `long:"advertise-port" env:"ADVERTISE_PORT" description:"postgresql instance port from outside. Use it to expose port different than local port with a PAT networking config"`
-	BinPath          string `long:"bin-path" env:"BIN_PATH" description:"absolute path to postgresql binaries. If empty they will be searched in the current PATH"`
-	WALDir           string `long:"wal-dir" env:"WAL_DIR" description:"postgresql WAL directory (optional, useful when WAL is on a separate disk)"`
+	ListenAddress    string   `long:"listen-address" env:"LISTEN_ADDRESS" description:"postgresql instance listening address, local address used for the postgres instance. For all network interface, you can set the value to '*'."`
+	AdvertiseAddress string   `long:"advertise-address" env:"ADVERTISE_ADDRESS" description:"postgresql instance address from outside. Use it to expose ip different than local ip with a NAT networking config"`
+	Port             string   `long:"port" env:"PORT" description:"postgresql instance listening port" short:"p" default:"5432"`
+	AdvertisePort    string   `long:"advertise-port" env:"ADVERTISE_PORT" description:"postgresql instance port from outside. Use it to expose port different than local port with a PAT networking config"`
+	BinPath          string   `long:"bin-path" env:"BIN_PATH" description:"absolute path to postgresql binaries. If empty they will be searched in the current PATH"`
+	WALDir           string   `long:"wal-dir" env:"WAL_DIR" description:"postgresql WAL directory (optional, useful when WAL is on a separate disk)"`
+	TablespaceDirs   []string `long:"tablespace-dir" env:"TABLESPACE_DIR" description:"managed PostgreSQL tablespace directory root; only directories under these roots can be cleaned during reinit/resync"`
 
 	Repl keeperPostgresReplOptions `group:"PostgreSQL Replication User" namespace:"repl" env-namespace:"REPL"`
 	SU   keeperPostgresSUOptions   `group:"PostgreSQL Superuser" namespace:"su" env-namespace:"SU"`

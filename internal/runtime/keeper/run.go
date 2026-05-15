@@ -57,6 +57,8 @@ type RunPostgresSUOptions struct {
 
 // RunPostgresOptions configures postgres runtime fields in RunWithOptions.
 type RunPostgresOptions struct {
+	Repl             RunPostgresReplOptions
+	SU               RunPostgresSUOptions
 	ListenAddress    string
 	AdvertiseAddress string
 	Port             string
@@ -64,15 +66,14 @@ type RunPostgresOptions struct {
 	BinPath          string
 	WALDir           string
 	TablespaceDirs   []string
-	Repl             RunPostgresReplOptions
-	SU               RunPostgresSUOptions
 }
 
 // RunOptions provides typed keeper runtime options for unified CLI.
 type RunOptions struct {
-	PG      RunPostgresOptions
 	UID     string
 	DataDir string
+
+	PG RunPostgresOptions
 
 	CanBeMaster             bool
 	CanBeSynchronousReplica bool

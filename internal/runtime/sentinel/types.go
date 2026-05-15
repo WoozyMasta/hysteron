@@ -113,12 +113,12 @@ type Sentinel struct {
 
 // KeeperInfoHistory tracks the latest keeper info observed by the sentinel.
 type KeeperInfoHistory struct {
+	// Timer is monotonic timestamp used for failure tracking.
+	Timer time.Time
 	// KeeperInfo is last keeper info snapshot.
 	KeeperInfo *cluster.KeeperInfo
 	// Seen reports whether keeper was seen in current loop.
 	Seen bool
-	// Timer is monotonic timestamp used for failure tracking.
-	Timer time.Time
 }
 
 // KeeperInfoHistories maps keeper UID to keeper info history.
@@ -146,10 +146,10 @@ func (k KeeperInfoHistories) DeepCopy() (KeeperInfoHistories, error) {
 
 // DBConvergenceInfo tracks convergence timing for a database generation.
 type DBConvergenceInfo struct {
-	// Generation is DB generation being tracked.
-	Generation int64
 	// Timer is monotonic timestamp when convergence tracking started.
 	Timer time.Time
+	// Generation is DB generation being tracked.
+	Generation int64
 }
 
 // ProxyInfoHistory tracks the latest proxy info observed by the sentinel.

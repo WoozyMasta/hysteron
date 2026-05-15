@@ -70,8 +70,6 @@ type PostgresKeeper struct {
 	pgBinPath string
 	// PostgreSQL WAL directory path (optional external path).
 	pgWALDir string
-	// Managed tablespace directory roots (cleanup is limited to these paths).
-	pgTablespaceDirs []string
 	// Replication user auth method.
 	pgReplAuthMethod string
 	// Replication user name.
@@ -88,6 +86,8 @@ type PostgresKeeper struct {
 	logicalSlotReadinessLast string
 	// Current keeper-local failsafe state (scaffold only, no behavior change).
 	failsafeState failsafeState
+	// Managed tablespace directory roots (cleanup is limited to these paths).
+	pgTablespaceDirs []string
 	// Main reconciliation loop sleep interval.
 	sleepInterval time.Duration
 	// Timeout for store and PostgreSQL requests.

@@ -58,9 +58,10 @@ type ProxyOptions struct {
 
 // KeeperOptions configures keeper runtime options from unified CLI.
 type KeeperOptions struct {
-	PG      KeeperPostgresOptions
 	UID     string
 	DataDir string
+
+	PG KeeperPostgresOptions
 
 	CanBeMaster             bool
 	CanBeSynchronousReplica bool
@@ -70,6 +71,8 @@ type KeeperOptions struct {
 
 // KeeperPostgresOptions contains keeper-managed PostgreSQL settings.
 type KeeperPostgresOptions struct {
+	Repl             KeeperPostgresReplOptions
+	SU               KeeperPostgresSUOptions
 	ListenAddress    string
 	AdvertiseAddress string
 	Port             string
@@ -77,8 +80,6 @@ type KeeperPostgresOptions struct {
 	BinPath          string
 	WALDir           string
 	TablespaceDirs   []string
-	Repl             KeeperPostgresReplOptions
-	SU               KeeperPostgresSUOptions
 }
 
 // KeeperPostgresReplOptions configures replication user settings.

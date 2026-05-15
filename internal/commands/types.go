@@ -93,10 +93,10 @@ type keeperRuntimeEtcdCommand struct {
 }
 
 type keeperRuntimeKubernetesCommand struct {
-	Keeper    keeperRuntimeOptions `no-flag:"true"`
 	K8s       k8sStoreOptions      `group:"Kubernetes" namespace:"k8s" env-namespace:"K8S"`
 	Component string               `no-flag:"true"`
 	Common    runtimeCommonOptions `no-flag:"true"`
+	Keeper    keeperRuntimeOptions `no-flag:"true"`
 }
 
 type proxyRuntimeKubernetesCommand struct {

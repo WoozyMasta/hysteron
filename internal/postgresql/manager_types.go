@@ -79,10 +79,6 @@ type Manager struct {
 	dataDir string
 	// Managed PostgreSQL WAL directory path.
 	walDir string
-	// Whether WAL directory is explicitly configured.
-	walDirConfigured bool
-	// Managed tablespace roots for cleanup guardrails.
-	tablespaceDirRoots []string
 	// Superuser auth method.
 	suAuthMethod string
 	// Superuser username.
@@ -95,6 +91,8 @@ type Manager struct {
 	replUsername string
 	// Replication password.
 	replPassword string
+	// Managed tablespace roots for cleanup guardrails.
+	tablespaceDirRoots []string
 	// Desired pg_hba entries.
 	hba []string
 	// Last applied pg_hba entries.
@@ -103,6 +101,8 @@ type Manager struct {
 	requestTimeout time.Duration
 	// Guards request timeout updates/read across concurrent keeper loops.
 	requestTimeoutMu sync.RWMutex
+	// Whether WAL directory is explicitly configured.
+	walDirConfigured bool
 }
 
 // RestartRequirement describes whether a PostgreSQL restart is required and

@@ -593,6 +593,13 @@ Run keeper runtime components
   absolute path to postgresql binaries. If empty they will be searched in the
   current PATH
   * Environment: `$HYSTERON_PG_BIN_PATH`
+* `--pg-wal-dir` -
+  postgresql WAL directory (optional, useful when WAL is on a separate disk)
+  * Environment: `$HYSTERON_PG_WAL_DIR`
+* `--pg-tablespace-dir` -
+  managed PostgreSQL tablespace directory root; only directories under these
+  roots can be cleaned during reinit/resync
+  * Environment: `$HYSTERON_PG_TABLESPACE_DIR`
 
 #### PostgreSQL Replication User
 

@@ -21,6 +21,7 @@ func TestManagerIsStartedMissingDataDir(t *testing.T) {
 	manager := NewManager(
 		"missing-bin",
 		t.TempDir(),
+		"",
 		nil,
 		nil,
 		"trust",

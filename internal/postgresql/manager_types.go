@@ -77,6 +77,10 @@ type Manager struct {
 	pgBinPath string
 	// Managed PostgreSQL data directory path.
 	dataDir string
+	// Managed PostgreSQL WAL directory path.
+	walDir string
+	// Whether WAL directory is explicitly configured.
+	walDirConfigured bool
 	// Superuser auth method.
 	suAuthMethod string
 	// Superuser username.
@@ -197,6 +201,7 @@ func SetLogger(l *zerolog.Logger) {
 func NewManager(
 	pgBinPath string,
 	dataDir string,
+	walDir string,
 	localConnParams,
 	replConnParams ConnParams,
 	suAuthMethod,
@@ -207,9 +212,18 @@ func NewManager(
 	replPassword string,
 	requestTimeout time.Duration,
 ) *Manager {
+	pgDataDir := filepath.Join(dataDir, "postgres")
+	effectiveWALDir := filepath.Join(pgDataDir, "pg_wal")
+	walDirConfigured := walDir != ""
+	if walDirConfigured {
+		effectiveWALDir = walDir
+	}
+
 	return &Manager{
 		pgBinPath:          pgBinPath,
-		dataDir:            filepath.Join(dataDir, "postgres"),
+		dataDir:            pgDataDir,
+		walDir:             effectiveWALDir,
+		walDirConfigured:   walDirConfigured,
 		parameters:         make(common.Parameters),
 		recoveryOptions:    NewRecoveryOptions(),
 		curParameters:      make(common.Parameters),

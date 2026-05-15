@@ -100,6 +100,7 @@ func Run(target Target) error {
 				Port:             target.Keeper.PG.Port,
 				AdvertisePort:    target.Keeper.PG.AdvertisePort,
 				BinPath:          target.Keeper.PG.BinPath,
+				WALDir:           target.Keeper.PG.WALDir,
 				Repl: keepercmd.RunPostgresReplOptions{
 					AuthMethod:   target.Keeper.PG.Repl.AuthMethod,
 					Username:     target.Keeper.PG.Repl.Username,

@@ -56,6 +56,7 @@ type keeperPostgresOptions struct {
 	Port             string `long:"port" env:"PORT" description:"postgresql instance listening port" short:"p" default:"5432"`
 	AdvertisePort    string `long:"advertise-port" env:"ADVERTISE_PORT" description:"postgresql instance port from outside. Use it to expose port different than local port with a PAT networking config"`
 	BinPath          string `long:"bin-path" env:"BIN_PATH" description:"absolute path to postgresql binaries. If empty they will be searched in the current PATH"`
+	WALDir           string `long:"wal-dir" env:"WAL_DIR" description:"postgresql WAL directory (optional, useful when WAL is on a separate disk)"`
 
 	Repl keeperPostgresReplOptions `group:"PostgreSQL Replication User" namespace:"repl" env-namespace:"REPL"`
 	SU   keeperPostgresSUOptions   `group:"PostgreSQL Superuser" namespace:"su" env-namespace:"SU"`

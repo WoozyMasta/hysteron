@@ -44,6 +44,159 @@ func TestPITRRecoveryTarget(t *testing.T) {
 	testPITR(t, true)
 }
 
+func TestPITRWithWALDirPlaceholder(t *testing.T) {
+	t.Parallel()
+
+	dir, err := os.MkdirTemp("", "hysteron")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	baseBackupDir, err := os.MkdirTemp(dir, "basebackup")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	archiveBackupDir, err := os.MkdirTemp(dir, "archivebackup")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	restoreWALDir := filepath.Join(dir, "restore-wal")
+
+	tstore := setupStore(t, dir)
+	defer tstore.Stop()
+
+	storeEndpoints := fmt.Sprintf("%s:%s", tstore.listenAddress, tstore.port)
+	clusterName := uuid.NewString()
+	storePath := filepath.Join(common.StorePrefix, clusterName)
+	sm := store.NewKVBackedStore(tstore.store, storePath)
+
+	initialClusterSpec := &cluster.ClusterSpec{
+		InitMode:           cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
+		SleepInterval:      &cluster.Duration{Duration: 2 * time.Second},
+		RequestTimeout:     &cluster.Duration{Duration: 1 * time.Second},
+		FailInterval:       &cluster.Duration{Duration: 5 * time.Second},
+		ConvergenceTimeout: &cluster.Duration{Duration: 30 * time.Second},
+		PGParameters: pgParametersWithDefaults(cluster.PGParameters{
+			"archive_mode":    "on",
+			"archive_command": fmt.Sprintf("cp %%p %s/%%f", archiveBackupDir),
+		}),
+	}
+	initialClusterSpecFile, err := writeClusterSpec(dir, initialClusterSpec)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	tk, err := NewTestKeeper(
+		t,
+		dir,
+		clusterName,
+		pgSUUsername,
+		pgSUPassword,
+		pgReplUsername,
+		pgReplPassword,
+		tstore.storeBackend,
+		storeEndpoints,
+		fmt.Sprintf("--pg-wal-dir=%s", restoreWALDir),
+	)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := tk.Start(); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer tk.Stop()
+
+	ts, err := NewTestSentinel(t, dir, clusterName, tstore.storeBackend, storeEndpoints, fmt.Sprintf("--initial-cluster-spec=%s", initialClusterSpecFile))
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := ts.Start(); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	_, err = WaitClusterDataWithMaster(sm, 30*time.Second)
+	if err != nil {
+		t.Fatal("expected a master in cluster view")
+	}
+	if err := tk.WaitDBUp(60 * time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := tk.WaitDBRole(common.RoleMaster, nil, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := populate(t, tk); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := write(t, tk, 2, 2); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	pgpass, err := os.CreateTemp("", "pgpass")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if _, err := pgpass.WriteString(fmt.Sprintf("%s:%s:*:%s:%s\n", tk.pgListenAddress, tk.pgPort, tk.pgReplUsername, tk.pgReplPassword)); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	cmd := exec.Command("pg_basebackup", "-F", "tar", "-D", baseBackupDir, "-h", tk.pgListenAddress, "-p", tk.pgPort, "-U", tk.pgReplUsername)
+	cmd.Env = append(cmd.Env, fmt.Sprintf("PGPASSFILE=%s", pgpass.Name()))
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("error: %v, output: %s", err, string(out))
+	}
+	if err := tk.SwitchWals(1); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	ts.Stop()
+	if err := tstore.store.Delete(context.TODO(), filepath.Join(storePath, "clusterdata")); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := tstore.store.Delete(context.TODO(), filepath.Join(storePath, common.SentinelLeaderKey)); err != nil && err != store.ErrKeyNotFound {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	markerPath := filepath.Join(restoreWALDir, "pitr-wal-marker")
+	initialClusterSpec = &cluster.ClusterSpec{
+		InitMode:           cluster.ClusterInitModeP(cluster.ClusterInitModePITR),
+		SleepInterval:      &cluster.Duration{Duration: 2 * time.Second},
+		RequestTimeout:     &cluster.Duration{Duration: 1 * time.Second},
+		FailInterval:       &cluster.Duration{Duration: 5 * time.Second},
+		ConvergenceTimeout: &cluster.Duration{Duration: 30 * time.Second},
+		PITRConfig: &cluster.PITRConfig{
+			DataRestoreCommand: fmt.Sprintf("sh -c 'mkdir -p %%w && echo marker > %%w/pitr-wal-marker && tar xvf %s/base.tar -C %%d'", baseBackupDir),
+			ArchiveRecoverySettings: &cluster.ArchiveRecoverySettings{
+				RestoreCommand: fmt.Sprintf("cp %s/%%f %%p", archiveBackupDir),
+			},
+		},
+		PGParameters: pgParametersWithDefaults(cluster.PGParameters{
+			"max_prepared_transactions": "100",
+		}),
+	}
+	initialClusterSpecFile, err = writeClusterSpec(dir, initialClusterSpec)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	ts, err = NewTestSentinel(t, dir, clusterName, tstore.storeBackend, storeEndpoints, fmt.Sprintf("--initial-cluster-spec=%s", initialClusterSpecFile))
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := ts.Start(); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer ts.Stop()
+
+	if err := WaitClusterPhase(sm, cluster.ClusterPhaseNormal, 60*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := tk.WaitDBUp(60 * time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if _, err := os.Stat(markerPath); err != nil {
+		t.Fatalf("expected marker %q created via %%w expansion: %v", markerPath, err)
+	}
+}
+
 func testPITR(t *testing.T, recoveryTarget bool) {
 	dir, err := os.MkdirTemp("", "hysteron")
 	if err != nil {

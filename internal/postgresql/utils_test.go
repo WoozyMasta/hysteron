@@ -107,6 +107,10 @@ func TestExpand(t *testing.T) {
 			out: "/datadir",
 		},
 		{
+			in:  "%w",
+			out: "/waldir",
+		},
+		{
 			in:  "%%d",
 			out: "%d",
 		},
@@ -121,7 +125,7 @@ func TestExpand(t *testing.T) {
 	}
 
 	for i, tt := range tests {
-		out := expand(tt.in, "/datadir")
+		out := expand(tt.in, "/datadir", "/waldir")
 		if out != tt.out {
 			t.Errorf("#%d: wrong expanded string: got: %s, want: %s", i, out, tt.out)
 		}

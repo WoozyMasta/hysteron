@@ -697,7 +697,7 @@ func fileExists(path string) (bool, error) {
 	return true, nil
 }
 
-func expand(s, dataDir string) string {
+func expand(s, dataDir string, walDir string) string {
 	buf := make([]byte, 0, 2*len(s))
 	// %d %% are all ASCII, so bytes are fine for this operation.
 	i := 0
@@ -707,6 +707,12 @@ func expand(s, dataDir string) string {
 			case 'd':
 				buf = append(buf, s[i:j]...)
 				buf = append(buf, []byte(dataDir)...)
+				j++
+				i = j + 1
+
+			case 'w':
+				buf = append(buf, s[i:j]...)
+				buf = append(buf, []byte(walDir)...)
 				j++
 				i = j + 1
 

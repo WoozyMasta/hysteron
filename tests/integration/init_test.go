@@ -565,6 +565,224 @@ func TestInitUsersSCRAMSHA256(t *testing.T) {
 	}
 }
 
+func TestInitWithCustomWALDir(t *testing.T) {
+	t.Parallel()
+
+	dir, err := os.MkdirTemp("", "")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	tstore := setupStore(t, dir)
+	defer tstore.Stop()
+
+	storeEndpoints := fmt.Sprintf("%s:%s", tstore.listenAddress, tstore.port)
+	clusterName := uuid.NewString()
+	storePath := filepath.Join(common.StorePrefix, clusterName)
+	sm := store.NewKVBackedStore(tstore.store, storePath)
+
+	initialClusterSpec := &cluster.ClusterSpec{
+		InitMode:           cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
+		SleepInterval:      &cluster.Duration{Duration: 2 * time.Second},
+		RequestTimeout:     &cluster.Duration{Duration: 1 * time.Second},
+		FailInterval:       &cluster.Duration{Duration: 5 * time.Second},
+		ConvergenceTimeout: &cluster.Duration{Duration: 30 * time.Second},
+		PGParameters:       defaultPGParameters,
+	}
+	initialClusterSpecFile, err := writeClusterSpec(dir, initialClusterSpec)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	ts, err := NewTestSentinel(
+		t,
+		dir,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		fmt.Sprintf("--initial-cluster-spec=%s", initialClusterSpecFile),
+	)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := ts.Start(); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer ts.Stop()
+
+	walDir := filepath.Join(dir, "wal-dir")
+	tk, err := NewTestKeeper(
+		t,
+		dir,
+		clusterName,
+		pgSUUsername,
+		pgSUPassword,
+		pgReplUsername,
+		pgReplPassword,
+		tstore.storeBackend,
+		storeEndpoints,
+		fmt.Sprintf("--pg-wal-dir=%s", walDir),
+	)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := tk.Start(); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer tk.Stop()
+
+	if err := WaitClusterPhase(sm, cluster.ClusterPhaseNormal, 60*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := tk.WaitDBUp(60 * time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	pgWalPath := filepath.Join(tk.dataDir, "postgres", "pg_wal")
+	target, err := os.Readlink(pgWalPath)
+	if err != nil {
+		t.Fatalf("expected %s to be a symlink: %v", pgWalPath, err)
+	}
+	if !filepath.IsAbs(target) {
+		target = filepath.Clean(filepath.Join(filepath.Dir(pgWalPath), target))
+	}
+	walDirAbs, err := filepath.Abs(walDir)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if target != walDirAbs {
+		t.Fatalf("unexpected pg_wal symlink target: got %q, want %q", target, walDirAbs)
+	}
+	if _, err := os.Stat(walDirAbs); err != nil {
+		t.Fatalf("expected wal dir to exist: %v", err)
+	}
+}
+
+func TestReinitWithCustomWALDirCleansWalDir(t *testing.T) {
+	t.Parallel()
+
+	clusterName := uuid.NewString()
+
+	dir, err := os.MkdirTemp("", "")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	tstore := setupStore(t, dir)
+	defer tstore.Stop()
+
+	storeEndpoints := fmt.Sprintf("%s:%s", tstore.listenAddress, tstore.port)
+	storePath := filepath.Join(common.StorePrefix, clusterName)
+	sm := store.NewKVBackedStore(tstore.store, storePath)
+
+	initialClusterSpec := &cluster.ClusterSpec{
+		InitMode:           cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
+		SleepInterval:      &cluster.Duration{Duration: 2 * time.Second},
+		RequestTimeout:     &cluster.Duration{Duration: 1 * time.Second},
+		FailInterval:       &cluster.Duration{Duration: 5 * time.Second},
+		ConvergenceTimeout: &cluster.Duration{Duration: 30 * time.Second},
+		PGParameters:       defaultPGParameters,
+	}
+	initialClusterSpecFile, err := writeClusterSpec(dir, initialClusterSpec)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	ts, err := NewTestSentinel(
+		t,
+		dir,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		fmt.Sprintf("--initial-cluster-spec=%s", initialClusterSpecFile),
+	)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := ts.Start(); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer ts.Stop()
+
+	walDir := filepath.Join(dir, "external-wal")
+	tk, err := NewTestKeeper(
+		t,
+		dir,
+		clusterName,
+		pgSUUsername,
+		pgSUPassword,
+		pgReplUsername,
+		pgReplPassword,
+		tstore.storeBackend,
+		storeEndpoints,
+		fmt.Sprintf("--pg-wal-dir=%s", walDir),
+	)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := tk.Start(); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer tk.Stop()
+
+	if err := WaitClusterPhase(sm, cluster.ClusterPhaseNormal, 60*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := tk.WaitDBUp(60 * time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	markerPath := filepath.Join(walDir, "reinit-marker")
+	if err := os.WriteFile(markerPath, []byte("stale"), 0600); err != nil {
+		t.Fatalf("unexpected err creating wal marker: %v", err)
+	}
+	if _, err := os.Stat(markerPath); err != nil {
+		t.Fatalf("expected marker to exist before reinit: %v", err)
+	}
+
+	reinitClusterSpec := &cluster.ClusterSpec{
+		InitMode:           cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
+		SleepInterval:      &cluster.Duration{Duration: 2 * time.Second},
+		RequestTimeout:     &cluster.Duration{Duration: 1 * time.Second},
+		FailInterval:       &cluster.Duration{Duration: 5 * time.Second},
+		ConvergenceTimeout: &cluster.Duration{Duration: 30 * time.Second},
+		PGParameters:       defaultPGParameters,
+	}
+	reinitClusterSpecFile, err := writeClusterSpec(dir, reinitClusterSpec)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	if err := HysteronCluster(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		"initialize",
+		"-y",
+		"-f",
+		reinitClusterSpecFile,
+	); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	if err := WaitClusterPhase(sm, cluster.ClusterPhaseInitializing, 60*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := WaitClusterPhase(sm, cluster.ClusterPhaseNormal, 60*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := tk.WaitDBUp(60 * time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	if _, err := os.Stat(markerPath); !os.IsNotExist(err) {
+		t.Fatalf("expected stale wal marker to be removed during reinit, got: %v", err)
+	}
+}
+
 func TestInitialClusterSpec(t *testing.T) {
 	t.Parallel()
 

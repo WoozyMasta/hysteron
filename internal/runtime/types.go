@@ -75,6 +75,7 @@ type KeeperPostgresOptions struct {
 	Port             string
 	AdvertisePort    string
 	BinPath          string
+	WALDir           string
 	Repl             KeeperPostgresReplOptions
 	SU               KeeperPostgresSUOptions
 }

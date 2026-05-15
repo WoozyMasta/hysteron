@@ -60,6 +60,13 @@ func NewPostgresKeeper(
 	if err != nil {
 		return nil, fmt.Errorf("resolve absolute datadir path for %q: %w", cfg.DataDir, err)
 	}
+	walDir := cfg.PG.WALDir
+	if walDir != "" {
+		walDir, err = filepath.Abs(walDir)
+		if err != nil {
+			return nil, fmt.Errorf("resolve absolute waldir path for %q: %w", cfg.PG.WALDir, err)
+		}
+	}
 
 	p := &PostgresKeeper{
 		cfg: cfg,
@@ -73,6 +80,7 @@ func NewPostgresKeeper(
 		pgPort:             cfg.PG.Port,
 		pgAdvertisePort:    cfg.PG.AdvertisePort,
 		pgBinPath:          cfg.PG.BinPath,
+		pgWALDir:           walDir,
 		pgReplAuthMethod:   cfg.PG.Repl.AuthMethod,
 		pgReplUsername:     cfg.PG.Repl.Username,
 		pgReplPassword:     cfg.PG.Repl.Password,

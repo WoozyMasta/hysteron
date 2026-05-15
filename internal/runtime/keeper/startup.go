@@ -58,6 +58,7 @@ func (p *PostgresKeeper) setupPostgresManager() error {
 	pgManager := postgresql.NewManager(
 		p.pgBinPath,
 		p.dataDir,
+		p.pgWALDir,
 		p.getLocalConnParams(),
 		p.getLocalReplConnParams(),
 		p.pgSUAuthMethod,

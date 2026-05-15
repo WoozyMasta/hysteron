@@ -62,6 +62,7 @@ type RunPostgresOptions struct {
 	Port             string
 	AdvertisePort    string
 	BinPath          string
+	WALDir           string
 	Repl             RunPostgresReplOptions
 	SU               RunPostgresSUOptions
 }
@@ -95,6 +96,7 @@ func RunWithOptions(commonConfig config.CommonConfig, opts RunOptions) error {
 	cfg.PG.Port = opts.PG.Port
 	cfg.PG.AdvertisePort = opts.PG.AdvertisePort
 	cfg.PG.BinPath = opts.PG.BinPath
+	cfg.PG.WALDir = opts.PG.WALDir
 
 	cfg.PG.Repl.AuthMethod = opts.PG.Repl.AuthMethod
 	cfg.PG.Repl.Username = opts.PG.Repl.Username

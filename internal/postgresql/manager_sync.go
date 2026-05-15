@@ -98,6 +98,9 @@ func (p *Manager) SyncFromFollowed(followedConnParams ConnParams, replSlot strin
 	zl().Info().Msg("running pg_basebackup")
 	name := filepath.Join(p.pgBinPath, "pg_basebackup")
 	args := []string{"-R", "-v", "-P", "-Xs", "-D", p.dataDir, "-d", followedConnString}
+	if p.walDirConfigured {
+		args = append(args, "--waldir", p.walDir)
+	}
 	if replSlot != "" {
 		args = append(args, "--slot", replSlot)
 	}

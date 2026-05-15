@@ -68,6 +68,8 @@ type PostgresKeeper struct {
 	pgAdvertisePort string
 	// PostgreSQL binaries directory path.
 	pgBinPath string
+	// PostgreSQL WAL directory path (optional external path).
+	pgWALDir string
 	// Replication user auth method.
 	pgReplAuthMethod string
 	// Replication user name.

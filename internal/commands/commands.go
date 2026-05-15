@@ -241,6 +241,7 @@ func keeperRuntimeOpts(opts keeperRuntimeOptions) *runtime.KeeperOptions {
 			Port:             opts.PG.Port,
 			AdvertisePort:    opts.PG.AdvertisePort,
 			BinPath:          opts.PG.BinPath,
+			WALDir:           opts.PG.WALDir,
 			Repl: runtime.KeeperPostgresReplOptions{
 				AuthMethod:   opts.PG.Repl.AuthMethod,
 				Username:     opts.PG.Repl.Username,

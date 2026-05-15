@@ -44,7 +44,7 @@ func (p *Manager) RemoveAll() error {
 		return errors.New("cannot remove postregsql database. Instance is active")
 	}
 
-	return os.RemoveAll(p.dataDir)
+	return p.removeManagedDirs()
 }
 
 // GetSystemData returns current PostgreSQL system data.
@@ -77,8 +77,7 @@ func (p *Manager) Ping() error {
 
 // OlderWalFile returns the oldest WAL filename needed by configured replication.
 func (p *Manager) OlderWalFile() (string, error) {
-	walDir := "pg_wal"
-	directory, err := os.Open(filepath.Join(p.dataDir, walDir))
+	directory, err := os.Open(p.walDir)
 	if err != nil {
 		return "", err
 	}
@@ -93,7 +92,7 @@ func (p *Manager) OlderWalFile() (string, error) {
 
 	for _, name := range names {
 		if IsWalFileName(name) {
-			fileInfo, err := os.Stat(filepath.Join(p.dataDir, walDir, name))
+			fileInfo, err := os.Stat(filepath.Join(p.walDir, name))
 			if err != nil {
 				return "", err
 			}

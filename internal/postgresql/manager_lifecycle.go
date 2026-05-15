@@ -46,6 +46,9 @@ func (p *Manager) Init(initConfig *InitConfig) error {
 
 	name := filepath.Join(p.pgBinPath, "initdb")
 	cmd := exec.Command(name, "-D", p.dataDir, "-U", p.suUsername)
+	if p.walDirConfigured {
+		cmd.Args = append(cmd.Args, "--waldir", p.walDir)
+	}
 	if p.suAuthMethod == "md5" || p.suAuthMethod == "scram-sha-256" {
 		cmd.Args = append(cmd.Args, "--auth", p.suAuthMethod)
 		cmd.Args = append(cmd.Args, "--pwfile", pwfile.Name())
@@ -71,8 +74,8 @@ func (p *Manager) Init(initConfig *InitConfig) error {
 
 	// remove the dataDir, so we don't end with an half initialized database
 	if err != nil {
-		if removeErr := os.RemoveAll(p.dataDir); removeErr != nil {
-			return errors.Join(err, fmt.Errorf("remove data dir %q: %w", p.dataDir, removeErr))
+		if removeErr := p.removeManagedDirs(); removeErr != nil {
+			return errors.Join(err, fmt.Errorf("remove managed postgres dirs: %w", removeErr))
 		}
 		return err
 	}
@@ -85,7 +88,7 @@ func (p *Manager) Restore(command string) error {
 	var err error
 	var cmd *exec.Cmd
 
-	command = expand(command, p.dataDir)
+	command = expand(command, p.dataDir, p.walDir)
 
 	if err = os.MkdirAll(p.dataDir, 0700); err != nil {
 		err = fmt.Errorf("cannot create data dir: %v", err)
@@ -105,8 +108,8 @@ func (p *Manager) Restore(command string) error {
 	// On every error remove the dataDir, so we don't end with an half initialized database
 out:
 	if err != nil {
-		if removeErr := os.RemoveAll(p.dataDir); removeErr != nil {
-			return errors.Join(err, fmt.Errorf("remove data dir %q: %w", p.dataDir, removeErr))
+		if removeErr := p.removeManagedDirs(); removeErr != nil {
+			return errors.Join(err, fmt.Errorf("remove managed postgres dirs: %w", removeErr))
 		}
 		return err
 	}

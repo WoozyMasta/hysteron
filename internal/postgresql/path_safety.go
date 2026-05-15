@@ -83,24 +83,13 @@ func (p *Manager) removeManagedDirs() error {
 	if err := p.validateManagedDirs(); err != nil {
 		return err
 	}
-	if err := osRemoveAll(p.dataDir); err != nil {
+	if err := os.RemoveAll(p.dataDir); err != nil {
 		return err
 	}
 	if p.walDirConfigured && p.walDir != p.dataDir {
-		if err := osRemoveAll(p.walDir); err != nil {
+		if err := os.RemoveAll(p.walDir); err != nil {
 			return err
 		}
 	}
 	return nil
-}
-
-func (p *Manager) removeManagedTablespaceDirs() error {
-	// Tablespace targets may be shared across nodes in single-host setups.
-	// Removing them during keeper-side cleanup can corrupt an active master.
-	// Cleanup responsibility stays with PostgreSQL operators.
-	return nil
-}
-
-var osRemoveAll = func(path string) error {
-	return os.RemoveAll(path)
 }

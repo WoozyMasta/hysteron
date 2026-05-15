@@ -137,7 +137,7 @@ func TestRemoveManagedDirsKeepsTablespaceTargets(t *testing.T) {
 		walDirConfigured:   true,
 		tablespaceDirRoots: []string{managedRoot},
 	}
-	if err := p.removeManagedTablespaceDirs(); err != nil {
+	if err := p.removeManagedDirs(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 

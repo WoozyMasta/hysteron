@@ -149,8 +149,8 @@ func (p *PostgresKeeper) generateHBA(
 		} else {
 			computedHBA = append(
 				computedHBA,
-				fmt.Sprintf("host all all 0.0.0.0/0 %s", defaultClientAuthMethod),
-				fmt.Sprintf("host all all ::0/0 %s", defaultClientAuthMethod),
+				"host all all 0.0.0.0/0 "+defaultClientAuthMethod,
+				"host all all ::0/0 "+defaultClientAuthMethod,
 			)
 		}
 	}

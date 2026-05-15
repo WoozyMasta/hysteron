@@ -10,6 +10,7 @@ primary concepts and avoid possible mistakes.
 * [Cluster Specification](cluster_spec.md)
 * [Config Variable Expansion](config_expansion.md)
 * [Cluster Initialization](initialization.md)
+* [PostgreSQL Data/WAL/Tablespace Layout](storage_layout.md)
 * [Hysteron Proxy](proxy.md)
 * [Kubernetes Service Publishing](kubernetes_service_publishing.md)
 * [Setting instance parameters](postgres_parameters.md)
@@ -39,5 +40,4 @@ primary concepts and avoid possible mistakes.
 * [Kubernetes](../examples/kubernetes/README.md)
 * [Two (or more) nodes setup](twonodes.md)
 
-## [FAQ](faq.md)
-
+[FAQ](faq.md)

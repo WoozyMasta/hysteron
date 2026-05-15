@@ -1,4 +1,5 @@
-// Copyright 20[0-9][0-9](?:-20[0-9][0-9])? (?:Sorint\.lab|WoozyMasta)(?:\nCopyright 2026 WoozyMasta)?
+// Copyright 2015 Sorint.lab
+// Copyright 2026 WoozyMasta
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,11 +16,15 @@
 package postgresql
 
 import (
+	"context"
 	"fmt"
+	"hash/fnv"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
+	"strings"
 )
 
 // SyncFromFollowedPGRewind synchronizes from a source using pg_rewind.
@@ -95,11 +100,19 @@ func (p *Manager) SyncFromFollowed(followedConnParams ConnParams, replSlot strin
 	followedConnCopy.Set("options", "-c synchronous_commit=off")
 	followedConnString := followedConnCopy.ConnString()
 
+	tablespaceMappings, err := p.tablespaceMappingsForBasebackup(followedConnParams)
+	if err != nil {
+		return err
+	}
+
 	zl().Info().Msg("running pg_basebackup")
 	name := filepath.Join(p.pgBinPath, "pg_basebackup")
 	args := []string{"-R", "-v", "-P", "-Xs", "-D", p.dataDir, "-d", followedConnString}
 	if p.walDirConfigured {
 		args = append(args, "--waldir", p.walDir)
+	}
+	for _, mapping := range tablespaceMappings {
+		args = append(args, "--tablespace-mapping", mapping.oldDir+"="+mapping.newDir)
 	}
 	if replSlot != "" {
 		args = append(args, "--slot", replSlot)
@@ -136,4 +149,89 @@ func (p *Manager) SyncFromFollowed(followedConnParams ConnParams, replSlot strin
 	}
 
 	return nil
+}
+
+type tablespaceMapping struct {
+	oldDir string
+	newDir string
+}
+
+func (p *Manager) tablespaceMappingsForBasebackup(
+	followedConnParams ConnParams,
+) ([]tablespaceMapping, error) {
+	if len(p.tablespaceDirRoots) == 0 {
+		return nil, nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeoutValue())
+	defer cancel()
+
+	introspectionConnParams := followedConnParams.Copy()
+	if introspectionConnParams.Get("dbname") == "" {
+		introspectionConnParams.Set("dbname", "postgres")
+	}
+	locations, err := getUserTablespaceLocations(ctx, introspectionConnParams)
+	if err != nil {
+		return nil, err
+	}
+	if len(locations) == 0 {
+		return nil, nil
+	}
+
+	sort.Strings(locations)
+	mappings := make([]tablespaceMapping, 0, len(locations))
+	for _, oldDir := range locations {
+		root := p.selectTablespaceRootForPath(oldDir)
+		newDir := p.tablespaceMappedPath(root, oldDir)
+		if err := os.RemoveAll(newDir); err != nil {
+			return nil, fmt.Errorf("cleanup mapped tablespace dir %q: %w", newDir, err)
+		}
+		if err := os.MkdirAll(newDir, 0700); err != nil {
+			return nil, fmt.Errorf("create mapped tablespace dir %q: %w", newDir, err)
+		}
+		mappings = append(mappings, tablespaceMapping{
+			oldDir: oldDir,
+			newDir: newDir,
+		})
+	}
+	return mappings, nil
+}
+
+func (p *Manager) selectTablespaceRootForPath(path string) string {
+	for _, root := range p.tablespaceDirRoots {
+		if hasPathPrefix(path, root) {
+			return root
+		}
+	}
+	return p.tablespaceDirRoots[0]
+}
+
+func (p *Manager) tablespaceMappedPath(root string, oldDir string) string {
+	keeperDir := filepath.Base(filepath.Dir(p.dataDir))
+	base := sanitizePathComponent(filepath.Base(oldDir))
+	hash := pathHash(oldDir)
+	return filepath.Join(root, keeperDir, base+"-"+hash)
+}
+
+func pathHash(path string) string {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(path))
+	return fmt.Sprintf("%08x", h.Sum32())
+}
+
+func sanitizePathComponent(name string) string {
+	if name == "" || name == "." || name == string(filepath.Separator) {
+		return "tablespace"
+	}
+	replacer := strings.NewReplacer(
+		"\\", "_",
+		"/", "_",
+		":", "_",
+		" ", "_",
+	)
+	s := replacer.Replace(name)
+	if s == "" {
+		return "tablespace"
+	}
+	return s
 }

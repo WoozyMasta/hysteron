@@ -1,4 +1,5 @@
-// Copyright 20[0-9][0-9](?:-20[0-9][0-9])? (?:Sorint\.lab|WoozyMasta)(?:\nCopyright 2026 WoozyMasta)?
+// Copyright 2015 Sorint.lab
+// Copyright 2026 WoozyMasta
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.

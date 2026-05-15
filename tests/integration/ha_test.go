@@ -727,8 +727,6 @@ func TestTablespaceFailoverDataIntegrity(t *testing.T) {
 }
 
 func TestTablespaceResyncDataIntegrity(t *testing.T) {
-	t.Skip("single-host integration uses shared tablespace path; full resync requires per-node tablespace mapping to avoid pg_basebackup non-empty target conflicts")
-
 	dir, err := os.MkdirTemp("", "hysteron")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)

@@ -273,6 +273,40 @@ func getReplicationSlots(ctx context.Context, connParams ConnParams) ([]string, 
 	return replSlots, nil
 }
 
+func getUserTablespaceLocations(ctx context.Context, connParams ConnParams) ([]string, error) {
+	db, err := openDB(connParams)
+	if err != nil {
+		return nil, err
+	}
+	defer ignoreClose(db)
+
+	rows, err := query(
+		ctx,
+		db,
+		`SELECT pg_tablespace_location(oid)
+		 FROM pg_tablespace
+		 WHERE spcname NOT IN ('pg_default', 'pg_global')
+		   AND pg_tablespace_location(oid) <> ''`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	locations := make([]string, 0)
+	for rows.Next() {
+		var location string
+		if err := rows.Scan(&location); err != nil {
+			return nil, err
+		}
+		locations = append(locations, location)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return locations, nil
+}
+
 func getPhysicalReplicationSlots(
 	ctx context.Context,
 	connParams ConnParams,

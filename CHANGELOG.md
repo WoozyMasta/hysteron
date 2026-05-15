@@ -48,7 +48,8 @@ The format is based on [Keep a Changelog][], and this project adheres to
   managed-path safety validation for destructive cleanup paths.
 * Keeper now supports repeatable `--pg-tablespace-dir` managed roots to
   run PostgreSQL clusters with user-managed tablespace locations while
-  keeping keeper reinit/resync flows tablespace-aware and safe.
+  keeping keeper reinit/resync flows tablespace-aware and safe, including
+  keeper-local tablespace remapping during `pg_basebackup` resync.
 * Sentinel timing internals now use Go stdlib monotonic `time` tracking
   instead of `internal/utils/timer`.
 * Runtime startup path was simplified to typed CLI options only

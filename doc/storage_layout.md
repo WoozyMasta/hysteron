@@ -49,10 +49,38 @@ pg_basebackup --pgdata %d --waldir %w ...
 
 * Hysteron does not create tablespaces automatically.
   Create them in PostgreSQL (`CREATE TABLESPACE ... LOCATION ...`).
+* During clone/resync, keeper uses `pg_basebackup --tablespace-mapping`
+  so each keeper can materialize tablespace files under its own local
+  `--pg-tablespace-dir` root.
 * Keep tablespace paths stable across keeper restarts/resync.
 * Use dedicated directories per keeper host/node in production.
 * Avoid sharing one writable tablespace path between multiple active
   PostgreSQL instances on the same host.
+
+## Multi-Keeper Recommendations
+
+* Configure `--pg-tablespace-dir` on every keeper.
+* Prefer one keeper-local subdirectory namespace per keeper host, for example:
+  * `/var/lib/postgresql/tablespaces/keeper-a`
+  * `/var/lib/postgresql/tablespaces/keeper-b`
+* Keep root ownership/permissions compatible with the PostgreSQL runtime user.
+* Treat tablespace data as persistent operator-managed storage.
+
+Single-host test/dev setups:
+
+* Running multiple keepers on one machine is supported, but each keeper still
+  needs isolated physical paths.
+* Do not point different active keepers at the same writable tablespace
+  directory.
+
+## Common Failure Modes
+
+* `pg_basebackup: directory ".../tablespace..." exists but is not empty`
+  usually means path collision between instances.
+  Fix: ensure keeper-local tablespace mapping roots and remove stale test data.
+* `could not open file "pg_tblspc/...": No such file or directory`
+  means PostgreSQL references a missing tablespace target.
+  Fix: restore/create expected tablespace paths before restart/resync.
 
 ## Safety Behavior
 

@@ -200,6 +200,46 @@ func waitHysteronReplicationSlots(q Querier, replSlots []string, timeout time.Du
 	return fmt.Errorf("timeout waiting for replSlots %v, got: %v, last err: %v", replSlots, curReplSlots, err)
 }
 
+func waitHysteronReplicationSlotsContains(q Querier, requiredSlots []string, timeout time.Duration) error {
+	for i, slot := range requiredSlots {
+		requiredSlots[i] = common.HysteronName(slot)
+	}
+	sort.Strings(requiredSlots)
+
+	start := time.Now()
+	var curReplSlots []string
+	var err error
+	for time.Now().Add(-timeout).Before(start) {
+		allReplSlots, curErr := getReplicationSlots(q)
+		err = curErr
+		if err != nil {
+			time.Sleep(2 * time.Second)
+			continue
+		}
+		curReplSlots = curReplSlots[:0]
+		for _, s := range allReplSlots {
+			if common.IsHysteronName(s) {
+				curReplSlots = append(curReplSlots, s)
+			}
+		}
+		sort.Strings(curReplSlots)
+
+		missing := false
+		for _, required := range requiredSlots {
+			if !slices.Contains(curReplSlots, required) {
+				missing = true
+				break
+			}
+		}
+		if !missing {
+			return nil
+		}
+
+		time.Sleep(2 * time.Second)
+	}
+	return fmt.Errorf("timeout waiting for replSlots containing %v, got: %v, last err: %v", requiredSlots, curReplSlots, err)
+}
+
 func waitNotHysteronReplicationSlots(q Querier, replSlots []string, timeout time.Duration) error {
 	sort.Strings(replSlots)
 

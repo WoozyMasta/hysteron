@@ -151,7 +151,7 @@ func TestInitStandbyCluster(t *testing.T) {
 	waitKeeperReady(t, sm, tk)
 	t.Logf("standby cluster master database is up")
 
-	if err := waitLines(t, tk, 1, 10*time.Second); err != nil {
+	if err := waitTableRowCount(tk, "table01", 1, 10*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
@@ -159,7 +159,7 @@ func TestInitStandbyCluster(t *testing.T) {
 	if err := write(t, ptk, 2, 2); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if err := waitLines(t, tk, 2, 10*time.Second); err != nil {
+	if err := waitTableRowCount(tk, "table01", 2, 10*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 }
@@ -286,7 +286,7 @@ func TestPromoteStandbyCluster(t *testing.T) {
 	waitKeeperReady(t, sm, tk)
 	t.Logf("standby cluster master database is up")
 
-	if err := waitLines(t, tk, 1, 10*time.Second); err != nil {
+	if err := waitTableRowCount(tk, "table01", 1, 10*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
@@ -294,7 +294,7 @@ func TestPromoteStandbyCluster(t *testing.T) {
 	if err := write(t, ptk, 2, 2); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if err := waitLines(t, tk, 2, 10*time.Second); err != nil {
+	if err := waitTableRowCount(tk, "table01", 2, 10*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
@@ -444,7 +444,7 @@ func TestPromoteStandbyClusterArchiveRecovery(t *testing.T) {
 	waitKeeperReady(t, sm, tk)
 	t.Logf("standby cluster master database is up")
 
-	if err := waitLines(t, tk, 1, 10*time.Second); err != nil {
+	if err := waitTableRowCount(tk, "table01", 1, 10*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
@@ -458,7 +458,7 @@ func TestPromoteStandbyClusterArchiveRecovery(t *testing.T) {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
-	if err := waitLines(t, tk, 2, 10*time.Second); err != nil {
+	if err := waitTableRowCount(tk, "table01", 2, 10*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
@@ -592,7 +592,7 @@ func TestPromoteStandbyClusterPrePromoteHookFailure(t *testing.T) {
 	defer tk.Stop()
 
 	waitKeeperReady(t, sm, tk)
-	if err := waitLines(t, tk, 1, 10*time.Second); err != nil {
+	if err := waitTableRowCount(tk, "table01", 1, 10*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 

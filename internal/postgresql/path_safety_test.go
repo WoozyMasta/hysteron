@@ -106,12 +106,13 @@ func TestRemoveManagedDirs(t *testing.T) {
 	}
 }
 
-func TestRemoveManagedDirsKeepsTablespaceTargets(t *testing.T) {
+func TestRemoveManagedDirsRemovesManagedTablespaceTargets(t *testing.T) {
 	base := t.TempDir()
 	dataDir := filepath.Join(base, "data", "postgres")
 	walDir := filepath.Join(base, "wal")
 	managedRoot := filepath.Join(base, "managed-tblspc")
-	managedTblspc := filepath.Join(managedRoot, "ts1")
+	keeperOwnedPrefix := filepath.Base(filepath.Dir(dataDir))
+	managedTblspc := filepath.Join(managedRoot, keeperOwnedPrefix, "ts1")
 	unmanagedRoot := filepath.Join(base, "unmanaged-tblspc")
 	unmanagedTblspc := filepath.Join(unmanagedRoot, "ts2")
 	pgTblspc := filepath.Join(dataDir, "pg_tblspc")
@@ -141,8 +142,8 @@ func TestRemoveManagedDirsKeepsTablespaceTargets(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if _, err := os.Stat(managedTblspc); err != nil {
-		t.Fatalf("expected managed tablespace dir to remain, got: %v", err)
+	if _, err := os.Stat(managedTblspc); !os.IsNotExist(err) {
+		t.Fatalf("expected managed tablespace dir removed, got: %v", err)
 	}
 	if _, err := os.Stat(unmanagedTblspc); err != nil {
 		t.Fatalf("expected unmanaged tablespace dir to remain, got: %v", err)

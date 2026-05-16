@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -83,6 +84,9 @@ func (p *Manager) removeManagedDirs() error {
 	if err := p.validateManagedDirs(); err != nil {
 		return err
 	}
+	if err := p.removeManagedTablespaceTargets(); err != nil {
+		return err
+	}
 	if err := os.RemoveAll(p.dataDir); err != nil {
 		return err
 	}
@@ -92,4 +96,57 @@ func (p *Manager) removeManagedDirs() error {
 		}
 	}
 	return nil
+}
+
+func (p *Manager) removeManagedTablespaceTargets() error {
+	if len(p.tablespaceDirRoots) == 0 {
+		return nil
+	}
+	pgTblspcDir := filepath.Join(p.dataDir, "pg_tblspc")
+	entries, err := os.ReadDir(pgTblspcDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("read pg_tblspc dir: %w", err)
+	}
+
+	seen := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		linkPath := filepath.Join(pgTblspcDir, entry.Name())
+		target, err := os.Readlink(linkPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return fmt.Errorf("read tablespace symlink %q: %w", linkPath, err)
+		}
+		resolved := target
+		if !filepath.IsAbs(resolved) {
+			resolved = filepath.Join(pgTblspcDir, resolved)
+		}
+		resolved = filepath.Clean(resolved)
+		if !p.isManagedTablespacePath(resolved) {
+			continue
+		}
+		if slices.Contains(seen, resolved) {
+			continue
+		}
+		if err := os.RemoveAll(resolved); err != nil {
+			return fmt.Errorf("remove managed tablespace dir %q: %w", resolved, err)
+		}
+		seen = append(seen, resolved)
+	}
+	return nil
+}
+
+func (p *Manager) isManagedTablespacePath(path string) bool {
+	keeperOwnedPrefix := filepath.Base(filepath.Dir(p.dataDir))
+	for _, root := range p.tablespaceDirRoots {
+		ownedRoot := filepath.Join(root, keeperOwnedPrefix)
+		if hasPathPrefix(path, ownedRoot) {
+			return true
+		}
+	}
+	return false
 }

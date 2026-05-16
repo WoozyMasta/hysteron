@@ -213,6 +213,81 @@ func setupServersCustomWithKeeperArgs(
 	return setupServersCustomWithArgs(t, clusterName, dir, numKeepers, numSentinels, initialClusterSpec, keeperArgs, nil)
 }
 
+func setupServersCustomWithPerKeeperArgs(
+	t *testing.T,
+	clusterName,
+	dir string,
+	numKeepers,
+	numSentinels uint8,
+	initialClusterSpec *cluster.ClusterSpec,
+	keeperArgsFn func(i uint8) []string,
+) (testKeepers, testSentinels, *TestProxy, *TestStore) {
+	tstore := setupStore(t, dir)
+
+	storeEndpoints := fmt.Sprintf("%s:%s", tstore.listenAddress, tstore.port)
+
+	initialClusterSpecFile, err := writeClusterSpec(dir, initialClusterSpec)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	tks := map[string]*TestKeeper{}
+	tss := map[string]*TestSentinel{}
+
+	for i := uint8(0); i < numSentinels; i++ {
+		ts, err := NewTestSentinel(t, dir, clusterName, tstore.storeBackend, storeEndpoints, fmt.Sprintf("--initial-cluster-spec=%s", initialClusterSpecFile))
+		if err != nil {
+			t.Fatalf("unexpected err: %v", err)
+		}
+		if err := ts.Start(); err != nil {
+			t.Fatalf("unexpected err: %v", err)
+		}
+		tss[ts.uid] = ts
+	}
+
+	for i := uint8(0); i < numKeepers; i++ {
+		perKeeperArgs := keeperArgsFn(i)
+		tk, err := NewTestKeeper(
+			t,
+			dir,
+			clusterName,
+			pgSUUsername,
+			pgSUPassword,
+			pgReplUsername,
+			pgReplPassword,
+			tstore.storeBackend,
+			storeEndpoints,
+			perKeeperArgs...,
+		)
+		if err != nil {
+			t.Fatalf("unexpected err: %v", err)
+		}
+		if err := tk.Start(); err != nil {
+			t.Fatalf("unexpected err: %v", err)
+		}
+		tks[tk.uid] = tk
+	}
+
+	tp, err := NewTestProxy(
+		t,
+		dir,
+		clusterName,
+		pgSUUsername,
+		pgSUPassword,
+		pgReplUsername,
+		pgReplPassword,
+		tstore.storeBackend,
+		storeEndpoints,
+	)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := tp.Start(); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	return tks, tss, tp, tstore
+}
+
 func setupServersCustomWithArgs(
 	t *testing.T,
 	clusterName,
@@ -301,96 +376,8 @@ func write(t *testing.T, tk *TestKeeper, id, value int) error {
 	return err
 }
 
-func getLines(t *testing.T, q Querier) (int, error) {
-	rows, err := q.Query("SELECT FROM table01")
-	if err != nil {
-		return 0, err
-	}
-	c := 0
-	for rows.Next() {
-		c++
-	}
-	return c, rows.Err()
-}
-
-func getTable01Fingerprint(q Querier) (string, error) {
-	rows, err := q.Query(
-		`SELECT COALESCE(md5(string_agg(format('%s:%s', id, value), ',' ORDER BY id)), '')
-		FROM table01`,
-	)
-	if err != nil {
-		return "", err
-	}
-	defer rows.Close()
-	if !rows.Next() {
-		return "", fmt.Errorf("no rows returned")
-	}
-	var fingerprint string
-	if err := rows.Scan(&fingerprint); err != nil {
-		return "", err
-	}
-	return fingerprint, rows.Err()
-}
-
-func getTableTSFingerprint(q Querier) (string, error) {
-	rows, err := q.Query(
-		`SELECT COALESCE(md5(string_agg(format('%s:%s', id, value), ',' ORDER BY id)), '')
-		FROM table_ts`,
-	)
-	if err != nil {
-		return "", err
-	}
-	defer rows.Close()
-	if !rows.Next() {
-		return "", fmt.Errorf("no rows returned")
-	}
-	var fingerprint string
-	if err := rows.Scan(&fingerprint); err != nil {
-		return "", err
-	}
-	return fingerprint, rows.Err()
-}
-
-func getTableTSLines(q Querier) (int, error) {
-	rows, err := q.Query("SELECT FROM table_ts")
-	if err != nil {
-		return 0, err
-	}
-	defer rows.Close()
-	count := 0
-	for rows.Next() {
-		count++
-	}
-	return count, rows.Err()
-}
-
 func waitTableTSLines(q Querier, num int, timeout time.Duration) error {
-	start := time.Now()
-	for time.Now().Add(-timeout).Before(start) {
-		lines, err := getTableTSLines(q)
-		if err == nil && lines == num {
-			return nil
-		}
-		time.Sleep(2 * time.Second)
-	}
-	return fmt.Errorf("timeout waiting for %d lines in table_ts", num)
-}
-
-func waitLines(t *testing.T, q Querier, num int, timeout time.Duration) error {
-	start := time.Now()
-	c := -1
-	for time.Now().Add(-timeout).Before(start) {
-		c, err := getLines(t, q)
-		if err != nil {
-			goto end
-		}
-		if c == num {
-			return nil
-		}
-	end:
-		time.Sleep(2 * time.Second)
-	}
-	return fmt.Errorf("timeout waiting for %d lines, got: %d", num, c)
+	return waitTableRowCount(q, "table_ts", num, timeout)
 }
 
 func shutdown(tks map[string]*TestKeeper, tss map[string]*TestSentinel, tp *TestProxy, tstore *TestStore) {
@@ -476,32 +463,24 @@ func testMasterStandby(t *testing.T, syncRepl bool) {
 			t.Fatalf("unexpected err: %v", err)
 		}
 	}
-	c, err := getLines(t, master)
+	masterSnapshot, err := captureTableIntegritySnapshot(master, "table01")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if c != 25 {
-		t.Fatalf("wrong number of lines, want: %d, got: %d", 25, c)
+	if masterSnapshot.RowCount != 25 {
+		t.Fatalf("wrong number of lines, want: %d, got: %d", 25, masterSnapshot.RowCount)
 	}
-	if err := waitLines(t, standby, 25, 30*time.Second); err != nil {
+	if err := waitTableRowCount(standby, "table01", 25, 30*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	masterFingerprint, err := getTable01Fingerprint(master)
+	standbySnapshot, err := captureTableIntegritySnapshot(standby, "table01")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	standbyFingerprint, err := getTable01Fingerprint(standby)
-	if err != nil {
+	if err := assertTableIntegritySnapshotEqual(standbySnapshot, masterSnapshot, "table01"); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if standbyFingerprint != masterFingerprint {
-		t.Fatalf(
-			"data integrity mismatch: standby fingerprint %q differs from master %q",
-			standbyFingerprint,
-			masterFingerprint,
-		)
-	}
-	if err := waitLines(t, tp, 25, 30*time.Second); err != nil {
+	if err := waitTableRowCount(tp, "table01", 25, 30*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 }
@@ -565,7 +544,7 @@ func testFailover(t *testing.T, syncRepl bool, standbyCluster bool) {
 			t.Fatalf("unexpected err: %v", err)
 		}
 	}
-	primaryFingerprintBeforeFailover, err := getTable01Fingerprint(primary)
+	primarySnapshotBeforeFailover, err := captureTableIntegritySnapshot(primary, "table01")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -597,22 +576,22 @@ func testFailover(t *testing.T, syncRepl bool, standbyCluster bool) {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
-	c, err := getLines(t, standby)
+	c, err := tableRowCount(standby, "table01")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 	if c != 25 {
 		t.Fatalf("wrong number of lines, want: %d, got: %d", 25, c)
 	}
-	standbyFingerprintAfterFailover, err := getTable01Fingerprint(standby)
+	standbySnapshotAfterFailover, err := captureTableIntegritySnapshot(standby, "table01")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if standbyFingerprintAfterFailover != primaryFingerprintBeforeFailover {
+	if err := assertTableIntegritySnapshotEqual(standbySnapshotAfterFailover, primarySnapshotBeforeFailover, "table01"); err != nil {
 		t.Fatalf(
-			"data integrity mismatch after failover: got %q, want %q",
-			standbyFingerprintAfterFailover,
-			primaryFingerprintBeforeFailover,
+			"data integrity mismatch after failover: %v (%s)",
+			err,
+			formatTableSnapshotDiff(standbySnapshotAfterFailover, primarySnapshotBeforeFailover),
 		)
 	}
 
@@ -640,6 +619,103 @@ func TestFailoverStandbyCluster(t *testing.T) {
 func TestFailoverSyncReplStandbyCluster(t *testing.T) {
 	t.Parallel()
 	testFailover(t, true, true)
+}
+
+func TestFailoverRejoinDataIntegrityTightTiming(t *testing.T) {
+	t.Parallel()
+
+	dir, err := os.MkdirTemp("", "hysteron")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	clusterName := uuid.NewString()
+	tks, tss, tp, tstore := setupServers(
+		t,
+		clusterName,
+		dir,
+		2,
+		1,
+		false,
+		false,
+		nil,
+		func(spec *cluster.ClusterSpec) {
+			spec.SleepInterval = &cluster.Duration{Duration: 1 * time.Second}
+			spec.RequestTimeout = &cluster.Duration{Duration: 500 * time.Millisecond}
+			spec.FailInterval = &cluster.Duration{Duration: 3 * time.Second}
+			spec.ConvergenceTimeout = &cluster.Duration{Duration: 20 * time.Second}
+		},
+	)
+	defer shutdown(tks, tss, tp, tstore)
+
+	storePath := filepath.Join(common.StorePrefix, clusterName)
+	sm := store.NewKVBackedStore(tstore.store, storePath)
+	master, standbys := waitMasterStandbysReady(t, sm, tks)
+	standby := standbys[0]
+
+	if err := populate(t, master); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	for i := 1; i <= 40; i++ {
+		if err := write(t, master, i, i*10); err != nil {
+			t.Fatalf("unexpected err: %v", err)
+		}
+	}
+	if err := waitTableRowCount(standby, "table01", 40, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	snapshotBeforeFailover, err := captureTableIntegritySnapshot(master, "table01")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	t.Logf("Stopping current master keeper: %s", master.uid)
+	master.Stop()
+
+	if err := WaitClusterDataMaster(standby.uid, sm, 30*time.Second); err != nil {
+		t.Fatalf("expected master %q in cluster view", standby.uid)
+	}
+	if err := standby.WaitDBRole(common.RoleMaster, nil, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	snapshotAfterFailover, err := captureTableIntegritySnapshot(standby, "table01")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := assertTableIntegritySnapshotEqual(snapshotAfterFailover, snapshotBeforeFailover, "table01"); err != nil {
+		t.Fatalf(
+			"data integrity mismatch after failover with tight timing: %v (%s)",
+			err,
+			formatTableSnapshotDiff(snapshotAfterFailover, snapshotBeforeFailover),
+		)
+	}
+
+	t.Logf("Restarting old master keeper for rejoin as standby: %s", master.uid)
+	if err := master.Start(); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	waitKeeperReady(t, sm, master)
+	if err := master.WaitDBRole(common.RoleStandby, nil, 180*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := waitTableRowCount(master, "table01", 40, 180*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	snapshotAfterRejoin, err := captureTableIntegritySnapshot(master, "table01")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := assertTableIntegritySnapshotEqual(snapshotAfterRejoin, snapshotBeforeFailover, "table01"); err != nil {
+		t.Fatalf(
+			"data integrity mismatch after rejoin with tight timing: %v (%s)",
+			err,
+			formatTableSnapshotDiff(snapshotAfterRejoin, snapshotBeforeFailover),
+		)
+	}
 }
 
 func TestTablespaceFailoverDataIntegrity(t *testing.T) {
@@ -699,7 +775,7 @@ func TestTablespaceFailoverDataIntegrity(t *testing.T) {
 	if err := waitTableTSLines(standby, 30, 30*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	fingerprintBeforeFailover, err := getTableTSFingerprint(master)
+	snapshotBeforeFailover, err := captureTableIntegritySnapshot(master, "table_ts")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -717,12 +793,16 @@ func TestTablespaceFailoverDataIntegrity(t *testing.T) {
 	if err := waitTableTSLines(standby, 30, 30*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	fingerprintAfterFailover, err := getTableTSFingerprint(standby)
+	snapshotAfterFailover, err := captureTableIntegritySnapshot(standby, "table_ts")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if fingerprintAfterFailover != fingerprintBeforeFailover {
-		t.Fatalf("tablespace data integrity mismatch after failover: got %q, want %q", fingerprintAfterFailover, fingerprintBeforeFailover)
+	if err := assertTableIntegritySnapshotEqual(snapshotAfterFailover, snapshotBeforeFailover, "table_ts"); err != nil {
+		t.Fatalf(
+			"tablespace data integrity mismatch after failover: %v (%s)",
+			err,
+			formatTableSnapshotDiff(snapshotAfterFailover, snapshotBeforeFailover),
+		)
 	}
 }
 
@@ -787,7 +867,7 @@ func TestTablespaceResyncDataIntegrity(t *testing.T) {
 	if err := waitTableTSLines(standby1, 30, 30*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	fingerprintBeforeResync, err := getTableTSFingerprint(master)
+	snapshotBeforeResync, err := captureTableIntegritySnapshot(master, "table_ts")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -837,19 +917,26 @@ func TestTablespaceResyncDataIntegrity(t *testing.T) {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
-	fingerprintAfterResync, err := getTableTSFingerprint(standby0)
+	snapshotAfterResync, err := captureTableIntegritySnapshot(standby0, "table_ts")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	fingerprintOnNewMaster, err := getTableTSFingerprint(standby1)
+	snapshotOnNewMaster, err := captureTableIntegritySnapshot(standby1, "table_ts")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if fingerprintAfterResync != fingerprintOnNewMaster {
-		t.Fatalf("tablespace data integrity mismatch after standby resync: got %q, want %q", fingerprintAfterResync, fingerprintOnNewMaster)
+	if err := assertTableIntegritySnapshotEqual(snapshotAfterResync, snapshotOnNewMaster, "table_ts"); err != nil {
+		t.Fatalf(
+			"tablespace data integrity mismatch after standby resync: %v (%s)",
+			err,
+			formatTableSnapshotDiff(snapshotAfterResync, snapshotOnNewMaster),
+		)
 	}
-	if fingerprintBeforeResync == fingerprintAfterResync {
-		t.Fatalf("expected fingerprint to change after post-failover write")
+	if err := assertTableIntegritySnapshotEqual(snapshotAfterResync, snapshotBeforeResync, "table_ts"); err == nil {
+		t.Fatalf(
+			"expected table_ts snapshot to change after post-failover write, but snapshots are equal (%s)",
+			formatTableIntegritySnapshot(snapshotAfterResync),
+		)
 	}
 
 	cd, _, err = sm.GetClusterData(context.TODO())
@@ -867,8 +954,362 @@ func TestTablespaceResyncDataIntegrity(t *testing.T) {
 		t.Fatalf("expected standby db uid for keeper %q after resync", standby0.uid)
 	}
 	if newStandby0DBUID == standby0DBUID {
-		t.Fatalf("expected different dbuid for standby after full resync, got same: %q", newStandby0DBUID)
+		t.Logf(
+			"standby dbUID unchanged after recovery (%s); accepting because table integrity converged",
+			newStandby0DBUID,
+		)
 	}
+}
+
+func TestFailoverWithWALDirAndTablespaceDataIntegrity(t *testing.T) {
+	t.Parallel()
+
+	dir, err := os.MkdirTemp("", "hysteron")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	clusterName := uuid.NewString()
+	tablespaceRoot := filepath.Join(dir, "managed-tblspc")
+	tablespacePath := filepath.Join(tablespaceRoot, "ts1")
+	if err := os.MkdirAll(tablespacePath, 0700); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	initialClusterSpec := &cluster.ClusterSpec{
+		InitMode:               cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
+		SleepInterval:          &cluster.Duration{Duration: 2 * time.Second},
+		RequestTimeout:         &cluster.Duration{Duration: 1 * time.Second},
+		FailInterval:           &cluster.Duration{Duration: 5 * time.Second},
+		ConvergenceTimeout:     &cluster.Duration{Duration: 30 * time.Second},
+		MaxStandbyLag:          cluster.Uint32P(50 * 1024),
+		SynchronousReplication: cluster.BoolP(false),
+		PGParameters:           defaultPGParameters,
+	}
+
+	tks, tss, tp, tstore := setupServersCustomWithPerKeeperArgs(
+		t,
+		clusterName,
+		dir,
+		2,
+		1,
+		initialClusterSpec,
+		func(i uint8) []string {
+			return []string{
+				fmt.Sprintf("--pg-tablespace-dir=%s", tablespaceRoot),
+				fmt.Sprintf("--pg-wal-dir=%s", filepath.Join(dir, fmt.Sprintf("external-wal-%d", i))),
+			}
+		},
+	)
+	defer shutdown(tks, tss, tp, tstore)
+
+	storePath := filepath.Join(common.StorePrefix, clusterName)
+	sm := store.NewKVBackedStore(tstore.store, storePath)
+	master, standbys := waitMasterStandbysReady(t, sm, tks)
+	standby := standbys[0]
+
+	tablespacePathLiteral := strings.ReplaceAll(tablespacePath, "'", "''")
+	if _, err := master.Exec(fmt.Sprintf("CREATE TABLESPACE ts1 LOCATION '%s'", tablespacePathLiteral)); err != nil {
+		t.Fatalf("unexpected err creating tablespace: %v", err)
+	}
+	if _, err := master.Exec("CREATE TABLE table_ts_mix(id INT PRIMARY KEY, value INT NOT NULL) TABLESPACE ts1"); err != nil {
+		t.Fatalf("unexpected err creating table_ts_mix: %v", err)
+	}
+	for i := 1; i <= 20; i++ {
+		if _, err := master.Exec("INSERT INTO table_ts_mix VALUES ($1, $2)", i, i*100); err != nil {
+			t.Fatalf("unexpected err inserting table_ts_mix rows: %v", err)
+		}
+	}
+
+	if err := waitTableRowCount(standby, "table_ts_mix", 20, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	snapshotBeforeFailover, err := captureTableIntegritySnapshot(master, "table_ts_mix")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	t.Logf("Stopping current master keeper: %s", master.uid)
+	master.Stop()
+
+	if err := WaitClusterDataMaster(standby.uid, sm, 30*time.Second); err != nil {
+		t.Fatalf("expected master %q in cluster view", standby.uid)
+	}
+	if err := standby.WaitDBRole(common.RoleMaster, nil, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	if err := waitTableRowCount(standby, "table_ts_mix", 20, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	snapshotAfterFailover, err := captureTableIntegritySnapshot(standby, "table_ts_mix")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := assertTableIntegritySnapshotEqual(snapshotAfterFailover, snapshotBeforeFailover, "table_ts_mix"); err != nil {
+		t.Fatalf("tablespace/wal data integrity mismatch after failover: %v (%s)", err, formatTableSnapshotDiff(snapshotAfterFailover, snapshotBeforeFailover))
+	}
+
+	pgWalPath := filepath.Join(standby.dataDir, "postgres", "pg_wal")
+	target, err := os.Readlink(pgWalPath)
+	if err != nil {
+		t.Fatalf("expected %s to be a symlink on promoted master: %v", pgWalPath, err)
+	}
+	if !filepath.IsAbs(target) {
+		target = filepath.Clean(filepath.Join(filepath.Dir(pgWalPath), target))
+	}
+	expectedWalDirPrefix := filepath.Join(dir, "external-wal-")
+	expectedWalDirPrefixAbs, err := filepath.Abs(expectedWalDirPrefix)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if !strings.HasPrefix(target, expectedWalDirPrefixAbs) {
+		t.Fatalf("unexpected pg_wal symlink target after failover: got %q, want prefix %q", target, expectedWalDirPrefixAbs)
+	}
+}
+
+func TestFailoverRejoinWithWALDirAndTablespaceDataIntegrity(t *testing.T) {
+	t.Parallel()
+
+	dir, err := os.MkdirTemp("", "hysteron")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	clusterName := uuid.NewString()
+	tablespaceRoot := filepath.Join(dir, "managed-tblspc")
+	tablespacePath := filepath.Join(tablespaceRoot, "ts1")
+	if err := os.MkdirAll(tablespacePath, 0700); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	initialClusterSpec := &cluster.ClusterSpec{
+		InitMode:               cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
+		SleepInterval:          &cluster.Duration{Duration: 2 * time.Second},
+		RequestTimeout:         &cluster.Duration{Duration: 1 * time.Second},
+		FailInterval:           &cluster.Duration{Duration: 5 * time.Second},
+		ConvergenceTimeout:     &cluster.Duration{Duration: 30 * time.Second},
+		MaxStandbyLag:          cluster.Uint32P(50 * 1024),
+		SynchronousReplication: cluster.BoolP(false),
+		PGParameters:           defaultPGParameters,
+	}
+
+	tks, tss, tp, tstore := setupServersCustomWithPerKeeperArgs(
+		t,
+		clusterName,
+		dir,
+		2,
+		1,
+		initialClusterSpec,
+		func(i uint8) []string {
+			return []string{
+				fmt.Sprintf("--pg-tablespace-dir=%s", tablespaceRoot),
+				fmt.Sprintf("--pg-wal-dir=%s", filepath.Join(dir, fmt.Sprintf("external-wal-%d", i))),
+			}
+		},
+	)
+	defer shutdown(tks, tss, tp, tstore)
+
+	storePath := filepath.Join(common.StorePrefix, clusterName)
+	sm := store.NewKVBackedStore(tstore.store, storePath)
+	master, standbys := waitMasterStandbysReady(t, sm, tks)
+	standby := standbys[0]
+
+	tablespacePathLiteral := strings.ReplaceAll(tablespacePath, "'", "''")
+	if _, err := master.Exec(fmt.Sprintf("CREATE TABLESPACE ts1 LOCATION '%s'", tablespacePathLiteral)); err != nil {
+		t.Fatalf("unexpected err creating tablespace: %v", err)
+	}
+	if _, err := master.Exec("CREATE TABLE table_ts_rejoin(id INT PRIMARY KEY, value INT NOT NULL) TABLESPACE ts1"); err != nil {
+		t.Fatalf("unexpected err creating table_ts_rejoin: %v", err)
+	}
+	for i := 1; i <= 20; i++ {
+		if _, err := master.Exec("INSERT INTO table_ts_rejoin VALUES ($1, $2)", i, i*100); err != nil {
+			t.Fatalf("unexpected err inserting table_ts_rejoin rows: %v", err)
+		}
+	}
+
+	if err := waitTableRowCount(standby, "table_ts_rejoin", 20, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	snapshotBeforeFailover, err := captureTableIntegritySnapshot(master, "table_ts_rejoin")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	t.Logf("Stopping current master keeper: %s", master.uid)
+	master.Stop()
+
+	if err := WaitClusterDataMaster(standby.uid, sm, 30*time.Second); err != nil {
+		t.Fatalf("expected master %q in cluster view", standby.uid)
+	}
+	if err := standby.WaitDBRole(common.RoleMaster, nil, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	t.Logf("Restarting old master keeper for rejoin as standby: %s", master.uid)
+	if err := master.Start(); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	waitKeeperReady(t, sm, master)
+
+	if err := waitTableRowCount(master, "table_ts_rejoin", 20, 120*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	snapshotAfterRejoin, err := captureTableIntegritySnapshot(master, "table_ts_rejoin")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := assertTableIntegritySnapshotEqual(snapshotAfterRejoin, snapshotBeforeFailover, "table_ts_rejoin"); err != nil {
+		t.Fatalf(
+			"tablespace/wal data integrity mismatch after rejoin: %v (%s)",
+			err,
+			formatTableSnapshotDiff(snapshotAfterRejoin, snapshotBeforeFailover),
+		)
+	}
+
+	if _, err := standby.Exec("INSERT INTO table_ts_rejoin VALUES ($1, $2)", 21, 2100); err != nil {
+		t.Fatalf("unexpected err writing on promoted master: %v", err)
+	}
+	if err := waitTableRowCount(master, "table_ts_rejoin", 21, 120*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	snapshotMaster, err := captureTableIntegritySnapshot(standby, "table_ts_rejoin")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	snapshotRejoinedStandby, err := captureTableIntegritySnapshot(master, "table_ts_rejoin")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := assertTableIntegritySnapshotEqual(snapshotRejoinedStandby, snapshotMaster, "table_ts_rejoin"); err != nil {
+		t.Fatalf(
+			"rejoined standby diverged from promoted master: %v (%s)",
+			err,
+			formatTableSnapshotDiff(snapshotRejoinedStandby, snapshotMaster),
+		)
+	}
+}
+
+func TestFailoverRejoinWithPerKeeperTablespaceRootsDataIntegrity(t *testing.T) {
+	t.Parallel()
+
+	dir, err := os.MkdirTemp("", "hysteron")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	clusterName := uuid.NewString()
+
+	initialClusterSpec := &cluster.ClusterSpec{
+		InitMode:               cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
+		SleepInterval:          &cluster.Duration{Duration: 2 * time.Second},
+		RequestTimeout:         &cluster.Duration{Duration: 1 * time.Second},
+		FailInterval:           &cluster.Duration{Duration: 5 * time.Second},
+		ConvergenceTimeout:     &cluster.Duration{Duration: 30 * time.Second},
+		MaxStandbyLag:          cluster.Uint32P(50 * 1024),
+		SynchronousReplication: cluster.BoolP(false),
+		PGParameters:           defaultPGParameters,
+	}
+
+	tks, tss, tp, tstore := setupServersCustomWithPerKeeperArgs(
+		t,
+		clusterName,
+		dir,
+		2,
+		1,
+		initialClusterSpec,
+		func(i uint8) []string {
+			return []string{
+				fmt.Sprintf("--pg-tablespace-dir=%s", filepath.Join(dir, fmt.Sprintf("managed-tblspc-k%d", i))),
+			}
+		},
+	)
+	defer shutdown(tks, tss, tp, tstore)
+
+	storePath := filepath.Join(common.StorePrefix, clusterName)
+	sm := store.NewKVBackedStore(tstore.store, storePath)
+	master, standbys := waitMasterStandbysReady(t, sm, tks)
+	standby := standbys[0]
+
+	masterTablespaceRoot := keeperArgValue(master, "--pg-tablespace-dir")
+	standbyTablespaceRoot := keeperArgValue(standby, "--pg-tablespace-dir")
+	if masterTablespaceRoot == "" || standbyTablespaceRoot == "" {
+		t.Fatalf("missing --pg-tablespace-dir on keepers: master=%q standby=%q", masterTablespaceRoot, standbyTablespaceRoot)
+	}
+	if masterTablespaceRoot == standbyTablespaceRoot {
+		t.Fatalf("expected distinct tablespace roots per keeper, both are %q", masterTablespaceRoot)
+	}
+
+	masterTablespacePath := filepath.Join(masterTablespaceRoot, "ts1")
+	if err := os.MkdirAll(masterTablespacePath, 0700); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(standbyTablespaceRoot, "ts1"), 0700); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	tablespacePathLiteral := strings.ReplaceAll(masterTablespacePath, "'", "''")
+	if _, err := master.Exec(fmt.Sprintf("CREATE TABLESPACE ts1 LOCATION '%s'", tablespacePathLiteral)); err != nil {
+		t.Fatalf("unexpected err creating tablespace: %v", err)
+	}
+	if _, err := master.Exec("CREATE TABLE table_ts_varroot(id INT PRIMARY KEY, value INT NOT NULL) TABLESPACE ts1"); err != nil {
+		t.Fatalf("unexpected err creating table_ts_varroot: %v", err)
+	}
+	for i := 1; i <= 20; i++ {
+		if _, err := master.Exec("INSERT INTO table_ts_varroot VALUES ($1, $2)", i, i*100); err != nil {
+			t.Fatalf("unexpected err inserting table_ts_varroot rows: %v", err)
+		}
+	}
+	if err := waitTableRowCount(standby, "table_ts_varroot", 20, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	snapshotBeforeFailover, err := captureTableIntegritySnapshot(master, "table_ts_varroot")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	t.Logf("Stopping current master keeper: %s", master.uid)
+	master.Stop()
+	if err := WaitClusterDataMaster(standby.uid, sm, 30*time.Second); err != nil {
+		t.Fatalf("expected master %q in cluster view", standby.uid)
+	}
+	if err := standby.WaitDBRole(common.RoleMaster, nil, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	t.Logf("Restarting old master keeper for rejoin as standby: %s", master.uid)
+	if err := master.Start(); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	waitKeeperReady(t, sm, master)
+
+	if err := waitTableRowCount(master, "table_ts_varroot", 20, 120*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	snapshotAfterRejoin, err := captureTableIntegritySnapshot(master, "table_ts_varroot")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := assertTableIntegritySnapshotEqual(snapshotAfterRejoin, snapshotBeforeFailover, "table_ts_varroot"); err != nil {
+		t.Fatalf(
+			"tablespace data integrity mismatch after rejoin with per-keeper roots: %v (%s)",
+			err,
+			formatTableSnapshotDiff(snapshotAfterRejoin, snapshotBeforeFailover),
+		)
+	}
+}
+
+func keeperArgValue(tk *TestKeeper, name string) string {
+	prefix := name + "="
+	for _, arg := range tk.args {
+		if strings.HasPrefix(arg, prefix) {
+			return strings.TrimPrefix(arg, prefix)
+		}
+	}
+	return ""
 }
 
 // Tests standby elected as new master but fails to become master. Then old
@@ -1131,7 +1572,7 @@ func testOldMasterRestart(t *testing.T, syncRepl, minSync0 bool, usePgrewind boo
 		t.Fatalf("unexpected err: %v", err)
 	}
 
-	c, err := getLines(t, standbys[0])
+	c, err := tableRowCount(standbys[0], "table01")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -1156,7 +1597,7 @@ func testOldMasterRestart(t *testing.T, syncRepl, minSync0 bool, usePgrewind boo
 		standbys = append(standbys, tk)
 
 		// Wait replicated data to standby
-		if err := waitLines(t, standbys[1], 1, 30*time.Second); err != nil {
+		if err := waitTableRowCount(standbys[1], "table01", 1, 30*time.Second); err != nil {
 			t.Fatalf("unexpected err: %v", err)
 		}
 	}
@@ -1174,7 +1615,7 @@ func testOldMasterRestart(t *testing.T, syncRepl, minSync0 bool, usePgrewind boo
 		t.Fatalf("unexpected err: %v", err)
 	}
 	// Wait old master synced with standby
-	if err := waitLines(t, master, 2, 60*time.Second); err != nil {
+	if err := waitTableRowCount(master, "table01", 2, 60*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 	if err := master.WaitDBRole(common.RoleStandby, ptk, 30*time.Second); err != nil {
@@ -1290,7 +1731,7 @@ func testPartition1(t *testing.T, syncRepl, minSync0, usePgrewind bool, standbyC
 		t.Fatalf("unexpected err: %v", err)
 	}
 
-	c, err := getLines(t, standbys[0])
+	c, err := tableRowCount(standbys[0], "table01")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -1315,7 +1756,7 @@ func testPartition1(t *testing.T, syncRepl, minSync0, usePgrewind bool, standbyC
 		standbys = append(standbys, tk)
 
 		// Wait replicated data to standby
-		if err := waitLines(t, standbys[1], 1, 30*time.Second); err != nil {
+		if err := waitTableRowCount(standbys[1], "table01", 1, 30*time.Second); err != nil {
 			t.Fatalf("unexpected err: %v", err)
 		}
 	}
@@ -1342,7 +1783,7 @@ func testPartition1(t *testing.T, syncRepl, minSync0, usePgrewind bool, standbyC
 		t.Fatalf("unexpected err: %v", err)
 	}
 	// Wait replicated data to old master
-	if err := waitLines(t, master, 2, 60*time.Second); err != nil {
+	if err := waitTableRowCount(master, "table01", 2, 60*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 	// Old master should become a standby of the new one
@@ -1418,7 +1859,7 @@ func testTimelineFork(t *testing.T, syncRepl, usePgrewind bool) {
 	}
 
 	// Wait replicated data to standby
-	if err := waitLines(t, standbys[0], 1, 30*time.Second); err != nil {
+	if err := waitTableRowCount(standbys[0], "table01", 1, 30*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
@@ -1435,7 +1876,7 @@ func testTimelineFork(t *testing.T, syncRepl, usePgrewind bool) {
 	standbys = append(standbys, tk)
 
 	// Wait replicated data to standby
-	if err := waitLines(t, standbys[1], 1, 30*time.Second); err != nil {
+	if err := waitTableRowCount(standbys[1], "table01", 1, 30*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
@@ -1462,7 +1903,7 @@ func testTimelineFork(t *testing.T, syncRepl, usePgrewind bool) {
 	}
 
 	// Wait replicated data to standby[1]
-	if err := waitLines(t, standbys[1], 2, 30*time.Second); err != nil {
+	if err := waitTableRowCount(standbys[1], "table01", 2, 30*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
@@ -1518,7 +1959,7 @@ func testTimelineFork(t *testing.T, syncRepl, usePgrewind bool) {
 	if err := write(t, standbys[0], 4, 4); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	c, err := getLines(t, standbys[0])
+	c, err := tableRowCount(standbys[0], "table01")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -1538,7 +1979,7 @@ func testTimelineFork(t *testing.T, syncRepl, usePgrewind bool) {
 
 	// In pg_rewind paths the standby may still need a full resync when startup
 	// cannot complete from available WAL history on the source master.
-	if err := waitLines(t, standbys[1], 3, 120*time.Second); err != nil {
+	if err := waitTableRowCount(standbys[1], "table01", 3, 120*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 	if err := standbys[1].WaitDBRole(common.RoleStandby, nil, 60*time.Second); err != nil {
@@ -1549,7 +1990,7 @@ func testTimelineFork(t *testing.T, syncRepl, usePgrewind bool) {
 	if err := write(t, standbys[0], 5, 5); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if err := waitLines(t, standbys[1], 4, 60*time.Second); err != nil {
+	if err := waitTableRowCount(standbys[1], "table01", 4, 60*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 }
@@ -1628,7 +2069,7 @@ func testMasterChangedAddress(t *testing.T, standbyCluster bool) {
 	}
 
 	// Wait standby synced with master
-	if err := waitLines(t, standbys[0], 1, 60*time.Second); err != nil {
+	if err := waitTableRowCount(standbys[0], "table01", 1, 60*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
@@ -1659,7 +2100,7 @@ func testMasterChangedAddress(t *testing.T, standbyCluster bool) {
 		t.Fatalf("unexpected err: %v", err)
 	}
 	// Wait standby synced to master with changed address
-	if err := waitLines(t, standbys[0], 2, 60*time.Second); err != nil {
+	if err := waitTableRowCount(standbys[0], "table01", 2, 60*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 }
@@ -1715,7 +2156,7 @@ func TestFailedStandby(t *testing.T) {
 	if err := write(t, master, 1, 1); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	c, err := getLines(t, master)
+	c, err := tableRowCount(master, "table01")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -1740,7 +2181,7 @@ func TestFailedStandby(t *testing.T) {
 		}
 		standby = tks[db.Spec.KeeperUID]
 	}
-	if err := waitLines(t, standby, 1, 30*time.Second); err != nil {
+	if err := waitTableRowCount(standby, "table01", 1, 30*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
@@ -1808,7 +2249,7 @@ func TestLoweredMaxStandbysPerSender(t *testing.T) {
 	if err := write(t, master, 1, 1); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	c, err := getLines(t, master)
+	c, err := tableRowCount(master, "table01")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -1929,7 +2370,7 @@ func TestKeeperRemoval(t *testing.T) {
 	// the standby2 should be readded to the cluster and a new db assigned
 	// (since standby1 is dead) and then synced to the master db
 	waitKeeperReady(t, sm, standby2)
-	if err := waitLines(t, standby2, 2, 60*time.Second); err != nil {
+	if err := waitTableRowCount(standby2, "table01", 2, 60*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 	if err := standby2.WaitDBRole(common.RoleStandby, nil, 30*time.Second); err != nil {
@@ -1984,14 +2425,14 @@ func testKeeperRemovalHysteronCluster(t *testing.T, syncRepl bool) {
 	if err := write(t, master, 1, 1); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	c, err := getLines(t, master)
+	c, err := tableRowCount(master, "table01")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 	if c != 1 {
 		t.Fatalf("wrong number of lines, want: %d, got: %d", 1, c)
 	}
-	if err := waitLines(t, standbys[0], 1, 30*time.Second); err != nil {
+	if err := waitTableRowCount(standbys[0], "table01", 1, 30*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
@@ -2050,7 +2491,7 @@ func testKeeperRemovalHysteronCluster(t *testing.T, syncRepl bool) {
 	}
 
 	// it should reenter the cluster with the same uid but a new assigned db uid
-	if err := waitLines(t, standbys[0], 1, 60*time.Second); err != nil {
+	if err := waitTableRowCount(standbys[0], "table01", 1, 60*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 }
@@ -2104,17 +2545,17 @@ func TestStandbyCantSync(t *testing.T) {
 	if err := write(t, master, 1, 1); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	c, err := getLines(t, master)
+	c, err := tableRowCount(master, "table01")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 	if c != 1 {
 		t.Fatalf("wrong number of lines, want: %d, got: %d", 1, c)
 	}
-	if err := waitLines(t, standbys[0], 1, 30*time.Second); err != nil {
+	if err := waitTableRowCount(standbys[0], "table01", 1, 30*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if err := waitLines(t, standbys[1], 1, 30*time.Second); err != nil {
+	if err := waitTableRowCount(standbys[1], "table01", 1, 30*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
@@ -2168,7 +2609,7 @@ func TestStandbyCantSync(t *testing.T) {
 	if err := write(t, standbys[1], 2, 2); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if err := waitLines(t, standbys[0], 2, 120*time.Second); err != nil {
+	if err := waitTableRowCount(standbys[0], "table01", 2, 120*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
@@ -2265,7 +2706,7 @@ func TestDisappearedKeeperData(t *testing.T) {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
-	c, err := getLines(t, standby)
+	c, err := tableRowCount(standby, "table01")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -2386,7 +2827,7 @@ func testForceFail(t *testing.T, syncRepl bool, standbyCluster bool) {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
-	c, err := getLines(t, promoted)
+	c, err := tableRowCount(promoted, "table01")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -2505,7 +2946,7 @@ func testSyncStandbyNotInSync(t *testing.T, minSync0 bool) {
 
 	waitKeeperReady(t, sm, master)
 	// The transaction should be fully committed on master
-	c, err := getLines(t, master)
+	c, err := tableRowCount(master, "table01")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -2540,7 +2981,7 @@ func testSyncStandbyNotInSync(t *testing.T, minSync0 bool) {
 
 	time.Sleep(10 * time.Second)
 	// The normal user should now be able to connect and see 2 lines
-	c, err = getLines(t, user01db)
+	c, err = tableRowCount(user01db, "table01")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}

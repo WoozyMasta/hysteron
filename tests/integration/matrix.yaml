@@ -1,0 +1,139 @@
+# Copyright 2026 WoozyMasta
+#
+# Integration profile/group manifest.
+
+version: 1
+
+pg_majors:
+  pr: ["18"]
+  merge: ["18", "14"]
+  nightly: ["18", "14"]
+
+profiles:
+  smoke:
+    description: Fast confidence checks for PR feedback.
+    default_parallel: true
+  storage-ha:
+    description: Focused storage + failover/rejoin integrity regression profile.
+    default_parallel: true
+  logical-slots:
+    description: Focused replication-slot and logical-slot behavior profile.
+    default_parallel: true
+  merge-gate:
+    description: Minimal critical gate for dual-major merge validation.
+    default_parallel: true
+  merge:
+    description: Merge gate profile for HA/storage safety.
+    default_parallel: true
+  full:
+    description: Full integration confidence profile.
+    default_parallel: true
+  soak:
+    description: Long-running failover/resync stability profile.
+    default_parallel: false
+
+groups:
+  - name: proxy
+    criticality: important
+    profiles: ["smoke", "merge-gate", "merge", "full"]
+    selectors:
+      - "^TestProxy"
+
+  - name: pitr
+    criticality: important
+    profiles: ["merge-gate", "merge", "full"]
+    selectors:
+      - "^TestPITR"
+
+  - name: metrics
+    criticality: important
+    profiles: ["merge-gate", "merge", "full"]
+    selectors:
+      - "^TestMetrics"
+
+  - name: sentinel-control
+    criticality: important
+    profiles: ["merge", "full"]
+    selectors:
+      - "^TestSentinel"
+      - "^TestExclusiveLock$"
+
+  - name: storage-layout-core
+    criticality: critical
+    profiles: ["storage-ha", "merge-gate", "merge", "full"]
+    selectors:
+      - "^TestInitWithCustomWALDir$"
+      - "^TestReinitWithCustomWALDirCleansWalDir$"
+      - "^TestReinitPreservesExternalManagedTablespaceDir$"
+      - "^TestReinitWithWALDirAndTablespaceKeepsTablespaceAndCleansWAL$"
+      - "^TestPITRWithWALDirPlaceholder$"
+      - "^TestTablespaceFailoverDataIntegrity$"
+
+  - name: storage-layout-deep
+    criticality: critical
+    profiles: ["storage-ha", "merge", "full"]
+    selectors:
+      - "^TestTablespaceResyncDataIntegrity$"
+      - "^TestFailoverWithWALDirAndTablespaceDataIntegrity$"
+      - "^TestFailoverRejoinWithWALDirAndTablespaceDataIntegrity$"
+      - "^TestFailoverRejoinWithPerKeeperTablespaceRootsDataIntegrity$"
+
+  - name: config-auth
+    criticality: important
+    profiles: ["merge", "full"]
+    selectors:
+      - "^TestInit(Users|UsersSCRAMSHA256|New.*|Existing.*|PasswordTrailingNewLine|InitialClusterSpec)$"
+      - "^Test(InitialClusterSpec|PasswordTrailingNewLine)$"
+      - "^TestServerParameters$"
+      - "^TestWal(Level|KeepSegments)$"
+      - "^TestAlterSystem$"
+      - "^TestAutomaticPgRestart$"
+      - "^TestBeforeStopCommandHook$"
+      - "^TestAdvertise$"
+      - "^TestFailsafeModeValidationAndUpdate$"
+
+  - name: logical-slots
+    criticality: critical
+    profiles: ["logical-slots", "merge", "full", "soak"]
+    selectors:
+      - "^Test(AdditionalReplicationSlots.*|MemberReplicationSlotTTL.*|ManagedLogicalReplicationSlots.*|ManagedLogicalSlotsMasterOnlyWhenGateDisabled|LogicalSlotFailoverGate.*)$"
+
+  - name: standby-cluster
+    criticality: important
+    profiles: ["full"]
+    selectors:
+      - "^Test(InitStandbyCluster|PromoteStandbyCluster.*)$"
+
+  - name: ha-core
+    criticality: critical
+    profiles: ["storage-ha", "merge", "full"]
+    selectors:
+      - "^Test(InitWithMultipleKeepers|MasterStandby.*|Failover(SyncRepl|SyncReplStandbyCluster|StandbyCluster)?|FailoverFailed.*|ForceFail.*)$"
+      - "^TestFailoverRejoinDataIntegrityTightTiming$"
+
+  - name: ha-resync
+    criticality: critical
+    profiles: ["full", "soak"]
+    selectors:
+      - "^Test(OldMasterRestart.*|Partition1.*|TimelineFork.*|StandbyCantSync|DisappearedKeeperData)$"
+
+  - name: ha-edge
+    criticality: important
+    profiles: ["full"]
+    selectors:
+      - "^Test(FailoverTooMuchLag.*|MasterChangedAddress.*|FailedStandby|LoweredMaxStandbysPerSender|KeeperRemoval.*|SyncStandbyNotInSync0?|ForceFailSyncReplStandbyCluster)$"
+
+  - name: smoke
+    criticality: critical
+    profiles: ["smoke"]
+    selectors:
+      - "^Test(Init$|ProxyListening|MasterStandby$|Failover$|TablespaceFailoverDataIntegrity|InitWithCustomWALDir)$"
+
+  - name: merge-gate
+    criticality: critical
+    profiles: ["merge-gate"]
+    selectors:
+      - "^Test(Init$|MasterStandby$|Failover$|ProxyListening|PITRWithWALDirPlaceholder)$"
+      - "^TestFailoverRejoinDataIntegrityTightTiming$"
+      - "^Test(InitWithCustomWALDir|ReinitWithCustomWALDirCleansWalDir|ReinitPreservesExternalManagedTablespaceDir)$"
+      - "^TestMetricsFailoverDCSAndPendingRestart$"

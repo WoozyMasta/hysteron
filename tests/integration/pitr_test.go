@@ -367,7 +367,7 @@ func testPITR(t *testing.T, recoveryTarget bool) {
 	if err := tk.WaitDBUp(60 * time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	c, err := getLines(t, tk)
+	c, err := tableRowCount(tk, "table01")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}

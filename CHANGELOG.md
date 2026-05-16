@@ -33,6 +33,9 @@ The format is based on [Keep a Changelog][], and this project adheres to
   and richer integration diagnostics.
 * New `examples/compose` topology with two clusters on shared sentinels
   (cluster `a` sync, cluster `b` async), Prometheus/Grafana, and web UI.
+* Profile-based integration test matrix runs (`tests/integration/matrix.yaml`)
+  with markdown/json reporting and stronger HA/storage/logical-slot
+  integrity assertions across failover/rejoin scenarios.
 
 ### Changed
 
@@ -565,5 +568,3 @@ Thanks to all the contributors!
 <!--links-->
 [Keep a Changelog]: https://keepachangelog.com/en/1.1.0/
 [Semantic Versioning]: https://semver.org/spec/v2.0.0.html
-
-* Add per-cycle debug summary for standby advance operations skipped by retry backoff.

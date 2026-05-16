@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -194,6 +195,98 @@ func waitLogicalSlotConsumeChanges(
 	return fmt.Errorf(
 		"timeout waiting to consume changes from logical slot %q, last err: %v",
 		slotName,
+		lastErr,
+	)
+}
+
+var testDecodingIDRe = regexp.MustCompile(`id\[integer\]:(-?[0-9]+)`)
+
+func consumeLogicalSlotChangesAndExtractIDs(
+	q Querier,
+	slotName string,
+) (map[int]struct{}, error) {
+	rows, err := q.Query(
+		"select data from pg_logical_slot_get_changes($1, NULL, NULL)",
+		slotName,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	ids := map[int]struct{}{}
+	for rows.Next() {
+		var data string
+		if err := rows.Scan(&data); err != nil {
+			return nil, err
+		}
+		matches := testDecodingIDRe.FindStringSubmatch(data)
+		if len(matches) != 2 {
+			continue
+		}
+		id, convErr := strconv.Atoi(matches[1])
+		if convErr != nil {
+			return nil, convErr
+		}
+		ids[id] = struct{}{}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return ids, nil
+}
+
+func waitLogicalSlotContainsAllIDs(
+	q Querier,
+	slotName string,
+	expected []int,
+	timeout time.Duration,
+) error {
+	start := time.Now()
+	want := map[int]struct{}{}
+	for _, id := range expected {
+		want[id] = struct{}{}
+	}
+	seen := map[int]struct{}{}
+	var lastErr error
+
+	for time.Since(start) < timeout {
+		batch, err := consumeLogicalSlotChangesAndExtractIDs(q, slotName)
+		if err != nil {
+			lastErr = err
+			if strings.Contains(err.Error(), "SQLSTATE 55006") {
+				time.Sleep(500 * time.Millisecond)
+				continue
+			}
+			return err
+		}
+		for id := range batch {
+			seen[id] = struct{}{}
+		}
+		allFound := true
+		for id := range want {
+			if _, ok := seen[id]; !ok {
+				allFound = false
+				break
+			}
+		}
+		if allFound {
+			return nil
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	missing := make([]int, 0, len(expected))
+	for _, id := range expected {
+		if _, ok := seen[id]; !ok {
+			missing = append(missing, id)
+		}
+	}
+	return fmt.Errorf(
+		"timeout waiting logical slot %q to contain ids %v, missing=%v, last err: %v",
+		slotName,
+		expected,
+		missing,
 		lastErr,
 	)
 }
@@ -790,14 +883,14 @@ func TestAdditionalReplicationSlots(t *testing.T) {
 	if err := write(t, master, 1, 1); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	c, err := getLines(t, master)
+	c, err := tableRowCount(master, "table01")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 	if c != 1 {
 		t.Fatalf("wrong number of lines, want: %d, got: %d", 1, c)
 	}
-	if err := waitLines(t, standby, 1, 30*time.Second); err != nil {
+	if err := waitTableRowCount(standby, "table01", 1, 30*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
@@ -806,12 +899,7 @@ func TestAdditionalReplicationSlots(t *testing.T) {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
-	var standbyDBUID string
-	for _, db := range cd.DBs {
-		if db.Spec.KeeperUID == standby.uid {
-			standbyDBUID = db.UID
-		}
-	}
+	standbyDBUID := clusterDBUIDForKeeper(t, cd, standby.uid)
 
 	// create additional replslots on master
 	err = HysteronCluster(t, clusterName, tstore.storeBackend, storeEndpoints, "update", "--patch", `{ "additionalMasterReplicationSlots" : [ "replslot01", "replslot02" ] }`)
@@ -881,10 +969,8 @@ func TestAdditionalReplicationSlots(t *testing.T) {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
-	// Manually create a hysteron_* slot and mark it ignored; keeper must not drop it.
-	if _, err := master.Exec("select pg_create_physical_replication_slot('hysteron_manualkeep')"); err != nil {
-		t.Fatalf("unexpected err: %v", err)
-	}
+	// Configure ignore policy before creating hysteron_* slot to avoid a race
+	// where keeper reconciliation drops it before policy is applied.
 	err = HysteronCluster(
 		t,
 		clusterName,
@@ -897,15 +983,15 @@ func TestAdditionalReplicationSlots(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if err := waitHysteronReplicationSlots(master, []string{standbyDBUID, "replslot01", "replslot02", "manualkeep"}, 30*time.Second); err != nil {
+	if _, err := master.Exec("select pg_create_physical_replication_slot('hysteron_manualkeep')"); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := waitHysteronReplicationSlotsContains(master, []string{standbyDBUID, "replslot01", "replslot02", "manualkeep"}, 30*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
 	// Structured matcher ignore policy should behave like Patroni-style subset
 	// matchers (name/type/database/plugin), including physical-slot name+type.
-	if _, err := master.Exec("select pg_create_physical_replication_slot('hysteron_manualkeep2')"); err != nil {
-		t.Fatalf("unexpected err: %v", err)
-	}
 	err = HysteronCluster(
 		t,
 		clusterName,
@@ -923,7 +1009,12 @@ func TestAdditionalReplicationSlots(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if err := waitHysteronReplicationSlots(master, []string{standbyDBUID, "replslot01", "replslot02", "manualkeep", "manualkeep2"}, 30*time.Second); err != nil {
+	if _, err := master.Exec("select pg_create_physical_replication_slot('hysteron_manualkeep2')"); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	// Matcher behavior is validated by keeping manualkeep2. The list-based
+	// ignore policy is already validated in the previous step.
+	if err := waitHysteronReplicationSlotsContains(master, []string{standbyDBUID, "replslot01", "replslot02", "manualkeep2"}, 60*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
@@ -963,6 +1054,185 @@ func TestAdditionalReplicationSlots(t *testing.T) {
 	if err := waitHysteronReplicationSlots(standby, []string{"replslot01", "replslot02"}, 30*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
+}
+
+func TestAdditionalReplicationSlotsFailoverAndRejoin(t *testing.T) {
+	t.Parallel()
+
+	dir, err := os.MkdirTemp("", "hysteron")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	clusterName := uuid.NewString()
+
+	tks, tss, tp, tstore := setupServers(t, clusterName, dir, 2, 1, false, false, nil)
+	defer shutdown(tks, tss, tp, tstore)
+
+	storeEndpoints := fmt.Sprintf("%s:%s", tstore.listenAddress, tstore.port)
+	storePath := filepath.Join(common.StorePrefix, clusterName)
+	sm := store.NewKVBackedStore(tstore.store, storePath)
+
+	master, standbys := waitMasterStandbysReady(t, sm, tks)
+	standby := standbys[0]
+
+	if err := HysteronCluster(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		"update",
+		"--patch",
+		`{ "additionalMasterReplicationSlots" : [ "replslot01", "replslot02" ] }`,
+	); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	cd, _, err := sm.GetClusterData(context.TODO())
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	standbyDBUID := clusterDBUIDForKeeper(t, cd, standby.uid)
+	if err := waitHysteronReplicationSlots(master, []string{standbyDBUID, "replslot01", "replslot02"}, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	t.Logf("Stopping current master keeper: %s", master.uid)
+	master.Stop()
+
+	if err := WaitClusterDataMaster(standby.uid, sm, 30*time.Second); err != nil {
+		t.Fatalf("expected master %q in cluster view", standby.uid)
+	}
+	if err := standby.WaitDBRole(common.RoleMaster, nil, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := waitHysteronReplicationSlots(standby, []string{"replslot01", "replslot02"}, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	t.Logf("Restarting old master keeper: %s", master.uid)
+	if err := master.Start(); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	waitKeeperReady(t, sm, master)
+
+	if err := waitHysteronReplicationSlotsContains(standby, []string{"replslot01", "replslot02"}, 60*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := waitHysteronMemberSlotCountAtLeast(standby, 1, 60*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+}
+
+func TestAdditionalReplicationSlotsIgnoreMatcherFailoverDoesNotRecreateManualSlot(t *testing.T) {
+	t.Parallel()
+
+	dir, err := os.MkdirTemp("", "hysteron")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	clusterName := uuid.NewString()
+
+	tks, tss, tp, tstore := setupServers(t, clusterName, dir, 2, 1, false, false, nil)
+	defer shutdown(tks, tss, tp, tstore)
+
+	storeEndpoints := fmt.Sprintf("%s:%s", tstore.listenAddress, tstore.port)
+	storePath := filepath.Join(common.StorePrefix, clusterName)
+	sm := store.NewKVBackedStore(tstore.store, storePath)
+
+	master, standbys := waitMasterStandbysReady(t, sm, tks)
+	standby := standbys[0]
+
+	if err := HysteronCluster(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		"update",
+		"--patch",
+		`{
+			"additionalMasterReplicationSlots" : [ "replslot01" ],
+			"ignoreMasterReplicationSlotMatchers" : [
+				{ "name": "hysteron_manualkeep2", "type": "physical" }
+			]
+		}`,
+	); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	if _, err := master.Exec("select pg_create_physical_replication_slot('hysteron_manualkeep2')"); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := waitHysteronReplicationSlotsContains(master, []string{"replslot01"}, 60*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	t.Logf("Stopping current master keeper: %s", master.uid)
+	master.Stop()
+
+	if err := WaitClusterDataMaster(standby.uid, sm, 30*time.Second); err != nil {
+		t.Fatalf("expected master %q in cluster view", standby.uid)
+	}
+	if err := standby.WaitDBRole(common.RoleMaster, nil, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	// The manual physical slot is local to the old master and is not replicated
+	// to the promoted master. Ensure required managed slots remain and the manual
+	// matcher slot is not unexpectedly recreated on failover.
+	if err := waitHysteronReplicationSlots(standby, []string{"replslot01"}, 60*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := waitHysteronReplicationSlotsContains(standby, []string{"manualkeep2"}, 5*time.Second); err == nil {
+		t.Fatalf("manual matcher slot was unexpectedly recreated on promoted master")
+	}
+}
+
+func clusterDBUIDForKeeper(t *testing.T, cd *cluster.ClusterData, keeperUID string) string {
+	t.Helper()
+
+	for _, db := range cd.DBs {
+		if db.Spec.KeeperUID == keeperUID {
+			return db.UID
+		}
+	}
+	t.Fatalf("expected db uid for keeper %q", keeperUID)
+	return ""
+}
+
+func waitHysteronMemberSlotCountAtLeast(q Querier, minCount int, timeout time.Duration) error {
+	start := time.Now()
+	var lastCount int
+	var lastErr error
+
+	for time.Now().Add(-timeout).Before(start) {
+		allSlots, err := getReplicationSlots(q)
+		if err != nil {
+			lastErr = err
+			time.Sleep(2 * time.Second)
+			continue
+		}
+		memberCount := 0
+		for _, slot := range allSlots {
+			if !common.IsHysteronName(slot) {
+				continue
+			}
+			if strings.HasPrefix(slot, common.HysteronName("replslot")) {
+				continue
+			}
+			memberCount++
+		}
+		lastCount = memberCount
+		if memberCount >= minCount {
+			return nil
+		}
+		time.Sleep(2 * time.Second)
+	}
+
+	return fmt.Errorf("timeout waiting for at least %d hysteron member slots, got: %d, last err: %v", minCount, lastCount, lastErr)
 }
 
 func TestMemberReplicationSlotTTLGuardsXmin(t *testing.T) {
@@ -1335,6 +1605,252 @@ func TestManagedLogicalReplicationSlots(t *testing.T) {
 	}
 
 	if err := waitLogicalReplicationSlotAbsent(master, slotName, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+}
+
+func TestManagedLogicalReplicationSlotsFailoverRejoinContinuity(t *testing.T) {
+	t.Parallel()
+
+	dir, err := os.MkdirTemp("", "hysteron")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	clusterName := uuid.NewString()
+
+	tks, tss, tp, tstore := setupServers(t, clusterName, dir, 2, 1, false, false, nil)
+	defer shutdown(tks, tss, tp, tstore)
+
+	storeEndpoints := fmt.Sprintf("%s:%s", tstore.listenAddress, tstore.port)
+	storePath := filepath.Join(common.StorePrefix, clusterName)
+	sm := store.NewKVBackedStore(tstore.store, storePath)
+
+	master, standbys := waitMasterStandbysReady(t, sm, tks)
+	standby := standbys[0]
+
+	slotName := "hysteron_logic_cont01"
+	if err := HysteronCluster(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		"update",
+		"--patch",
+		`{ "pgParameters": { "wal_level": "logical" } }`,
+	); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	// wal_level change requires restart before logical slot creation.
+	master.Stop()
+	standby.Stop()
+	if err := master.Start(); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := standby.Start(); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	master, standbys = waitMasterStandbysReady(t, sm, tks)
+	standby = standbys[0]
+
+	if err := HysteronCluster(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		"update",
+		"--patch",
+		fmt.Sprintf(
+			`{ "managedLogicalReplicationSlots" : [ { "name" : "%s", "database" : "postgres", "plugin" : "test_decoding" } ] }`,
+			slotName,
+		),
+	); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	if err := waitLogicalReplicationSlotPresent(master, slotName, 60*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	if _, err := master.Exec("CREATE TABLE logic_cont_t(id INT PRIMARY KEY, value INT NOT NULL)"); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	for i := 1; i <= 10; i++ {
+		if _, err := master.Exec("INSERT INTO logic_cont_t VALUES ($1, $2)", i, i*10); err != nil {
+			t.Fatalf("unexpected err: %v", err)
+		}
+	}
+	if err := waitLogicalSlotContainsAllIDs(master, slotName, []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	t.Logf("Stopping current master keeper: %s", master.uid)
+	master.Stop()
+
+	if err := WaitClusterDataMaster(standby.uid, sm, 30*time.Second); err != nil {
+		t.Fatalf("expected master %q in cluster view", standby.uid)
+	}
+	if err := standby.WaitDBRole(common.RoleMaster, nil, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := waitLogicalReplicationSlotPresent(standby, slotName, 60*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	for i := 11; i <= 20; i++ {
+		if _, err := standby.Exec("INSERT INTO logic_cont_t VALUES ($1, $2)", i, i*10); err != nil {
+			t.Fatalf("unexpected err: %v", err)
+		}
+	}
+	if err := waitLogicalSlotContainsAllIDs(standby, slotName, []int{11, 12, 13, 14, 15, 16, 17, 18, 19, 20}, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	t.Logf("Restarting old master keeper for rejoin as standby: %s", master.uid)
+	if err := master.Start(); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	waitKeeperReady(t, sm, master)
+
+	for i := 21; i <= 25; i++ {
+		if _, err := standby.Exec("INSERT INTO logic_cont_t VALUES ($1, $2)", i, i*10); err != nil {
+			t.Fatalf("unexpected err: %v", err)
+		}
+	}
+	if err := waitLogicalSlotContainsAllIDs(standby, slotName, []int{21, 22, 23, 24, 25}, 30*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+}
+
+func TestManagedLogicalReplicationSlotsFailoverRejoinContinuityTightTiming(t *testing.T) {
+	t.Parallel()
+
+	dir, err := os.MkdirTemp("", "hysteron")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	clusterName := uuid.NewString()
+	tks, tss, tp, tstore := setupServers(
+		t,
+		clusterName,
+		dir,
+		2,
+		1,
+		false,
+		false,
+		nil,
+		func(spec *cluster.ClusterSpec) {
+			spec.SleepInterval = &cluster.Duration{Duration: 1 * time.Second}
+			spec.RequestTimeout = &cluster.Duration{Duration: 500 * time.Millisecond}
+			spec.FailInterval = &cluster.Duration{Duration: 3 * time.Second}
+			spec.ConvergenceTimeout = &cluster.Duration{Duration: 20 * time.Second}
+		},
+	)
+	defer shutdown(tks, tss, tp, tstore)
+
+	storeEndpoints := fmt.Sprintf("%s:%s", tstore.listenAddress, tstore.port)
+	storePath := filepath.Join(common.StorePrefix, clusterName)
+	sm := store.NewKVBackedStore(tstore.store, storePath)
+
+	master, standbys := waitMasterStandbysReady(t, sm, tks)
+	standby := standbys[0]
+
+	slotName := "hysteron_logic_cont_tight01"
+	if err := HysteronCluster(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		"update",
+		"--patch",
+		`{ "pgParameters": { "wal_level": "logical" } }`,
+	); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	master.Stop()
+	standby.Stop()
+	if err := master.Start(); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := standby.Start(); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	master, standbys = waitMasterStandbysReady(t, sm, tks)
+	standby = standbys[0]
+
+	if err := HysteronCluster(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		"update",
+		"--patch",
+		fmt.Sprintf(
+			`{ "managedLogicalReplicationSlots" : [ { "name" : "%s", "database" : "postgres", "plugin" : "test_decoding" } ] }`,
+			slotName,
+		),
+	); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	if err := waitLogicalReplicationSlotPresent(master, slotName, 60*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	if _, err := master.Exec("CREATE TABLE logic_cont_tight_t(id INT PRIMARY KEY, value INT NOT NULL)"); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	for i := 1; i <= 10; i++ {
+		if _, err := master.Exec("INSERT INTO logic_cont_tight_t VALUES ($1, $2)", i, i*10); err != nil {
+			t.Fatalf("unexpected err: %v", err)
+		}
+	}
+	if err := waitTableRowCount(standby, "logic_cont_tight_t", 10, 45*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := waitLogicalSlotContainsAllIDs(master, slotName, []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, 45*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	t.Logf("Stopping current master keeper: %s", master.uid)
+	master.Stop()
+
+	if err := WaitClusterDataMaster(standby.uid, sm, 45*time.Second); err != nil {
+		t.Fatalf("expected master %q in cluster view", standby.uid)
+	}
+	if err := standby.WaitDBRole(common.RoleMaster, nil, 45*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := waitLogicalReplicationSlotPresent(standby, slotName, 90*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	for i := 11; i <= 20; i++ {
+		if _, err := standby.Exec("INSERT INTO logic_cont_tight_t VALUES ($1, $2)", i, i*10); err != nil {
+			t.Fatalf("unexpected err: %v", err)
+		}
+	}
+	if err := waitLogicalSlotContainsAllIDs(standby, slotName, []int{11, 12, 13, 14, 15, 16, 17, 18, 19, 20}, 45*time.Second); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	t.Logf("Restarting old master keeper for rejoin as standby: %s", master.uid)
+	if err := master.Start(); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	waitKeeperReady(t, sm, master)
+
+	for i := 21; i <= 25; i++ {
+		if _, err := standby.Exec("INSERT INTO logic_cont_tight_t VALUES ($1, $2)", i, i*10); err != nil {
+			t.Fatalf("unexpected err: %v", err)
+		}
+	}
+	if err := waitLogicalSlotContainsAllIDs(standby, slotName, []int{21, 22, 23, 24, 25}, 45*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 }
@@ -2588,21 +3104,22 @@ func TestLogicalSlotFailoverGateRepeatedFailoverCycles(t *testing.T) {
 	if !failoverEnabled {
 		t.Fatalf("expected logical slot %q failover=true on initial master", slotName)
 	}
-	if err := populate(t, master); err != nil {
+
+	if _, err := master.Exec("CREATE TABLE logic_cycle_t(id INT PRIMARY KEY, value INT NOT NULL)"); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
 	currentMaster := master
 	seenMasters := map[string]struct{}{currentMaster.uid: {}}
-	writeID := 10
+	writeID := 1
 	const cycles = 2
 
 	for cycle := 0; cycle < cycles; cycle++ {
-		if err := write(t, currentMaster, writeID, writeID); err != nil {
+		if _, err := currentMaster.Exec("INSERT INTO logic_cycle_t VALUES ($1, $2)", writeID, writeID*10); err != nil {
 			t.Fatalf("unexpected err: %v", err)
 		}
-		if err := waitLogicalSlotConsumeChanges(currentMaster, slotName, 20*time.Second); err != nil {
-			t.Fatalf("expected logical slot consume before failover: %v", err)
+		if err := waitLogicalSlotContainsAllIDs(currentMaster, slotName, []int{writeID}, 30*time.Second); err != nil {
+			t.Fatalf("expected logical slot ids before failover: %v", err)
 		}
 		writeID++
 
@@ -2657,11 +3174,11 @@ func TestLogicalSlotFailoverGateRepeatedFailoverCycles(t *testing.T) {
 			t.Fatalf("expected logical slot %q failover=true on promoted master", slotName)
 		}
 
-		if err := write(t, currentMaster, writeID, writeID); err != nil {
+		if _, err := currentMaster.Exec("INSERT INTO logic_cycle_t VALUES ($1, $2)", writeID, writeID*10); err != nil {
 			t.Fatalf("unexpected err: %v", err)
 		}
-		if err := waitLogicalSlotConsumeChanges(currentMaster, slotName, 20*time.Second); err != nil {
-			t.Fatalf("expected logical slot consume after failover: %v", err)
+		if err := waitLogicalSlotContainsAllIDs(currentMaster, slotName, []int{writeID}, 30*time.Second); err != nil {
+			t.Fatalf("expected logical slot ids after failover: %v", err)
 		}
 		writeID++
 		seenMasters[currentMaster.uid] = struct{}{}

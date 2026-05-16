@@ -42,4 +42,4 @@ ENV INTEGRATION_STORE_BACKEND=etcdv3
 WORKDIR /workspace
 
 ENTRYPOINT ["make"]
-CMD ["integration"]
+CMD ["-C", "tests", "integration-container"]

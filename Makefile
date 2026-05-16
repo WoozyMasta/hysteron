@@ -64,15 +64,36 @@ LDFLAGS_X := \
 	-X '$(LDFLAGS_PKG).Date=$(DATE)' \
 	-X '$(LDFLAGS_PKG).URL=$(URL)'
 
-.PHONY: all build generate cli-docs release clean check ci verify tidy tidy-check download fmt \
-	fmt-check vet lint lint-fix align align-fix test test-race test-short bench \
-	bench-fast bench-reset integration integration-compose integration-matrix integration-matrix-ci vulncheck tools tools-ci tool-golangci-lint \
-	tool-betteralign tool-benchstat tool-vulncheck tool-mockgen container-build
+.PHONY: \
+	all clean \
+	build generate cli-docs \
+	release release-notes container-build
+
+.PHONY: \
+	check ci verify tidy tidy-check download \
+	fmt fmt-check vet lint lint-fix align align-fix	vulncheck
+
+.PHONY: \
+	test test-race test-short \
+	bench bench-fast bench-reset
+
+.PHONY: \
+	integration integration-compose integration-matrix \
+	integration-matrix-ci integration-container \
+	integration-check-matrix \
+	integration-profile-run integration-profile-list \
+	integration-baseline-inventory integration-profile-counts \
+	integration-profile-fast-matrix integration-profile-storage-ha-matrix integration-profile-logical-slots-matrix integration-profile-merge-gate-matrix integration-profile-merge-matrix integration-runtime-summary \
+	integration-report-index integration-clean-artifacts
+
+.PHONY: \
+	tools tools-ci \
+	tool-golangci-lint tool-betteralign tool-benchstat tool-govulncheck tool-mockgen
 
 all: build
 
-check: verify vulncheck tidy fmt vet lint-fix align-fix test
-ci: download tools-ci verify vulncheck tidy-check fmt-check vet lint align test
+check: verify vulncheck tidy fmt vet lint-fix align-fix integration-check-matrix test
+ci: download tools-ci verify vulncheck tidy-check fmt-check vet lint align integration-check-matrix test
 
 clean:
 	rm -rf $(OUTPUT_DIR)
@@ -109,6 +130,9 @@ release: clean
 		$(GO) build $(GOFLAGS) -ldflags="$(LDFLAGS) $(LDFLAGS_X)" \
 			-tags "$(GOFTAGS)" -o "$$out" "$(PKG)"; \
 	done
+
+generate:
+	$(GO) generate ./...
 
 verify:
 	$(GO) mod verify
@@ -182,66 +206,61 @@ bench-reset:
 	rm -f "$(BENCH_REF)"
 
 integration: build
-	@mkdir -p "$(INTEGRATION_ARTIFACTS_DIR)"
-	@log_file="$(INTEGRATION_ARTIFACTS_DIR)/integration-$(INTEGRATION_TIMESTAMP).log"; \
-	echo ">> writing integration log to $$log_file"; \
-	HYSTERON_TEST_STORE_BACKEND="$(INTEGRATION_STORE_BACKEND)" \
-	HYSTERON_INTEGRATION_MAX_STORES="$(INTEGRATION_MAX_STORES)" \
-	ETCD_BIN="$(ETCD_BIN)" \
-	HYSTERON_BIN="$(OUTPUT_ABS_DIR)/$(BINARY)$(NATIVE_EXTENSION)" \
-	$(GO) test -tags "$(INTEGRATION_TAGS)" -timeout "$(INTEGRATION_TIMEOUT)" \
-		-parallel "$(INTEGRATION_PARALLEL)" $(INTEGRATION_RUN_ARG) \
-		$(INTEGRATION_TEST_ARGS) \
-		-v -count 1 ./tests/integration > "$$log_file" 2>&1; \
-	status=$$?; cat "$$log_file"; exit $$status
+	@$(MAKE) -C tests integration-local
 
 integration-compose:
-	@mkdir -p "$(INTEGRATION_ARTIFACTS_DIR)"
-	@log_file="$(INTEGRATION_ARTIFACTS_DIR)/integration-compose-pg$(PG_MAJOR)-$(INTEGRATION_TIMESTAMP).log"; \
-	echo ">> writing integration compose log to $$log_file"; \
-	PG_MAJOR="$(PG_MAJOR)" $(CRI) compose -f tests/integration/compose.yml \
-		build integration > "$$log_file" 2>&1; \
-	status=$$?; \
-	if [ $$status -eq 0 ]; then \
-		PG_MAJOR="$(PG_MAJOR)" $(CRI) compose -f tests/integration/compose.yml \
-			run --rm integration >> "$$log_file" 2>&1; \
-		status=$$?; \
-	fi; \
-	cat "$$log_file"; exit $$status
+	@$(MAKE) -C tests integration CRI="$(CRI)" PG_MAJOR="$(PG_MAJOR)"
 
 integration-matrix:
-	@mkdir -p "$(INTEGRATION_ARTIFACTS_DIR)"
-	@for pg in $(PG_MATRIX); do \
-		echo ">> running integration compose matrix for PostgreSQL $$pg"; \
-		log_file="$(INTEGRATION_ARTIFACTS_DIR)/integration-compose-pg$${pg}-$(INTEGRATION_TIMESTAMP).log"; \
-		echo ">> writing integration compose log to $$log_file"; \
-		PG_MAJOR="$$pg" $(CRI) compose -f tests/integration/compose.yml \
-			build integration > "$$log_file" 2>&1; \
-		status=$$?; \
-		if [ $$status -eq 0 ]; then \
-			PG_MAJOR="$$pg" $(CRI) compose -f tests/integration/compose.yml \
-				run --rm integration >> "$$log_file" 2>&1; \
-			status=$$?; \
-		fi; \
-		cat "$$log_file"; if [ $$status -ne 0 ]; then exit $$status; fi; \
-	done
+	@$(MAKE) -C tests integration-matrix CRI="$(CRI)" PG_MATRIX="$(PG_MATRIX)"
 
 integration-matrix-ci:
-	@mkdir -p "$(INTEGRATION_ARTIFACTS_DIR)"
-	@for pg in $(PG_MATRIX_CI); do \
-		echo ">> running reduced integration compose matrix for PostgreSQL $$pg"; \
-		log_file="$(INTEGRATION_ARTIFACTS_DIR)/integration-compose-pg$${pg}-$(INTEGRATION_TIMESTAMP).log"; \
-		echo ">> writing integration compose log to $$log_file"; \
-		PG_MAJOR="$$pg" $(CRI) compose -f tests/integration/compose.yml \
-			build integration > "$$log_file" 2>&1; \
-		status=$$?; \
-		if [ $$status -eq 0 ]; then \
-			PG_MAJOR="$$pg" $(CRI) compose -f tests/integration/compose.yml \
-				run --rm integration >> "$$log_file" 2>&1; \
-			status=$$?; \
-		fi; \
-		cat "$$log_file"; if [ $$status -ne 0 ]; then exit $$status; fi; \
-	done
+	@$(MAKE) -C tests integration-matrix-ci CRI="$(CRI)" PG_MATRIX_CI="$(PG_MATRIX_CI)"
+
+integration-container:
+	@$(MAKE) -C tests integration-container
+
+integration-check-matrix:
+	@$(MAKE) -C tests integration-check-matrix
+
+integration-profile-run:
+	@$(MAKE) -C tests integration-profile-run PROFILE="$(PROFILE)" PG_MAJOR="$(PG_MAJOR)"
+
+integration-profile-list:
+	@$(MAKE) -C tests integration-profile-list PROFILE="$(PROFILE)"
+
+integration-profile-%:
+	@$(MAKE) -C tests integration-profile-run PROFILE="$*" PG_MAJOR="$(PG_MAJOR)"
+
+integration-baseline-inventory:
+	@$(MAKE) -C tests integration-baseline-inventory
+
+integration-profile-counts:
+	@$(MAKE) -C tests integration-profile-counts
+
+integration-profile-fast-matrix:
+	@$(MAKE) -C tests integration-profile-fast-matrix
+
+integration-profile-storage-ha-matrix:
+	@$(MAKE) -C tests integration-profile-storage-ha-matrix
+
+integration-profile-logical-slots-matrix:
+	@$(MAKE) -C tests integration-profile-logical-slots-matrix
+
+integration-profile-merge-gate-matrix:
+	@$(MAKE) -C tests integration-profile-merge-gate-matrix
+
+integration-profile-merge-matrix:
+	@$(MAKE) -C tests integration-profile-merge-matrix
+
+integration-runtime-summary:
+	@$(MAKE) -C tests integration-runtime-summary
+
+integration-report-index:
+	@$(MAKE) -C tests integration-report-index INTEGRATION_ARTIFACTS_DIR="../$(INTEGRATION_ARTIFACTS_DIR)"
+
+integration-clean-artifacts:
+	@$(MAKE) -C tests integration-clean-artifacts INTEGRATION_ARTIFACTS_DIR="../$(INTEGRATION_ARTIFACTS_DIR)"
 
 tools: tool-golangci-lint tool-betteralign tool-benchstat tool-govulncheck tool-mockgen
 tools-ci: tool-golangci-lint tool-betteralign tool-govulncheck tool-mockgen
@@ -286,6 +305,3 @@ container-build:
 	if [ -z "$${TAG}" ]; then echo 'TAG is undefined'; exit 1; fi; \
 	$(CRI) build --build-arg PGVERSION=$${PGVERSION} -t $${TAG} \
 		-f examples/kubernetes/image/docker/Dockerfile .
-
-generate:
-	$(GO) generate ./...

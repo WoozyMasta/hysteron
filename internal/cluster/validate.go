@@ -178,6 +178,11 @@ func (c *ClusterSpec) Validate() error {
 			return errors.New("pgHBA entries cannot contain newline characters")
 		}
 	}
+	for _, entry := range s.PGIdent {
+		if strings.Contains(entry, "\n") {
+			return errors.New("pgIdent entries cannot contain newline characters")
+		}
+	}
 
 	switch *s.InitMode {
 	case ClusterInitModeNew:

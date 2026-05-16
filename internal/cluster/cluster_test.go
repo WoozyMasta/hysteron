@@ -455,6 +455,11 @@ func TestClusterSpecValidate(t *testing.T) {
 			wantErr: "pgHBA entries cannot contain newline characters",
 		},
 		{
+			name:    "pg ident entries cannot contain newline characters",
+			spec:    &ClusterSpec{InitMode: &newMode, PGIdent: []string{"mymap postgres root\n"}},
+			wantErr: "pgIdent entries cannot contain newline characters",
+		},
+		{
 			name:    "new init cannot request standby role",
 			spec:    &ClusterSpec{InitMode: &newMode, Role: &standbyRole},
 			wantErr: `invalid cluster role standby when initMode is "new"`,

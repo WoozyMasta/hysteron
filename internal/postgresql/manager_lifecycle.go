@@ -225,6 +225,9 @@ func (p *Manager) start(args ...string) error {
 	if err := p.UpdateCurHba(); err != nil {
 		return err
 	}
+	if err := p.UpdateCurIdent(); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -299,6 +302,9 @@ func (p *Manager) Reload() error {
 	}
 	p.UpdateCurRecoveryOptions()
 	if err := p.UpdateCurHba(); err != nil {
+		return err
+	}
+	if err := p.UpdateCurIdent(); err != nil {
 		return err
 	}
 

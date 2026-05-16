@@ -32,6 +32,9 @@ func (p *Manager) writeConfs(useTmpPostgresConf bool) error {
 	if err := p.writePgHba(); err != nil {
 		return fmt.Errorf("error writing pg_hba.conf file: %v", err)
 	}
+	if err := p.writePgIdent(); err != nil {
+		return fmt.Errorf("error writing pg_ident.conf file: %v", err)
+	}
 	if err := p.writeStandbySignal(); err != nil {
 		return fmt.Errorf("error writing %s file: %v", postgresStandbySignal, err)
 	}
@@ -116,6 +119,20 @@ func (p *Manager) writePgHba() error {
 		func(writer io.Writer) error {
 			if p.hba != nil {
 				for _, entry := range p.hba {
+					if _, err := writer.Write([]byte(entry + "\n")); err != nil {
+						return err
+					}
+				}
+			}
+			return nil
+		})
+}
+
+func (p *Manager) writePgIdent() error {
+	return fs.WriteFileAtomicFunc(filepath.Join(p.dataDir, "pg_ident.conf"), 0600,
+		func(writer io.Writer) error {
+			if p.ident != nil {
+				for _, entry := range p.ident {
 					if _, err := writer.Write([]byte(entry + "\n")); err != nil {
 						return err
 					}

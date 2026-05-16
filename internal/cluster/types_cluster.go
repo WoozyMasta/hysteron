@@ -150,6 +150,9 @@ type ClusterSpec struct { //nolint:revive
 	// Additional pg_hba.conf entries
 	// we don't set omitempty since we want to distinguish between null or empty slice
 	PGHBA []string `json:"pgHBA"`
+	// Additional pg_ident.conf entries.
+	// We don't set omitempty since we want to distinguish between null or empty slice.
+	PGIdent []string `json:"pgIdent"`
 	// EnableLogicalSlotFailover enables experimental logical slot failover
 	// semantics. Disabled by default and currently reserved for controlled
 	// rollouts.

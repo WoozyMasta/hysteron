@@ -55,6 +55,7 @@ func (s *Sentinel) setDBSpecFromClusterSpec(cd *cluster.ClusterData) {
 		}
 		db.Spec.PGParameters = clusterSpec.PGParameters
 		db.Spec.PGHBA = clusterSpec.PGHBA
+		db.Spec.PGIdent = clusterSpec.PGIdent
 		db.Spec.BeforeStopCommand = clusterSpec.BeforeStopCommand
 		db.Spec.PrePromoteCommand = clusterSpec.PrePromoteCommand
 		db.Spec.EnableLogicalSlotFailover = clusterSpec.EnableLogicalSlotFailover

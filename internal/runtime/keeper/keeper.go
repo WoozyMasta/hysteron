@@ -155,6 +155,7 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 
 	// Generate hba auth from clusterData
 	pgManager.SetHba(p.generateHBA(cd, db, p.waitSyncStandbysSynced))
+	pgManager.SetIdent(db.Spec.PGIdent)
 
 	p.baseLog().Debug().
 		Str(log.FieldDBUID, db.UID).
@@ -1081,6 +1082,14 @@ func (p *PostgresKeeper) postgresKeeperSM(pctx context.Context) {
 	} else {
 		// for tests
 		p.baseLog().Debug().Msg("pg_hba not changed")
+	}
+
+	if !reflect.DeepEqual(db.Spec.PGIdent, pgManager.CurIdent()) {
+		p.baseLog().Info().Msg("pg_ident changed, reloading postgres instance")
+		pgManager.SetIdent(db.Spec.PGIdent)
+		needsReload = true
+	} else {
+		p.baseLog().Debug().Msg("pg_ident not changed")
 	}
 
 	if needsReload {

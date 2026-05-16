@@ -95,8 +95,12 @@ type Manager struct {
 	tablespaceDirRoots []string
 	// Desired pg_hba entries.
 	hba []string
+	// Desired pg_ident entries.
+	ident []string
 	// Last applied pg_hba entries.
 	curHba []string
+	// Last applied pg_ident entries.
+	curIdent []string
 	// Request timeout for PostgreSQL operations.
 	requestTimeout time.Duration
 	// Guards request timeout updates/read across concurrent keeper loops.

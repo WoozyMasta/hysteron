@@ -129,6 +129,9 @@ type DBSpec struct {
 	// Additional pg_hba.conf entries
 	// We don't set omitempty since we want to distinguish between null or empty slice
 	PGHBA []string `json:"pgHBA"`
+	// Additional pg_ident.conf entries.
+	// We don't set omitempty since we want to distinguish between null or empty slice.
+	PGIdent []string `json:"pgIdent"`
 	// Followers DB UIDs
 	Followers []string `json:"followers"`
 	// SynchronousStandbys are the standbys to be configured as synchronous

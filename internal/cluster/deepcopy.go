@@ -84,6 +84,7 @@ func (c *ClusterSpec) DeepCopy() *ClusterSpec {
 	nc.IgnoreMasterReplicationSlotMatchers = slices.Clone(c.IgnoreMasterReplicationSlotMatchers)
 	nc.ManagedLogicalReplicationSlots = slices.Clone(c.ManagedLogicalReplicationSlots)
 	nc.PGHBA = slices.Clone(c.PGHBA)
+	nc.PGIdent = slices.Clone(c.PGIdent)
 	return &nc
 }
 
@@ -310,6 +311,7 @@ func copyDBSpec(s *DBSpec) *DBSpec {
 	ns.IgnoreReplicationSlotMatchers = slices.Clone(s.IgnoreReplicationSlotMatchers)
 	ns.ManagedLogicalReplicationSlots = slices.Clone(s.ManagedLogicalReplicationSlots)
 	ns.PGHBA = slices.Clone(s.PGHBA)
+	ns.PGIdent = slices.Clone(s.PGIdent)
 	ns.Followers = slices.Clone(s.Followers)
 	ns.SynchronousStandbys = slices.Clone(s.SynchronousStandbys)
 	ns.ExternalSynchronousStandbys = slices.Clone(s.ExternalSynchronousStandbys)

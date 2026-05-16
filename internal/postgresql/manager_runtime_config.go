@@ -57,6 +57,16 @@ func (p *Manager) CurHba() []string {
 	return p.curHba
 }
 
+// SetIdent sets desired pg_ident entries.
+func (p *Manager) SetIdent(ident []string) {
+	p.ident = ident
+}
+
+// CurIdent returns the current tracked pg_ident entries.
+func (p *Manager) CurIdent() []string {
+	return p.curIdent
+}
+
 // SetRequestTimeout updates timeout used by PostgreSQL operations.
 func (p *Manager) SetRequestTimeout(timeout time.Duration) {
 	p.requestTimeoutMu.Lock()
@@ -96,5 +106,16 @@ func (p *Manager) UpdateCurHba() error {
 	}
 
 	p.curHba = append([]string(nil), p.hba...)
+	return nil
+}
+
+// UpdateCurIdent snapshots desired pg_ident entries.
+func (p *Manager) UpdateCurIdent() error {
+	if p.ident == nil {
+		p.curIdent = nil
+		return nil
+	}
+
+	p.curIdent = append([]string(nil), p.ident...)
 	return nil
 }

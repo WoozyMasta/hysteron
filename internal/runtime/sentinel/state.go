@@ -121,7 +121,11 @@ func (s *Sentinel) updateKeepersStatus(
 
 	// Update keepers' healthy states
 	forceFailedKeeperUIDs := make(map[string]struct{})
+	if s.keeperHealthySince == nil {
+		s.keeperHealthySince = make(map[string]time.Time)
+	}
 	for _, k := range cd.Keepers {
+		wasHealthy := k.Status.Healthy
 		healthy := s.isKeeperHealthy(cd, k)
 		if k.Status.ForceFail {
 			healthy = false
@@ -138,6 +142,16 @@ func (s *Sentinel) updateKeepersStatus(
 			k.Status.LastHealthyTime = time.Now()
 		}
 		k.Status.Healthy = healthy
+		switch {
+		case healthy && !wasHealthy:
+			s.keeperHealthySince[k.UID] = time.Now()
+		case healthy && wasHealthy:
+			if _, ok := s.keeperHealthySince[k.UID]; !ok {
+				s.keeperHealthySince[k.UID] = time.Now()
+			}
+		default:
+			delete(s.keeperHealthySince, k.UID)
+		}
 	}
 	s.forceFailedKeeperUIDs = forceFailedKeeperUIDs
 

@@ -161,18 +161,19 @@
 
   function renderKeepers(rows) {
     if (!rows || rows.length === 0) {
-      return '<tr><td colspan="7">no keeper rows</td></tr>';
+      return '<tr><td colspan="8">no keeper rows</td></tr>';
     }
     return rows.map(function (row) {
       return "<tr>" +
         "<td>" + detailToggle("keeper", row.uid, row) + " " + mono(row.uid) + "</td>" +
         "<td>" + boolBadge(row.healthy) + "</td>" +
         "<td>" + boolBadge(row.pg_healthy) + "</td>" +
+        "<td>" + mono(row.sync_role || "-") + "</td>" +
         "<td>" + boolBadge(row.can_be_master) + "</td>" +
         "<td>" + boolBadge(row.can_be_synchronous_replica) + "</td>" +
         "<td>" + mono(row.master_priority) + "</td>" +
         "<td>" + mono(row.listen_address) + "</td>" +
-        "</tr>" + detailRow(7);
+        "</tr>" + detailRow(8);
     }).join("");
   }
 
@@ -266,6 +267,7 @@
         '<th title="Keeper unique identifier">Keeper UID</th>' +
         '<th title="Keeper health status reported to DCS">Healthy</th>' +
         '<th title="PostgreSQL health for keeper\'s assigned database">PG Healthy</th>' +
+        '<th title="Replication sync role for keeper DB relative to current master">Sync Role</th>' +
         '<th title="Keeper is eligible to become writable primary">Can Be Master</th>' +
         '<th title="Keeper is eligible for synchronous standby selection">Can Be Sync Replica</th>' +
         '<th title="Keeper priority used as tie-breaker for master election candidates">Master Priority</th>' +

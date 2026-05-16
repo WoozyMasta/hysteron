@@ -28,6 +28,9 @@ Some options in a running cluster specification can be changed to update the des
 | maxStandbysPerSender             | max number of standbys for every sender. A sender can be a master or another standby (with cascading replication).                                                                                                                                                                                                                                                                                                                                                                | no                        | uint16            | 3                                                                                                                                   |
 | maxStandbyLag                    | maximum lag (from the last reported master state, in bytes) that an asynchronous standby can have to be elected in place of a failed master.                                                                                                                                                                                                                                                                                                                                      | no                        | uint32            | 1MiB                                                                                                                                |
 | synchronousReplication           | use synchronous replication between the master and its standbys                                                                                                                                                                                                                                                                                                                                                                                                                   | no                        | bool              | false                                                                                                                               |
+| unsafeAutoFailback               | **unsafe opt-in** automatic switchback to a higher-priority keeper when it becomes eligible again. This can cause flapping on unstable nodes and is disabled by default.                                                                                                                                                                                                                                                                                                          | no                        | bool              | false                                                                                                                               |
+| autoFailbackMinUptime            | minimum continuous healthy time required for a recovered keeper before unsafe auto-failback may switch master to it.                                                                                                                                                                                                                                                                                                                                                               | no                        | string (duration) | 60s                                                                                                                                 |
+| autoFailbackCooldown             | minimum time between two unsafe auto-failback switches. Used to reduce repeated switch oscillations.                                                                                                                                                                                                                                                                                                                                                                               | no                        | string (duration) | 5m                                                                                                                                  |
 | minSynchronousStandbys           | minimum number of required synchronous standbys when synchronous replication is enabled (only set this to a value != 1 when using PostgreSQL >= 9.6). Notice that you are also allowed to set it to 0, in which case the primary will keep accepting commits even when there is no healthy sync standby. Setting `minSynchronousStandbys` to 0 is not generally advised - please see [syncrepl.md](syncrepl.md)                                                                                                                                                                 | no                        | uint16            | 1                                                                                                                                   |
 | maxSynchronousStandbys           | maximum number of required synchronous standbys when synchronous replication is enabled (only set this to a value > 1 when using PostgreSQL >= 9.6)                                                                                                                                                                                                                                                                                                                               | no                        | uint16            | 1                                                                                                                                   |
 | additionalWalSenders             | number of additional wal_senders in addition to the ones internally defined by hysteron, useful to provide enough wal senders for external standbys (changing this value requires an instance restart)                                                                                                                                                                                                                                                                              | no                        | uint16            | 5                                                                                                                                   |
@@ -114,6 +117,31 @@ Practical behavior:
   keep the slot while waiting for consistent orphan tracking state.
 * In degraded/outage scenarios this policy intentionally prefers safety over
   aggressive slot removal.
+
+### Unsafe Auto-Failback Notes
+
+`unsafeAutoFailback` is intentionally dangerous and must be treated as an
+operator convenience mode, not as a general HA default.
+
+Practical behavior:
+
+* Normal failover safety filters remain authoritative first. Auto-failback
+  chooses only from already eligible failover candidates.
+* Keeper priority is used as a tie-break/ranking signal; switchback is
+  considered only when a candidate has strictly higher priority than current
+  master.
+* `autoFailbackMinUptime` requires the target keeper to stay healthy
+  continuously for the configured window.
+* `autoFailbackCooldown` enforces minimum time between consecutive
+  auto-failback switches.
+
+Recommended defaults:
+
+* Keep `unsafeAutoFailback` disabled unless you explicitly need automatic
+  preference restoration.
+* If enabled, start with conservative windows (for example
+  `autoFailbackMinUptime: "5m"` and `autoFailbackCooldown: "15m"`), then tune
+  only after observing real cluster behavior.
 
 #### ArchiveRecoverySettings
 

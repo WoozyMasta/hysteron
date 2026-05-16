@@ -31,6 +31,8 @@ func (s *Sentinel) runLeadershipSanitySweep(cd *cluster.ClusterData) {
 	s.dbErrorTimers = make(map[string]time.Time)
 	s.dbNotIncreasingXLogPos = make(map[string]int64)
 	s.dbIncreasingXLogPosObservedAt = make(map[string]time.Time)
+	s.keeperHealthySince = make(map[string]time.Time)
+	s.autoFailbackLastSwitchAt = time.Time{}
 	s.keeperInfoHistories = make(KeeperInfoHistories)
 	s.dbConvergenceInfos = make(map[string]*DBConvergenceInfo)
 	s.leaderRaceBackoffTimers = make(map[string]time.Time)

@@ -94,6 +94,7 @@ func writeStatusTable(w io.Writer, status app.Status) error {
 		"UID",
 		"DB UID",
 		"Role",
+		"Sync Role",
 		"PG Version",
 		"Master Priority",
 		"Healthy",
@@ -109,6 +110,7 @@ func writeStatusTable(w io.Writer, status app.Status) error {
 			keeper.UID,
 			valueOrDash(keeper.DBUID),
 			valueOrDash(keeper.Role),
+			valueOrDash(keeper.SyncRole),
 			valueOrDash(keeper.PGVersion),
 			keeper.MasterPriority,
 			keeper.Healthy,
@@ -121,7 +123,7 @@ func writeStatusTable(w io.Writer, status app.Status) error {
 		})
 	}
 	keeperTable.AppendFooter(table.Row{
-		"Rows", "", "", "", "", "", "", "", "", "", "", len(status.Keepers),
+		"Rows", "", "", "", "", "", "", "", "", "", "", "", len(status.Keepers),
 	})
 	keeperTable.Render()
 

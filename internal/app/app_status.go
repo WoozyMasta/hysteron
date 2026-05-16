@@ -105,6 +105,7 @@ func makeKeeperStatus(cd *cluster.ClusterData) []KeeperStatus {
 			Healthy:        keeper.Status.Healthy,
 			DBUID:          "-",
 			Role:           "-",
+			SyncRole:       "-",
 			PGVersion:      "-",
 			MasterPriority: keeper.Status.MasterPriority,
 			ListenAddress:  "(no db assigned)",
@@ -128,6 +129,7 @@ func makeKeeperStatus(cd *cluster.ClusterData) []KeeperStatus {
 		if db != nil {
 			keeperStatus.DBUID = db.UID
 			keeperStatus.Role = string(db.Spec.Role)
+			keeperStatus.SyncRole = syncRoleForDB(cd, db.UID)
 			keeperStatus.PgHealthy = db.Status.Healthy
 			keeperStatus.PgWantedGeneration = db.Generation
 			keeperStatus.PgCurrentGeneration = db.Status.CurrentGeneration
@@ -142,6 +144,27 @@ func makeKeeperStatus(cd *cluster.ClusterData) []KeeperStatus {
 	}
 
 	return status
+}
+
+func syncRoleForDB(cd *cluster.ClusterData, dbUID string) string {
+	if cd == nil || cd.Cluster == nil {
+		return "-"
+	}
+	masterUID := cd.Cluster.Status.Master
+	if masterUID == "" {
+		return "-"
+	}
+	if dbUID == masterUID {
+		return "master"
+	}
+	masterDB := cd.DBs[masterUID]
+	if masterDB == nil {
+		return "-"
+	}
+	if slices.Contains(masterDB.Status.SynchronousStandbys, dbUID) {
+		return "sync"
+	}
+	return "async"
 }
 
 // makeClusterStatus summarizes cluster-level state for status output.

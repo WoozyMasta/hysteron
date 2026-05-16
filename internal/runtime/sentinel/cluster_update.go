@@ -356,6 +356,20 @@ func (s *Sentinel) updateCluster(cd *cluster.ClusterData, pis cluster.ProxiesInf
 			}
 		} else {
 			delete(s.leaderRaceBackoffTimers, curMasterDBUID)
+			if !manualSwitchApplied && masterOK {
+				if autoTarget := s.chooseAutoFailbackTarget(newcd, curMasterDB); autoTarget != nil {
+					s.log.Warn().
+						Str(slog.FieldDBUID, curMasterDB.UID).
+						Str(slog.FieldKeeperUID, curMasterDB.Spec.KeeperUID).
+						Int("current_master_priority", keeperMasterPriority(newcd, curMasterDB)).
+						Str("target_db_uid", autoTarget.UID).
+						Str("target_keeper_uid", autoTarget.Spec.KeeperUID).
+						Int("target_keeper_priority", keeperMasterPriority(newcd, autoTarget)).
+						Msg("unsafe auto-failback elected a higher-priority master")
+					wantedMasterDBUID = autoTarget.UID
+					s.autoFailbackLastSwitchAt = time.Now().UTC()
+				}
+			}
 		}
 
 		// New master elected

@@ -83,6 +83,15 @@ func (c *ClusterSpec) WithDefaults() *ClusterSpec {
 	if s.SynchronousReplication == nil {
 		s.SynchronousReplication = new(DefaultSynchronousReplication)
 	}
+	if s.UnsafeAutoFailback == nil {
+		s.UnsafeAutoFailback = new(DefaultUnsafeAutoFailback)
+	}
+	if s.AutoFailbackMinUptime == nil {
+		s.AutoFailbackMinUptime = &Duration{Duration: DefaultAutoFailbackMinUptime}
+	}
+	if s.AutoFailbackCooldown == nil {
+		s.AutoFailbackCooldown = &Duration{Duration: DefaultAutoFailbackCooldown}
+	}
 	if s.UsePgrewind == nil {
 		s.UsePgrewind = new(DefaultUsePgrewind)
 	}

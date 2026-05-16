@@ -49,6 +49,12 @@ func (c *ClusterSpec) Validate() error {
 	if s.FailInterval.Duration < 0 {
 		return errors.New("failInterval must be positive")
 	}
+	if s.AutoFailbackMinUptime.Duration < 0 {
+		return errors.New("autoFailbackMinUptime must be positive")
+	}
+	if s.AutoFailbackCooldown.Duration < 0 {
+		return errors.New("autoFailbackCooldown must be positive")
+	}
 	if s.FailsafeProbeInterval.Duration < 0 {
 		return errors.New("failsafeProbeInterval must be positive")
 	}

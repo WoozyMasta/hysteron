@@ -452,3 +452,136 @@ func TestFindBestNewMasters_PriorityTieBreakOnEqualXLogPos(t *testing.T) {
 		t.Fatalf("expected highest-priority equal-xlog candidate first, got %q", candidates[0].UID)
 	}
 }
+
+func TestChooseAutoFailbackTarget_Guardrails(t *testing.T) {
+	s := &Sentinel{
+		dbConvergenceInfos: map[string]*DBConvergenceInfo{},
+		keeperHealthySince: map[string]time.Time{},
+	}
+
+	now := time.Now().UTC()
+	cd := &cluster.ClusterData{
+		Cluster: &cluster.Cluster{
+			UID: "cluster1",
+			Spec: &cluster.ClusterSpec{
+				UnsafeAutoFailback:     cluster.BoolP(true),
+				AutoFailbackMinUptime:  &cluster.Duration{Duration: time.Minute},
+				AutoFailbackCooldown:   &cluster.Duration{Duration: time.Minute},
+				SynchronousReplication: cluster.BoolP(false),
+				MaxStandbyLag:          cluster.Uint32P(cluster.DefaultMaxStandbyLag),
+			},
+			Status: cluster.ClusterStatus{Master: "db1"},
+		},
+		Keepers: cluster.Keepers{
+			"keeper1": {UID: "keeper1", Status: cluster.KeeperStatus{Healthy: true, MasterPriority: 100}},
+			"keeper2": {UID: "keeper2", Status: cluster.KeeperStatus{Healthy: true, MasterPriority: 200}},
+		},
+		DBs: cluster.DBs{
+			"db1": {
+				UID:        "db1",
+				Generation: 1,
+				Spec: &cluster.DBSpec{
+					KeeperUID: "keeper1",
+					Role:      common.RoleMaster,
+				},
+				Status: cluster.DBStatus{Healthy: true, CurrentGeneration: 1, TimelineID: 1, XLogPos: 500},
+			},
+			"db2": {
+				UID:        "db2",
+				Generation: 1,
+				Spec: &cluster.DBSpec{
+					KeeperUID: "keeper2",
+					Role:      common.RoleStandby,
+					FollowConfig: &cluster.FollowConfig{
+						Type:  cluster.FollowTypeInternal,
+						DBUID: "db1",
+					},
+				},
+				Status: cluster.DBStatus{Healthy: true, CurrentGeneration: 1, TimelineID: 1, XLogPos: 500},
+			},
+		},
+	}
+
+	s.keeperHealthySince["keeper2"] = now.Add(-30 * time.Second)
+	if target := s.chooseAutoFailbackTarget(cd, cd.DBs["db1"]); target != nil {
+		t.Fatalf("expected no target before min uptime, got %q", target.UID)
+	}
+
+	s.keeperHealthySince["keeper2"] = now.Add(-2 * time.Minute)
+	s.autoFailbackLastSwitchAt = now.Add(-30 * time.Second)
+	if target := s.chooseAutoFailbackTarget(cd, cd.DBs["db1"]); target != nil {
+		t.Fatalf("expected no target during cooldown, got %q", target.UID)
+	}
+
+	s.autoFailbackLastSwitchAt = now.Add(-2 * time.Minute)
+	target := s.chooseAutoFailbackTarget(cd, cd.DBs["db1"])
+	if target == nil || target.UID != "db2" {
+		t.Fatalf("expected db2 as auto-failback target, got %#v", target)
+	}
+}
+
+func TestUpdateCluster_AppliesUnsafeAutoFailback(t *testing.T) {
+	s := &Sentinel{
+		dbConvergenceInfos: map[string]*DBConvergenceInfo{},
+		keeperHealthySince: map[string]time.Time{
+			"keeper2": time.Now().UTC().Add(-10 * time.Minute),
+		},
+	}
+
+	cd := &cluster.ClusterData{
+		Cluster: &cluster.Cluster{
+			UID: "cluster1",
+			Spec: &cluster.ClusterSpec{
+				InitMode:               cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
+				Role:                   cluster.ClusterRoleP(cluster.ClusterRoleMaster),
+				SynchronousReplication: cluster.BoolP(false),
+				MaxStandbyLag:          cluster.Uint32P(cluster.DefaultMaxStandbyLag),
+				UnsafeAutoFailback:     cluster.BoolP(true),
+				AutoFailbackMinUptime:  &cluster.Duration{Duration: time.Second},
+				AutoFailbackCooldown:   &cluster.Duration{Duration: 0},
+			},
+			Status: cluster.ClusterStatus{
+				Phase:  cluster.ClusterPhaseNormal,
+				Master: "db1",
+			},
+		},
+		Keepers: cluster.Keepers{
+			"keeper1": {UID: "keeper1", Status: cluster.KeeperStatus{Healthy: true, MasterPriority: 100}},
+			"keeper2": {UID: "keeper2", Status: cluster.KeeperStatus{Healthy: true, MasterPriority: 300}},
+		},
+		DBs: cluster.DBs{
+			"db1": {
+				UID:        "db1",
+				Generation: 1,
+				Spec: &cluster.DBSpec{
+					KeeperUID: "keeper1",
+					Role:      common.RoleMaster,
+					Followers: []string{"db2"},
+				},
+				Status: cluster.DBStatus{Healthy: true, CurrentGeneration: 1, TimelineID: 1, XLogPos: 500},
+			},
+			"db2": {
+				UID:        "db2",
+				Generation: 1,
+				Spec: &cluster.DBSpec{
+					KeeperUID: "keeper2",
+					Role:      common.RoleStandby,
+					FollowConfig: &cluster.FollowConfig{
+						Type:  cluster.FollowTypeInternal,
+						DBUID: "db1",
+					},
+				},
+				Status: cluster.DBStatus{Healthy: true, CurrentGeneration: 1, TimelineID: 1, XLogPos: 500},
+			},
+		},
+		Proxy: &cluster.Proxy{},
+	}
+
+	got, err := s.updateCluster(cd, cluster.ProxiesInfo{})
+	if err != nil {
+		t.Fatalf("updateCluster() error: %v", err)
+	}
+	if got.Cluster.Status.Master != "db2" {
+		t.Fatalf("expected unsafe auto-failback to switch master to db2, got %q", got.Cluster.Status.Master)
+	}
+}

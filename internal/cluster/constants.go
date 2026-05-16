@@ -57,6 +57,14 @@ const (
 	DefaultMaxStandbyLag = 1024 * 1204
 	// DefaultSynchronousReplication is the default synchronous replication setting.
 	DefaultSynchronousReplication = false
+	// DefaultUnsafeAutoFailback controls unsafe automatic switchback behavior.
+	DefaultUnsafeAutoFailback = false
+	// DefaultAutoFailbackMinUptime is the default minimum healthy time before
+	// unsafe auto-failback may switch.
+	DefaultAutoFailbackMinUptime = 60 * time.Second
+	// DefaultAutoFailbackCooldown is the default minimum interval between unsafe
+	// auto-failback switches.
+	DefaultAutoFailbackCooldown = 5 * time.Minute
 	// DefaultMinSynchronousStandbys is the default minimum synchronous standby count.
 	DefaultMinSynchronousStandbys uint16 = 1
 	// DefaultMaxSynchronousStandbys is the default maximum synchronous standby count.

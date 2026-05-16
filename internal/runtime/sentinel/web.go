@@ -130,6 +130,7 @@ type webClusterStatus struct {
 type webKeeperRow struct {
 	UID                     string `json:"uid"`
 	ListenAddress           string `json:"listen_address"`
+	SyncRole                string `json:"sync_role"`
 	Generation              int64  `json:"generation"`
 	MasterPriority          int    `json:"master_priority"`
 	Healthy                 bool   `json:"healthy"`
@@ -493,6 +494,7 @@ func collectWebSnapshot(
 					CanBeSynchronousReplica: k.Status.CanBeSynchronousReplica != nil && *k.Status.CanBeSynchronousReplica,
 					Generation:              k.Generation,
 					MasterPriority:          k.Status.MasterPriority,
+					SyncRole:                "-",
 				}
 				if k.Status.PostgresBinaryVersion.Maj > 0 {
 					if k.Status.PostgresBinaryVersion.Min > 0 {
@@ -506,6 +508,7 @@ func collectWebSnapshot(
 						continue
 					}
 					row.PGHealthy = db.Status.Healthy
+					row.SyncRole = webSyncRoleForDB(cdata, db.UID)
 					row.ListenAddress = db.Status.ListenAddress + ":" + db.Status.Port
 					break
 				}
@@ -601,6 +604,27 @@ func collectWebSnapshot(
 	})
 
 	return snapshot
+}
+
+func webSyncRoleForDB(cd *cluster.ClusterData, dbUID string) string {
+	if cd == nil || cd.Cluster == nil {
+		return "-"
+	}
+	masterUID := cd.Cluster.Status.Master
+	if masterUID == "" {
+		return "-"
+	}
+	if dbUID == masterUID {
+		return "master"
+	}
+	masterDB := cd.DBs[masterUID]
+	if masterDB == nil {
+		return "-"
+	}
+	if slices.Contains(masterDB.Status.SynchronousStandbys, dbUID) {
+		return "sync"
+	}
+	return "async"
 }
 
 func webProxyMode(listeners []cluster.ProxyListenerInfo) string {

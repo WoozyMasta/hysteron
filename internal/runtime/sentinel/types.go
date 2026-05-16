@@ -67,6 +67,10 @@ type Sentinel struct {
 
 	// Last observed timestamps of DB WAL position increases.
 	dbIncreasingXLogPosObservedAt map[string]time.Time
+	// First observed timestamp while keeper remains healthy (resets on unhealthy).
+	keeperHealthySince map[string]time.Time
+	// Last time unsafe auto-failback switched master.
+	autoFailbackLastSwitchAt time.Time
 
 	// Cached convergence tracking keyed by DB UID.
 	dbConvergenceInfos map[string]*DBConvergenceInfo

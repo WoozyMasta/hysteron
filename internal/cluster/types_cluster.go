@@ -74,6 +74,15 @@ type ClusterSpec struct { //nolint:revive
 	MaxStandbyLag *uint32 `json:"maxStandbyLag,omitempty"`
 	// Use Synchronous replication between master and its standbys
 	SynchronousReplication *bool `json:"synchronousReplication,omitempty"`
+	// UnsafeAutoFailback enables automatic switchback to a higher-priority keeper
+	// when it becomes safely eligible again. Disabled by default.
+	UnsafeAutoFailback *bool `json:"unsafeAutoFailback,omitempty"`
+	// AutoFailbackMinUptime defines how long a recovered keeper must stay healthy
+	// before unsafe auto-failback may switch to it.
+	AutoFailbackMinUptime *Duration `json:"autoFailbackMinUptime,omitempty"`
+	// AutoFailbackCooldown defines minimum time between two unsafe auto-failback
+	// switches.
+	AutoFailbackCooldown *Duration `json:"autoFailbackCooldown,omitempty"`
 	// MinSynchronousStandbys is the mininum number if synchronous standbys
 	// to be configured when SynchronousReplication is true
 	MinSynchronousStandbys *uint16 `json:"minSynchronousStandbys,omitempty"`

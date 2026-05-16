@@ -18,6 +18,7 @@ package sentinel
 import (
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/woozymasta/hysteron/internal/cluster"
 	"github.com/woozymasta/hysteron/internal/common"
@@ -66,6 +67,61 @@ func (s *Sentinel) dbType(cd *cluster.ClusterData, dbUID string) (dbType, error)
 	default:
 		return 0, fmt.Errorf("invalid db role in spec for db %q", dbUID)
 	}
+}
+
+// chooseAutoFailbackTarget returns an optional unsafe auto-failback target.
+func (s *Sentinel) chooseAutoFailbackTarget(
+	cd *cluster.ClusterData,
+	curMasterDB *cluster.DB,
+) *cluster.DB {
+	if cd == nil || cd.Cluster == nil || curMasterDB == nil {
+		return nil
+	}
+	spec := cd.Cluster.DefSpec()
+	if spec.UnsafeAutoFailback == nil || !*spec.UnsafeAutoFailback {
+		return nil
+	}
+	candidates := s.findBestNewMasters(cd, curMasterDB)
+	if len(candidates) == 0 {
+		return nil
+	}
+
+	currentPriority := keeperMasterPriority(cd, curMasterDB)
+	bestPriority := currentPriority
+	var target *cluster.DB
+	for _, candidate := range candidates {
+		priority := keeperMasterPriority(cd, candidate)
+		if priority <= bestPriority {
+			continue
+		}
+		bestPriority = priority
+		target = candidate
+	}
+	if target == nil {
+		return nil
+	}
+
+	keeper := cd.Keepers[target.Spec.KeeperUID]
+	if keeper == nil || !keeper.Status.Healthy {
+		return nil
+	}
+
+	now := time.Now().UTC()
+	minUptime := spec.AutoFailbackMinUptime.Duration
+	if minUptime > 0 {
+		healthySince, ok := s.keeperHealthySince[keeper.UID]
+		if !ok || now.Sub(healthySince) < minUptime {
+			return nil
+		}
+	}
+
+	cooldown := spec.AutoFailbackCooldown.Duration
+	if cooldown > 0 && !s.autoFailbackLastSwitchAt.IsZero() &&
+		now.Sub(s.autoFailbackLastSwitchAt) < cooldown {
+		return nil
+	}
+
+	return target
 }
 
 // dbValidity reports whether DB can be considered a valid failover candidate.

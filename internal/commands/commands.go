@@ -199,6 +199,16 @@ func (c *clusterPromoteCommand) Execute(_ []string) error {
 	return app.PromoteCluster(commandContext(), clusterConfig())
 }
 
+// Execute runs `hysteron cluster pause`.
+func (c *clusterPauseCommand) Execute(_ []string) error {
+	return app.PauseCluster(commandContext(), clusterConfig(), c.Reason, c.TTL)
+}
+
+// Execute runs `hysteron cluster resume`.
+func (c *clusterResumeCommand) Execute(_ []string) error {
+	return app.ResumeCluster(commandContext(), clusterConfig())
+}
+
 // Execute runs `hysteron cluster keeper remove`.
 func (c *clusterKeeperRemoveCommand) Execute(_ []string) error {
 	return app.RemoveKeeper(commandContext(), clusterConfig(), c.KeeperUID)

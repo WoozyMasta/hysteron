@@ -41,4 +41,6 @@ var (
 	ErrNoMasterDatabase = errors.New("no master database available")
 	// ErrNoMasterKeeper reports unresolved keeper for the current master DB.
 	ErrNoMasterKeeper = errors.New("no master keeper available")
+	// ErrClusterPaused reports that cluster mutations are blocked by pause mode.
+	ErrClusterPaused = errors.New("cluster is paused; resume first")
 )

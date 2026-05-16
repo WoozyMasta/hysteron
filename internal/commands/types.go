@@ -14,7 +14,11 @@
 
 package commands
 
-import "github.com/woozymasta/hysteron/internal/output"
+import (
+	"time"
+
+	"github.com/woozymasta/hysteron/internal/output"
+)
 
 type rootCommand struct {
 	Keeper   keeperRuntimeCommand   `command:"keeper"   command-group:"Runtime Commands"    description:"Run keeper runtime components"`
@@ -54,6 +58,8 @@ type clusterCommand struct {
 	Keeper        clusterKeeperCommand        `command:"keeper"        description:"Manage keeper records in cluster data"`
 	List          clusterListCommand          `command:"list"          description:"List clusters in the configured store"              alias:"ls"`
 	Status        clusterStatusCommand        `command:"status"        description:"Display current cluster status"`
+	Pause         clusterPauseCommand         `command:"pause"         description:"Pause mutating management operations"`
+	Resume        clusterResumeCommand        `command:"resume"        description:"Resume mutating management operations"`
 	Data          clusterDataCommand          `command:"data"          description:"Read and mutate cluster data documents"`
 	Initialize    clusterInitializeCommand    `command:"initialize"    description:"Initialize a new cluster"                           alias:"init"`
 	Update        clusterUpdateCommand        `command:"update"        description:"Replace or patch the current cluster specification"`
@@ -164,6 +170,13 @@ type clusterDataPatchCommand struct {
 type clusterPromoteCommand struct {
 	confirmationOptions
 }
+
+type clusterPauseCommand struct {
+	Reason string        `long:"reason" description:"optional pause reason"`
+	TTL    time.Duration `long:"ttl" description:"optional pause duration, for example 30m or 2h"`
+}
+
+type clusterResumeCommand struct{}
 
 type clusterKeeperRemoveCommand struct {
 	keeperUIDOptions

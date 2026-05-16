@@ -45,6 +45,9 @@ func writeStatusTable(w io.Writer, status app.Status) error {
 	clusterTable.AppendRows([]table.Row{
 		{"Available", status.Cluster.Available},
 		{"Phase", valueOrDash(status.Cluster.Phase)},
+		{"Paused", status.Cluster.Paused},
+		{"Pause Reason", valueOrDash(status.Cluster.PauseReason)},
+		{"Pause Until", valueOrDash(status.Cluster.PauseUntil)},
 		{"Generation", status.Cluster.Generation},
 		{"Format Version", status.Cluster.FormatVersion},
 		{"Master Keeper", valueOrDash(status.Cluster.MasterKeeperUID)},
@@ -53,7 +56,7 @@ func writeStatusTable(w io.Writer, status app.Status) error {
 		{"DBs", fmt.Sprintf("%d/%d", status.Cluster.DBsHealthy, status.Cluster.DBsTotal)},
 		{"Proxies Seen", status.Cluster.ProxiesSeen},
 	})
-	clusterTable.AppendFooter(table.Row{"Rows", 9})
+	clusterTable.AppendFooter(table.Row{"Rows", 12})
 	clusterTable.Render()
 
 	if err := writeLine(w); err != nil {

@@ -17,6 +17,7 @@ package cluster
 import (
 	"maps"
 	"slices"
+	"time"
 )
 
 // DeepCopy returns an independent copy of the cluster.
@@ -27,6 +28,7 @@ func (c *Cluster) DeepCopy() *Cluster {
 
 	nc := *c
 	nc.Spec = c.Spec.DeepCopy()
+	nc.Status.PauseUntil = copyTimePtr(c.Status.PauseUntil)
 	return &nc
 }
 
@@ -111,6 +113,15 @@ func copyDurationPtr(d *Duration) *Duration {
 
 	nd := *d
 	return &nd
+}
+
+func copyTimePtr(v *time.Time) *time.Time {
+	if v == nil {
+		return nil
+	}
+
+	nv := *v
+	return &nv
 }
 
 func copyBoolPtr(b *bool) *bool {

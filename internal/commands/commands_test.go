@@ -201,6 +201,39 @@ func TestClusterInitializeSkipIfPresentFlagIsAccepted(t *testing.T) {
 	}
 }
 
+func TestClusterPauseFlagsAreAccepted(t *testing.T) {
+	parser := newTestParser()
+	_, err := parser.ParseArgs([]string{
+		"cluster", "--cluster-name", "test", "pause",
+		"--reason", "maintenance", "--ttl", "30m",
+	})
+	if err == nil {
+		t.Fatal("expected pause error")
+	}
+	if strings.Contains(err.Error(), "unknown flag") {
+		t.Fatalf("unexpected unknown flag error: %v", err)
+	}
+	if !strings.Contains(err.Error(), "unknown store backend") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestClusterResumeCommandIsAccepted(t *testing.T) {
+	parser := newTestParser()
+	_, err := parser.ParseArgs([]string{
+		"cluster", "--cluster-name", "test", "resume",
+	})
+	if err == nil {
+		t.Fatal("expected resume error")
+	}
+	if strings.Contains(err.Error(), "unknown command") {
+		t.Fatalf("unexpected unknown command error: %v", err)
+	}
+	if !strings.Contains(err.Error(), "unknown store backend") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestClusterSpecificationWithoutStoreBackendFails(t *testing.T) {
 	parser := newTestParser()
 	_, err := parser.ParseArgs([]string{"cluster", "--cluster-name", "test", "specification"})

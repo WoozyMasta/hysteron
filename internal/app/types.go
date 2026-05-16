@@ -68,6 +68,9 @@ type ClusterStatus struct {
 	MasterKeeperUID string `json:"master_keeper_uid"`
 	MasterDBUID     string `json:"master_db_uid"`
 	Phase           string `json:"phase"`
+	Paused          bool   `json:"paused"`
+	PauseReason     string `json:"pause_reason,omitempty"`
+	PauseUntil      string `json:"pause_until,omitempty"`
 	Generation      int64  `json:"generation"`
 	FormatVersion   uint64 `json:"format_version"`
 	KeepersTotal    int    `json:"keepers_total"`

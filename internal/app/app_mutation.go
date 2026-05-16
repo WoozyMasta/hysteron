@@ -40,6 +40,12 @@ func PromoteCluster(ctx context.Context, cfg *stconfig.CommonConfig) error {
 		if cd.Cluster == nil || cd.Cluster.Spec == nil {
 			return ErrNoClusterSpec
 		}
+		if err := ensureClusterNotPaused(
+			cd.Cluster.Status.Paused,
+			cd.Cluster.Status.PauseUntil,
+		); err != nil {
+			return err
+		}
 		defaultSpec := cd.Cluster.DefSpec()
 		if defaultSpec.Role != nil && *defaultSpec.Role == cluster.ClusterRoleMaster {
 			return nil
@@ -74,6 +80,12 @@ func RemoveKeeper(
 	}
 	s, cd, pair, err := validatedClusterDataWithStore(ctx, cfg)
 	if err != nil {
+		return err
+	}
+	if err := ensureClusterNotPaused(
+		cd.Cluster.Status.Paused,
+		cd.Cluster.Status.PauseUntil,
+	); err != nil {
 		return err
 	}
 
@@ -112,6 +124,12 @@ func FailKeeper(
 	if err != nil {
 		return err
 	}
+	if err := ensureClusterNotPaused(
+		cd.Cluster.Status.Paused,
+		cd.Cluster.Status.PauseUntil,
+	); err != nil {
+		return err
+	}
 
 	newCD := cd.DeepCopy()
 	keeperInfo := newCD.Keepers[keeperUID]
@@ -144,6 +162,14 @@ func WriteClusterData(ctx context.Context, cfg *stconfig.CommonConfig, data []by
 	existing, _, err := s.GetClusterData(ctx)
 	if err != nil {
 		return err
+	}
+	if existing != nil && existing.Cluster != nil {
+		if err := ensureClusterNotPaused(
+			existing.Cluster.Status.Paused,
+			existing.Cluster.Status.PauseUntil,
+		); err != nil {
+			return err
+		}
 	}
 	if existing != nil && !force {
 		return ErrClusterDataOverwriteRequiresYes
@@ -200,6 +226,14 @@ func InitializeCluster(
 	if err != nil {
 		return err
 	}
+	if existing != nil && existing.Cluster != nil {
+		if err := ensureClusterNotPaused(
+			existing.Cluster.Status.Paused,
+			existing.Cluster.Status.PauseUntil,
+		); err != nil {
+			return err
+		}
+	}
 	if existing != nil && skipIfPresent {
 		return nil
 	}
@@ -236,6 +270,12 @@ func UpdateClusterSpecification(
 	for range clusterDataMutateRetries {
 		s, cd, pair, err := validatedClusterDataWithStore(ctx, cfg)
 		if err != nil {
+			return err
+		}
+		if err := ensureClusterNotPaused(
+			cd.Cluster.Status.Paused,
+			cd.Cluster.Status.PauseUntil,
+		); err != nil {
 			return err
 		}
 
@@ -281,6 +321,12 @@ func PatchClusterData(
 	for range clusterDataMutateRetries {
 		s, cd, pair, err := validatedClusterDataWithStore(ctx, cfg)
 		if err != nil {
+			return err
+		}
+		if err := ensureClusterNotPaused(
+			cd.Cluster.Status.Paused,
+			cd.Cluster.Status.PauseUntil,
+		); err != nil {
 			return err
 		}
 
@@ -336,6 +382,12 @@ func ForceFailover(ctx context.Context, cfg *stconfig.CommonConfig) error {
 	for range clusterDataMutateRetries {
 		s, cd, pair, err := validatedClusterDataWithStore(ctx, cfg)
 		if err != nil {
+			return err
+		}
+		if err := ensureClusterNotPaused(
+			cd.Cluster.Status.Paused,
+			cd.Cluster.Status.PauseUntil,
+		); err != nil {
 			return err
 		}
 

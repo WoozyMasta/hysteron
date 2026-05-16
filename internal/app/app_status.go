@@ -19,6 +19,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/woozymasta/hysteron/internal/cluster"
 )
@@ -152,6 +153,15 @@ func makeClusterStatus(cd *cluster.ClusterData) ClusterStatus {
 
 	clusterStatus.Available = true
 	clusterStatus.Phase = string(cd.Cluster.Status.Phase)
+	clusterStatus.Paused = isPauseActive(
+		time.Now().UTC(),
+		cd.Cluster.Status.Paused,
+		cd.Cluster.Status.PauseUntil,
+	)
+	clusterStatus.PauseReason = cd.Cluster.Status.PauseReason
+	if cd.Cluster.Status.PauseUntil != nil {
+		clusterStatus.PauseUntil = cd.Cluster.Status.PauseUntil.UTC().Format(time.RFC3339)
+	}
 	clusterStatus.Generation = cd.Cluster.Generation
 	clusterStatus.FormatVersion = cd.FormatVersion
 	clusterStatus.KeepersTotal = len(cd.Keepers)

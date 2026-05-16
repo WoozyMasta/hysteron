@@ -60,6 +60,7 @@ type clusterCommand struct {
 	List          clusterListCommand          `command:"list"          description:"List clusters in the configured store"              alias:"ls"`
 	Status        clusterStatusCommand        `command:"status"        description:"Display current cluster status"`
 	Switchover    clusterSwitchoverCommand    `command:"switchover"    description:"Request planned master switch to target keeper"`
+	Reinit        clusterReinitCommand        `command:"reinit"        description:"Request replica reinitialize on target keeper"`
 	Data          clusterDataCommand          `command:"data"          description:"Read and mutate cluster data documents"`
 	Initialize    clusterInitializeCommand    `command:"initialize"    description:"Initialize a new cluster"                           alias:"init"`
 	Update        clusterUpdateCommand        `command:"update"        description:"Replace or patch the current cluster specification"`
@@ -181,6 +182,10 @@ type clusterPauseCommand struct {
 type clusterResumeCommand struct{}
 
 type clusterSwitchoverCommand struct {
+	keeperUIDOptions
+}
+
+type clusterReinitCommand struct {
 	keeperUIDOptions
 }
 

@@ -18,6 +18,9 @@ The format is based on [Keep a Changelog][], and this project adheres to
   `hysteron cluster switchover --keeper-uid` and
   `hysteron failover target --keeper-uid`, persisted in cluster status and
   applied by sentinel only when target passes HA safety eligibility filters.
+* Manual replica reinitialize action:
+  `hysteron cluster reinit --keeper-uid`, marking target standby for resync
+  while rejecting master targets and honoring pause guards.
 * New embedded Sentinel web status UI,
   authenticated API endpoint, auto-refresh,
   and multi-cluster status tables (sentinels, keepers, databases, proxies).

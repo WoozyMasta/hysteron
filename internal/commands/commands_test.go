@@ -266,6 +266,22 @@ func TestFailoverTargetCommandIsAccepted(t *testing.T) {
 	}
 }
 
+func TestClusterReinitCommandIsAccepted(t *testing.T) {
+	parser := newTestParser()
+	_, err := parser.ParseArgs([]string{
+		"cluster", "--cluster-name", "test", "reinit", "--keeper-uid", "keeper-01",
+	})
+	if err == nil {
+		t.Fatal("expected reinit error")
+	}
+	if strings.Contains(err.Error(), "unknown command") {
+		t.Fatalf("unexpected unknown command error: %v", err)
+	}
+	if !strings.Contains(err.Error(), "unknown store backend") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestClusterSpecificationWithoutStoreBackendFails(t *testing.T) {
 	parser := newTestParser()
 	_, err := parser.ParseArgs([]string{"cluster", "--cluster-name", "test", "specification"})

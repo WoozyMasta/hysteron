@@ -218,6 +218,11 @@ func (c *clusterSwitchoverCommand) Execute(_ []string) error {
 	)
 }
 
+// Execute runs `hysteron cluster reinit`.
+func (c *clusterReinitCommand) Execute(_ []string) error {
+	return app.ReinitializeReplica(commandContext(), clusterConfig(), c.KeeperUID)
+}
+
 // Execute runs `hysteron cluster keeper remove`.
 func (c *clusterKeeperRemoveCommand) Execute(_ []string) error {
 	return app.RemoveKeeper(commandContext(), clusterConfig(), c.KeeperUID)

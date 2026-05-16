@@ -47,4 +47,8 @@ var (
 	ErrManualSwitchTargetKeeperRequired = errors.New("target keeper uid required")
 	// ErrManualSwitchTargetKeeperNotFound reports unknown target keeper.
 	ErrManualSwitchTargetKeeperNotFound = errors.New("target keeper not found")
+	// ErrReplicaReinitTargetNotFound reports missing db assignment for target keeper.
+	ErrReplicaReinitTargetNotFound = errors.New("target keeper has no assigned database")
+	// ErrReplicaReinitTargetIsMaster reports reinit request for current master.
+	ErrReplicaReinitTargetIsMaster = errors.New("cannot reinitialize current master database")
 )

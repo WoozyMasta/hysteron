@@ -28,6 +28,7 @@ func Run(target Target) error {
 	if target.CommonConfig == nil {
 		return ErrCommonConfigRequired
 	}
+	target = autoProvisionTarget(target)
 
 	backend, err := normalizeBackend(target.Backend)
 	if err != nil {

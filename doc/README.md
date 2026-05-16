@@ -13,6 +13,7 @@ primary concepts and avoid possible mistakes.
 * [PostgreSQL Data/WAL/Tablespace Layout](storage_layout.md)
 * [Hysteron Proxy](proxy.md)
 * [Kubernetes Service Publishing](kubernetes_service_publishing.md)
+* [Runtime Auto-Provisioning](runtime_autoprovision.md)
 * [Setting instance parameters](postgres_parameters.md)
 * [Metrics Guidelines](metrics.md)
 * [Managed Logical Slots](logical_slots.md)

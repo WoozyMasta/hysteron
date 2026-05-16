@@ -21,6 +21,9 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Manual replica reinitialize action:
   `hysteron cluster reinit --keeper-uid`, marking target standby for resync
   while rejecting master targets and honoring pause guards.
+* Sentinel web admin API endpoints for management parity:
+  `pause`, `resume`, `switchover`, `failover-target`, and `reinit`
+  operations over HTTP JSON.
 * New embedded Sentinel web status UI,
   authenticated API endpoint, auto-refresh,
   and multi-cluster status tables (sentinels, keepers, databases, proxies).

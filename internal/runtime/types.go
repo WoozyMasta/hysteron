@@ -38,7 +38,7 @@ type SentinelOptions struct {
 	WebWriteTimeout  string
 	ClusterSpecFiles []string
 
-	WebAllowUnsafeAdminWithoutAuth bool
+	WebUnsafeNoAuth bool
 }
 
 // ProxyOptions configures proxy runtime options from unified CLI.

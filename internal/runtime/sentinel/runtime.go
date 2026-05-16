@@ -47,7 +47,7 @@ type RunOptions struct {
 	WebWriteTimeout  string   // Web server write timeout duration string (for example "10s").
 	ClusterSpecFiles []string // Per-cluster overrides formatted as "<cluster>=<spec-file-path>".
 
-	WebAllowUnsafeAdminWithoutAuth bool // Enables admin actions without auth (unsafe, test/dev only).
+	WebUnsafeNoAuth bool // Enables admin actions without auth (unsafe, test/dev only).
 }
 
 // RunWithOptions executes sentinel runtime without re-parsing component flags.
@@ -77,7 +77,7 @@ func RunWithOptions(commonConfig stconfig.CommonConfig, opts RunOptions) error {
 		cfg.Web.WriteTimeout = d
 	}
 
-	cfg.Web.AllowUnsafeAdminWithoutAuth = opts.WebAllowUnsafeAdminWithoutAuth
+	cfg.Web.UnsafeNoAuth = opts.WebUnsafeNoAuth
 	return runSentinel()
 }
 

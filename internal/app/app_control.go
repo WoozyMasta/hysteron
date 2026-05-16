@@ -16,13 +16,37 @@ package app
 
 import (
 	"context"
-	"errors"
-	"fmt"
+	"time"
 
 	"github.com/woozymasta/hysteron/internal/cluster"
 	stconfig "github.com/woozymasta/hysteron/internal/config"
-	"github.com/woozymasta/hysteron/internal/store"
+	"github.com/woozymasta/hysteron/internal/operations"
 )
+
+func ensureClusterNotPaused(cdPaused bool, cdPauseUntil *time.Time) error {
+	if !(cluster.ClusterStatus{
+		Paused:     cdPaused,
+		PauseUntil: cdPauseUntil,
+	}).PauseActive(time.Now().UTC()) {
+		return nil
+	}
+	return ErrClusterPaused
+}
+
+// PauseCluster enables cluster pause mode with optional reason and TTL.
+func PauseCluster(
+	ctx context.Context,
+	cfg *stconfig.CommonConfig,
+	reason string,
+	ttl time.Duration,
+) error {
+	return operations.PauseCluster(ctx, cfg, reason, ttl)
+}
+
+// ResumeCluster disables cluster pause mode.
+func ResumeCluster(ctx context.Context, cfg *stconfig.CommonConfig) error {
+	return operations.ResumeCluster(ctx, cfg)
+}
 
 // RequestManualSwitchover requests a master switch to target keeper.
 func RequestManualSwitchover(
@@ -30,7 +54,12 @@ func RequestManualSwitchover(
 	cfg *stconfig.CommonConfig,
 	targetKeeperUID string,
 ) error {
-	return requestManualSwitch(ctx, cfg, targetKeeperUID, cluster.ManualSwitchModeSwitchover)
+	return operations.RequestManualSwitch(
+		ctx,
+		cfg,
+		targetKeeperUID,
+		cluster.ManualSwitchModeSwitchover,
+	)
 }
 
 // RequestManualFailover requests a forced master switch to target keeper.
@@ -39,51 +68,19 @@ func RequestManualFailover(
 	cfg *stconfig.CommonConfig,
 	targetKeeperUID string,
 ) error {
-	return requestManualSwitch(ctx, cfg, targetKeeperUID, cluster.ManualSwitchModeFailover)
+	return operations.RequestManualSwitch(
+		ctx,
+		cfg,
+		targetKeeperUID,
+		cluster.ManualSwitchModeFailover,
+	)
 }
 
-func requestManualSwitch(
+// ReinitializeReplica marks a standby database on the target keeper for resync.
+func ReinitializeReplica(
 	ctx context.Context,
 	cfg *stconfig.CommonConfig,
 	targetKeeperUID string,
-	mode cluster.ManualSwitchMode,
 ) error {
-	if targetKeeperUID == "" {
-		return ErrManualSwitchTargetKeeperRequired
-	}
-
-	for range clusterDataMutateRetries {
-		s, cd, pair, err := validatedClusterDataWithStore(ctx, cfg)
-		if err != nil {
-			return err
-		}
-		if err := ensureClusterNotPaused(
-			cd.Cluster.Status.Paused,
-			cd.Cluster.Status.PauseUntil,
-		); err != nil {
-			return err
-		}
-		if _, ok := cd.Keepers[targetKeeperUID]; !ok {
-			return ErrManualSwitchTargetKeeperNotFound
-		}
-
-		newCD := cd.DeepCopy()
-		newCD.Cluster.Status.ManualSwitch = &cluster.ManualSwitchRequest{
-			TargetKeeperUID: targetKeeperUID,
-			Mode:            mode,
-		}
-
-		if _, err := s.AtomicPutClusterData(ctx, newCD, pair); err != nil {
-			if errors.Is(err, store.ErrKeyModified) {
-				continue
-			}
-			return fmt.Errorf("cannot update cluster data: %w", err)
-		}
-		return nil
-	}
-
-	return fmt.Errorf(
-		"failed to update cluster data after %d retries",
-		clusterDataMutateRetries,
-	)
+	return operations.ReinitializeReplica(ctx, cfg, targetKeeperUID)
 }

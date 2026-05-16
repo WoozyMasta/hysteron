@@ -56,15 +56,15 @@ func Run(target Target) error {
 			return fmt.Errorf("missing runtime options for component %q", target.Component)
 		}
 		return sentinelcmd.RunWithOptions(*target.CommonConfig, sentinelcmd.RunOptions{
-			InitialClusterSpecFile:         target.Sentinel.InitialClusterSpecFile,
-			ClusterSpecFiles:               target.Sentinel.ClusterSpecFiles,
-			WebListenAddress:               target.Sentinel.WebListenAddress,
-			WebBasePath:                    target.Sentinel.WebBasePath,
-			WebAuthUsername:                target.Sentinel.WebAuthUsername,
-			WebAuthPassword:                target.Sentinel.WebAuthPassword,
-			WebReadTimeout:                 target.Sentinel.WebReadTimeout,
-			WebWriteTimeout:                target.Sentinel.WebWriteTimeout,
-			WebAllowUnsafeAdminWithoutAuth: target.Sentinel.WebAllowUnsafeAdminWithoutAuth,
+			InitialClusterSpecFile: target.Sentinel.InitialClusterSpecFile,
+			ClusterSpecFiles:       target.Sentinel.ClusterSpecFiles,
+			WebListenAddress:       target.Sentinel.WebListenAddress,
+			WebBasePath:            target.Sentinel.WebBasePath,
+			WebAuthUsername:        target.Sentinel.WebAuthUsername,
+			WebAuthPassword:        target.Sentinel.WebAuthPassword,
+			WebReadTimeout:         target.Sentinel.WebReadTimeout,
+			WebWriteTimeout:        target.Sentinel.WebWriteTimeout,
+			WebUnsafeNoAuth:        target.Sentinel.WebUnsafeNoAuth,
 		})
 
 	case "proxy":

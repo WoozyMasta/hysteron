@@ -31,6 +31,8 @@ import (
 
 	"github.com/woozymasta/hysteron/internal/assets"
 	"github.com/woozymasta/hysteron/internal/cluster"
+	stconfig "github.com/woozymasta/hysteron/internal/config"
+	"github.com/woozymasta/hysteron/internal/operations"
 	runtimecommon "github.com/woozymasta/hysteron/internal/runtime/common"
 	"github.com/woozymasta/hysteron/internal/utils/buildflags"
 )
@@ -45,7 +47,7 @@ type webOptions struct {
 	ReadTimeout  time.Duration `long:"read-timeout" env:"READ_TIMEOUT" default:"5s" validate-min:"0" description:"maximum duration for reading the entire request, including the body"`
 	WriteTimeout time.Duration `long:"write-timeout" env:"WRITE_TIMEOUT" default:"10s" validate-min:"0" description:"maximum duration before timing out writes of the response"`
 
-	AllowUnsafeAdminWithoutAuth bool `long:"allow-unsafe-admin-without-auth" env:"ALLOW_UNSAFE_ADMIN_WITHOUT_AUTH" description:"allow admin API endpoints when web auth is disabled (unsafe; intended only for controlled environments)"`
+	UnsafeNoAuth bool `long:"unsafe-no-auth" env:"UNSAFE_NO_AUTH" description:"allow admin API endpoints without web auth (unsafe; intended only for controlled environments)"`
 }
 
 type sentinelWebRegistry struct {
@@ -158,6 +160,25 @@ type webProxyRow struct {
 	Enabled      bool   `json:"enabled"`
 }
 
+type webAdminClusterPayload struct {
+	Cluster string `json:"cluster"`
+}
+
+type webAdminPausePayload struct {
+	Cluster string `json:"cluster"`
+	Reason  string `json:"reason,omitempty"`
+	TTL     string `json:"ttl,omitempty"`
+}
+
+type webAdminKeeperPayload struct {
+	Cluster   string `json:"cluster"`
+	KeeperUID string `json:"keeper_uid"`
+}
+
+type webAdminResponse struct {
+	OK bool `json:"ok"`
+}
+
 func validateWebConfig(cfg *config) error {
 	if cfg == nil {
 		return errors.New("nil config")
@@ -173,7 +194,7 @@ func validateWebConfig(cfg *config) error {
 	}
 
 	hasWebUser := strings.TrimSpace(cfg.Web.AuthUsername) != ""
-	if cfg.Web.AllowUnsafeAdminWithoutAuth && !hasWebUser {
+	if cfg.Web.UnsafeNoAuth && !hasWebUser {
 		log.Warn().Msg("web unsafe admin without auth is enabled; do not use in untrusted environments")
 	}
 	return nil
@@ -235,6 +256,7 @@ func registerWebRoutes(
 			http.Error(w, "failed to render dashboard", http.StatusInternalServerError)
 		}
 	}))
+
 	status := webAuthMiddleware(cfg, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		snapshot := collectWebSnapshot(r.Context(), cfg, clusterNames, basePath, registry)
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -243,15 +265,117 @@ func registerWebRoutes(
 		}
 	}))
 
+	adminPause := webAdminMiddleware(cfg, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload webAdminPausePayload
+		if !decodeAdminJSON(w, r, &payload) {
+			return
+		}
+		ttl := time.Duration(0)
+		if strings.TrimSpace(payload.TTL) != "" {
+			parsed, err := time.ParseDuration(strings.TrimSpace(payload.TTL))
+			if err != nil {
+				writeAdminError(w, "invalid ttl duration")
+				return
+			}
+			ttl = parsed
+		}
+		if err := operations.PauseCluster(
+			r.Context(),
+			webAdminClusterConfig(cfg, payload.Cluster),
+			payload.Reason,
+			ttl,
+		); err != nil {
+			writeAdminError(w, err.Error())
+			return
+		}
+		writeAdminOK(w)
+	}))
+
+	adminResume := webAdminMiddleware(cfg, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload webAdminClusterPayload
+		if !decodeAdminJSON(w, r, &payload) {
+			return
+		}
+		if err := operations.ResumeCluster(
+			r.Context(),
+			webAdminClusterConfig(cfg, payload.Cluster),
+		); err != nil {
+			writeAdminError(w, err.Error())
+			return
+		}
+		writeAdminOK(w)
+	}))
+
+	adminSwitchover := webAdminMiddleware(cfg, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload webAdminKeeperPayload
+		if !decodeAdminJSON(w, r, &payload) {
+			return
+		}
+		if err := operations.RequestManualSwitch(
+			r.Context(),
+			webAdminClusterConfig(cfg, payload.Cluster),
+			strings.TrimSpace(payload.KeeperUID),
+			cluster.ManualSwitchModeSwitchover,
+		); err != nil {
+			writeAdminError(w, err.Error())
+			return
+		}
+		writeAdminOK(w)
+	}))
+
+	adminFailoverTarget := webAdminMiddleware(cfg, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload webAdminKeeperPayload
+		if !decodeAdminJSON(w, r, &payload) {
+			return
+		}
+		if err := operations.RequestManualSwitch(
+			r.Context(),
+			webAdminClusterConfig(cfg, payload.Cluster),
+			strings.TrimSpace(payload.KeeperUID),
+			cluster.ManualSwitchModeFailover,
+		); err != nil {
+			writeAdminError(w, err.Error())
+			return
+		}
+		writeAdminOK(w)
+	}))
+
+	adminReinit := webAdminMiddleware(cfg, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload webAdminKeeperPayload
+		if !decodeAdminJSON(w, r, &payload) {
+			return
+		}
+		if err := operations.ReinitializeReplica(
+			r.Context(),
+			webAdminClusterConfig(cfg, payload.Cluster),
+			strings.TrimSpace(payload.KeeperUID),
+		); err != nil {
+			writeAdminError(w, err.Error())
+			return
+		}
+		writeAdminOK(w)
+	}))
+
 	if basePath == "/" {
 		mux.Handle("/", root)
 		mux.Handle("/api/v1/status", status)
+		mux.Handle("/api/v1/admin/pause", adminPause)
+		mux.Handle("/api/v1/admin/resume", adminResume)
+		mux.Handle("/api/v1/admin/switchover", adminSwitchover)
+		mux.Handle("/api/v1/admin/failover-target", adminFailoverTarget)
+		mux.Handle("/api/v1/admin/reinit", adminReinit)
 		mux.Handle("/static/", http.StripPrefix("/static/", static))
 		return
 	}
+
 	mux.Handle(basePath, http.RedirectHandler(basePath+"/", http.StatusTemporaryRedirect))
 	mux.Handle(basePath+"/", http.StripPrefix(basePath, root))
 	mux.Handle(basePath+"/api/v1/status", http.StripPrefix(basePath, status))
+	mux.Handle(basePath+"/api/v1/admin/pause", http.StripPrefix(basePath, adminPause))
+	mux.Handle(basePath+"/api/v1/admin/resume", http.StripPrefix(basePath, adminResume))
+	mux.Handle(basePath+"/api/v1/admin/switchover", http.StripPrefix(basePath, adminSwitchover))
+	mux.Handle(basePath+"/api/v1/admin/failover-target", http.StripPrefix(basePath, adminFailoverTarget))
+	mux.Handle(basePath+"/api/v1/admin/reinit", http.StripPrefix(basePath, adminReinit))
 	mux.Handle(
 		basePath+"/static/",
 		http.StripPrefix(path.Clean(basePath)+"/static/", static),
@@ -341,6 +465,7 @@ func collectWebSnapshot(
 			clusterStatus.ProxiesSeen = len(rawProxiesInfo)
 			proxiesInfo = rawProxiesInfo
 		}
+
 		if cdata != nil {
 			clusterStatus.Phase = string(cdata.Cluster.Status.Phase)
 			clusterStatus.Generation = cdata.Cluster.Generation
@@ -356,6 +481,7 @@ func collectWebSnapshot(
 				if k == nil {
 					continue
 				}
+
 				if k.Status.Healthy {
 					clusterStatus.KeepersHealthy++
 				}
@@ -383,6 +509,7 @@ func collectWebSnapshot(
 				}
 				keeperRows = append(keeperRows, row)
 			}
+
 			slices.SortFunc(keeperRows, func(a, b webKeeperRow) int {
 				return strings.Compare(a.UID, b.UID)
 			})
@@ -392,6 +519,7 @@ func collectWebSnapshot(
 			if master, ok := cdata.DBs[cdata.Cluster.Status.Master]; ok && master != nil {
 				masterXLog = master.Status.XLogPos
 			}
+
 			rows := make([]webDBRow, 0, len(cdata.DBs))
 			for _, db := range cdata.DBs {
 				if db == nil || db.Spec == nil {
@@ -414,6 +542,7 @@ func collectWebSnapshot(
 					LagBytes:  lagBytes,
 				})
 			}
+
 			slices.SortFunc(rows, func(a, b webDBRow) int {
 				return strings.Compare(a.UID, b.UID)
 			})
@@ -435,6 +564,7 @@ func collectWebSnapshot(
 			for uid := range proxiesInfo {
 				allProxyUIDs[uid] = struct{}{}
 			}
+
 			proxyRows := make([]webProxyRow, 0, len(allProxyUIDs))
 			for uid := range allProxyUIDs {
 				row := webProxyRow{UID: uid}
@@ -451,19 +581,23 @@ func collectWebSnapshot(
 			slices.SortFunc(proxyRows, func(a, b webProxyRow) int {
 				return strings.Compare(a.UID, b.UID)
 			})
+
 			clusterStatus.ProxyRows = proxyRows
 		}
 		cancel()
 		snapshot.Clusters = append(snapshot.Clusters, clusterStatus)
 	}
+
 	for _, row := range sentinelRowsByUID {
 		row.Clusters = uniqueSortedStrings(row.Clusters)
 		row.LeaderClusters = uniqueSortedStrings(row.LeaderClusters)
 		snapshot.Sentinels = append(snapshot.Sentinels, *row)
 	}
+
 	slices.SortFunc(snapshot.Sentinels, func(a, b webSentinelRow) int {
 		return strings.Compare(a.UID, b.UID)
 	})
+
 	return snapshot
 }
 
@@ -498,6 +632,7 @@ func webProxyEndpoints(listeners []cluster.ProxyListenerInfo) (rwAddr string, rw
 		if strings.TrimSpace(l.Address) == "" || strings.TrimSpace(l.Port) == "" {
 			continue
 		}
+
 		address := l.Address + ":" + l.Port
 		switch l.Mode {
 		case "writable":
@@ -508,6 +643,7 @@ func webProxyEndpoints(listeners []cluster.ProxyListenerInfo) (rwAddr string, rw
 			roActive = l.Active
 		}
 	}
+
 	return rwAddr, rwActive, roAddr, roActive
 }
 
@@ -515,6 +651,7 @@ func uniqueSortedStrings(values []string) []string {
 	if len(values) == 0 {
 		return nil
 	}
+
 	set := make(map[string]struct{}, len(values))
 	for _, v := range values {
 		if v == "" {
@@ -526,6 +663,7 @@ func uniqueSortedStrings(values []string) []string {
 	for v := range set {
 		out = append(out, v)
 	}
+
 	slices.Sort(out)
 	return out
 }
@@ -534,6 +672,7 @@ func webLinkBasePath(basePath string) string {
 	if basePath == "/" {
 		return ""
 	}
+
 	return basePath
 }
 
@@ -542,6 +681,7 @@ func webAuthMiddleware(cfg *config, next http.Handler) http.Handler {
 	if username == "" {
 		return next
 	}
+
 	password := cfg.Web.AuthPassword
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		user, pass, ok := r.BasicAuth()
@@ -561,4 +701,71 @@ func compareConstantTime(got, want string) bool {
 		return false
 	}
 	return subtle.ConstantTimeCompare(gotBytes, wantBytes) == 1
+}
+
+func webAdminClusterConfig(cfg *config, clusterName string) *stconfig.CommonConfig {
+	clusterName = strings.TrimSpace(clusterName)
+	return &stconfig.CommonConfig{
+		Metrics: stconfig.MetricsOptions{
+			ListenAddress: cfg.Metrics.ListenAddress,
+		},
+		K8s: stconfig.K8sOptions{
+			Config:       cfg.Kube.Config,
+			ResourceKind: cfg.Kube.ResourceKind,
+			ResourceName: cfg.Kube.ResourceName,
+			Context:      cfg.Kube.Context,
+			Namespace:    cfg.Kube.Namespace,
+		},
+		ClusterNames: []string{clusterName},
+		Log:          cfg.Log,
+		Store: stconfig.StoreOptions{
+			Backend:       cfg.Store.Backend,
+			Endpoints:     cfg.Store.Endpoints,
+			Prefix:        cfg.Store.Prefix,
+			CertFile:      cfg.Store.CertFile,
+			KeyFile:       cfg.Store.KeyFile,
+			CAFile:        cfg.Store.CAFile,
+			Timeout:       cfg.Store.Timeout,
+			SkipTLSVerify: cfg.Store.SkipTLSVerify,
+		},
+		Debug: cfg.Debug,
+	}
+}
+
+func webAdminMiddleware(cfg *config, next http.Handler) http.Handler {
+	authEnabled := strings.TrimSpace(cfg.Web.AuthUsername) != ""
+	if !authEnabled && !cfg.Web.UnsafeNoAuth {
+		return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			http.Error(w, "admin api disabled without auth", http.StatusForbidden)
+		})
+	}
+	return webAuthMiddleware(cfg, next)
+}
+
+func decodeAdminJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return false
+	}
+	if err := json.NewDecoder(r.Body).Decode(dst); err != nil {
+		http.Error(w, "invalid json payload", http.StatusBadRequest)
+		return false
+	}
+	return true
+}
+
+func writeAdminError(w http.ResponseWriter, msg string) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusBadRequest)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"ok":    false,
+		"error": msg,
+	})
+}
+
+func writeAdminOK(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(webAdminResponse{OK: true})
 }

@@ -317,15 +317,15 @@ func sentinelRuntimeOpts(
 	webOpts sentinelWebOptions,
 ) *runtime.SentinelOptions {
 	return &runtime.SentinelOptions{
-		InitialClusterSpecFile:         runtimeOpts.InitialClusterSpecFile,
-		ClusterSpecFiles:               runtimeOpts.ClusterSpecFiles,
-		WebListenAddress:               webOpts.ListenAddress,
-		WebBasePath:                    webOpts.BasePath,
-		WebAuthUsername:                webOpts.AuthUsername,
-		WebAuthPassword:                webOpts.AuthPassword,
-		WebReadTimeout:                 webOpts.ReadTimeout.String(),
-		WebWriteTimeout:                webOpts.WriteTimeout.String(),
-		WebAllowUnsafeAdminWithoutAuth: webOpts.AllowUnsafeAdminWithoutAuth,
+		InitialClusterSpecFile: runtimeOpts.InitialClusterSpecFile,
+		ClusterSpecFiles:       runtimeOpts.ClusterSpecFiles,
+		WebListenAddress:       webOpts.ListenAddress,
+		WebBasePath:            webOpts.BasePath,
+		WebAuthUsername:        webOpts.AuthUsername,
+		WebAuthPassword:        webOpts.AuthPassword,
+		WebReadTimeout:         webOpts.ReadTimeout.String(),
+		WebWriteTimeout:        webOpts.WriteTimeout.String(),
+		WebUnsafeNoAuth:        webOpts.UnsafeNoAuth,
 	}
 }
 

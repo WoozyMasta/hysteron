@@ -87,7 +87,7 @@ type sentinelWebOptions struct {
 	ReadTimeout  time.Duration `long:"read-timeout" env:"READ_TIMEOUT" default:"5s" validate-min:"0" description:"maximum duration for reading the entire request, including the body"`
 	WriteTimeout time.Duration `long:"write-timeout" env:"WRITE_TIMEOUT" default:"10s" validate-min:"0" description:"maximum duration before timing out writes of the response"`
 
-	AllowUnsafeAdminWithoutAuth bool `long:"allow-unsafe-admin-without-auth" env:"ALLOW_UNSAFE_ADMIN_WITHOUT_AUTH" description:"allow admin API endpoints when web auth is disabled (unsafe; intended only for controlled environments)"`
+	UnsafeNoAuth bool `long:"unsafe-no-auth" env:"UNSAFE_NO_AUTH" description:"allow admin API endpoints without web auth (unsafe; intended only for controlled environments)"`
 }
 
 type sentinelRuntimeOptions struct {

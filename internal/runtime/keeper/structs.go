@@ -48,6 +48,8 @@ type PostgresKeeper struct {
 	canBeMaster *bool
 	// Advertised capability: eligible for synchronous replica role.
 	canBeSynchronousReplica *bool
+	// Advertised keeper priority used as failover tie-break on sentinel side.
+	masterPriority *int
 	// Per-slot retry-after map for standby logical-slot advance failures.
 	logicalSlotStandbyAdvanceRetryAfter map[string]time.Time
 	// Pending async standby logical-slot advance operations keyed by slot/database.

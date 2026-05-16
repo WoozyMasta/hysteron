@@ -101,12 +101,13 @@ func makeKeeperStatus(cd *cluster.ClusterData) []KeeperStatus {
 		}
 
 		keeperStatus := KeeperStatus{
-			UID:           keeperUID,
-			Healthy:       keeper.Status.Healthy,
-			DBUID:         "-",
-			Role:          "-",
-			PGVersion:     "-",
-			ListenAddress: "(no db assigned)",
+			UID:            keeperUID,
+			Healthy:        keeper.Status.Healthy,
+			DBUID:          "-",
+			Role:           "-",
+			PGVersion:      "-",
+			MasterPriority: keeper.Status.MasterPriority,
+			ListenAddress:  "(no db assigned)",
 		}
 		if keeper.Status.PostgresBinaryVersion.Maj > 0 {
 			if keeper.Status.PostgresBinaryVersion.Min > 0 {

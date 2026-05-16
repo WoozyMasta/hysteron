@@ -101,6 +101,7 @@ func (s *Sentinel) updateKeepersStatus(
 		if ki, ok := keepersInfo[keeperUID]; ok {
 			k.Status.CanBeMaster = ki.CanBeMaster
 			k.Status.CanBeSynchronousReplica = ki.CanBeSynchronousReplica
+			k.Status.MasterPriority = ki.MasterPriority
 		}
 	}
 

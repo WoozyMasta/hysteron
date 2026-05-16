@@ -161,7 +161,7 @@
 
   function renderKeepers(rows) {
     if (!rows || rows.length === 0) {
-      return '<tr><td colspan="6">no keeper rows</td></tr>';
+      return '<tr><td colspan="7">no keeper rows</td></tr>';
     }
     return rows.map(function (row) {
       return "<tr>" +
@@ -170,8 +170,9 @@
         "<td>" + boolBadge(row.pg_healthy) + "</td>" +
         "<td>" + boolBadge(row.can_be_master) + "</td>" +
         "<td>" + boolBadge(row.can_be_synchronous_replica) + "</td>" +
+        "<td>" + mono(row.master_priority) + "</td>" +
         "<td>" + mono(row.listen_address) + "</td>" +
-        "</tr>" + detailRow(6);
+        "</tr>" + detailRow(7);
     }).join("");
   }
 
@@ -267,6 +268,7 @@
         '<th title="PostgreSQL health for keeper\'s assigned database">PG Healthy</th>' +
         '<th title="Keeper is eligible to become writable primary">Can Be Master</th>' +
         '<th title="Keeper is eligible for synchronous standby selection">Can Be Sync Replica</th>' +
+        '<th title="Keeper priority used as tie-breaker for master election candidates">Master Priority</th>' +
         '<th title="Keeper PostgreSQL listen address">Address</th>' +
         "</tr></thead><tbody>" + renderKeepers(cluster.keeper_rows) + "</tbody></table>" +
         "<h3>Databases</h3>" +

@@ -60,6 +60,7 @@
           <th title="PostgreSQL health for keeper's assigned database">PG Healthy</th>
           <th title="Keeper is eligible to become writable primary">Can Be Master</th>
           <th title="Keeper is eligible for synchronous standby selection">Can Be Sync Replica</th>
+          <th title="Keeper priority used as tie-breaker for master election candidates">Master Priority</th>
           <th title="Keeper PostgreSQL listen address">Address</th>
         </tr>
       </thead>
@@ -71,11 +72,12 @@
           <td>{{ .PGHealthy }}</td>
           <td>{{ .CanBeMaster }}</td>
           <td>{{ .CanBeSynchronousReplica }}</td>
+          <td>{{ .MasterPriority }}</td>
           <td>{{ .ListenAddress }}</td>
         </tr>
         {{ else }}
         <tr>
-          <td colspan="6">no keeper rows</td>
+          <td colspan="7">no keeper rows</td>
         </tr>
         {{ end }}
       </tbody>

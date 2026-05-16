@@ -75,6 +75,8 @@ type RunOptions struct {
 
 	PG RunPostgresOptions
 
+	MasterPriority int
+
 	CanBeMaster             bool
 	CanBeSynchronousReplica bool
 	DisableDataDirLocking   bool
@@ -86,6 +88,7 @@ func RunWithOptions(commonConfig config.CommonConfig, opts RunOptions) error {
 	cfg = runConfig{
 		CanBeMaster:             opts.CanBeMaster,
 		CanBeSynchronousReplica: opts.CanBeSynchronousReplica,
+		MasterPriority:          opts.MasterPriority,
 	}
 	cfg.CommonConfig = runtimecommon.FromConfigCommon(commonConfig)
 	cfg.UID = opts.UID

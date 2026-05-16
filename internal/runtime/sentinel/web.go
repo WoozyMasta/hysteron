@@ -131,6 +131,7 @@ type webKeeperRow struct {
 	UID                     string `json:"uid"`
 	ListenAddress           string `json:"listen_address"`
 	Generation              int64  `json:"generation"`
+	MasterPriority          int    `json:"master_priority"`
 	Healthy                 bool   `json:"healthy"`
 	CanBeMaster             bool   `json:"can_be_master"`
 	CanBeSynchronousReplica bool   `json:"can_be_synchronous_replica"`
@@ -491,6 +492,7 @@ func collectWebSnapshot(
 					CanBeMaster:             k.Status.CanBeMaster != nil && *k.Status.CanBeMaster,
 					CanBeSynchronousReplica: k.Status.CanBeSynchronousReplica != nil && *k.Status.CanBeSynchronousReplica,
 					Generation:              k.Generation,
+					MasterPriority:          k.Status.MasterPriority,
 				}
 				if k.Status.PostgresBinaryVersion.Maj > 0 {
 					if k.Status.PostgresBinaryVersion.Min > 0 {

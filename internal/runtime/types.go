@@ -63,6 +63,8 @@ type KeeperOptions struct {
 
 	PG KeeperPostgresOptions
 
+	MasterPriority int
+
 	CanBeMaster             bool
 	CanBeSynchronousReplica bool
 	DisableDataDirLocking   bool

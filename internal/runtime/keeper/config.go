@@ -18,11 +18,13 @@ package keeper
 import runtimecommon "github.com/woozymasta/hysteron/internal/runtime/common"
 
 type runConfig struct {
-	PG postgresOptions `group:"PostgreSQL" namespace:"pg" env-namespace:"PG"`
+	UID     string          `short:"i" long:"uid" env:"UID" long-alias:"id" description:"keeper uid (must be unique in the cluster and can contain only lower-case letters, numbers and the underscore character). If not provided a random uid will be generated."`
+	DataDir string          `short:"d" long:"data-dir" env:"DATA_DIR" description:"data directory"`
+	PG      postgresOptions `group:"PostgreSQL" namespace:"pg" env-namespace:"PG"`
 
-	UID     string `short:"i" long:"uid" env:"UID" long-alias:"id" description:"keeper uid (must be unique in the cluster and can contain only lower-case letters, numbers and the underscore character). If not provided a random uid will be generated."`
-	DataDir string `short:"d" long:"data-dir" env:"DATA_DIR" description:"data directory"`
 	runtimecommon.CommonConfig
+
+	MasterPriority int `long:"master-priority" env:"MASTER_PRIORITY" description:"keeper priority used as failover tie-break when candidates are otherwise equal (default 100)"`
 
 	CanBeMaster             bool `long:"can-be-master" env:"CAN_BE_MASTER" description:"allow keeper to be elected as master (default true)"`
 	CanBeSynchronousReplica bool `long:"can-be-synchronous-replica" env:"CAN_BE_SYNCHRONOUS_REPLICA" description:"allow keeper to be chosen as synchronous replica (default true)"`
@@ -65,4 +67,5 @@ type postgresSUOptions struct {
 var cfg = runConfig{
 	CanBeMaster:             true,
 	CanBeSynchronousReplica: true,
+	MasterPriority:          100,
 }

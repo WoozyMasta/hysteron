@@ -192,6 +192,9 @@ func (p *PostgresKeeper) updateKeeperInfo() error {
 		CanBeMaster:             p.canBeMaster,
 		CanBeSynchronousReplica: p.canBeSynchronousReplica,
 	}
+	if p.masterPriority != nil {
+		keeperInfo.MasterPriority = *p.masterPriority
+	}
 
 	// TTL only garbage-collects stale info keys; it is not freshness signal.
 	if err := p.e.SetKeeperInfo(context.TODO(), keeperUID, keeperInfo, p.sleepInterval); err != nil {

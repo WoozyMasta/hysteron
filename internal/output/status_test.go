@@ -62,6 +62,7 @@ func TestWriteStatusPlain(t *testing.T) {
 		Keepers: []app.KeeperStatus{{
 			UID:                 "keeper-1",
 			ListenAddress:       "10.0.0.1:5432",
+			MasterPriority:      200,
 			Healthy:             true,
 			PgHealthy:           true,
 			PgWantedGeneration:  3,
@@ -84,6 +85,9 @@ func TestWriteStatusPlain(t *testing.T) {
 	}
 	if !strings.Contains(out, "write+read") {
 		t.Fatalf("expected proxy mode in output, got %q", out)
+	}
+	if !strings.Contains(out, "MASTER PRIORITY") || !strings.Contains(out, "200") {
+		t.Fatalf("expected master priority in output, got %q", out)
 	}
 	if !strings.Contains(out, "ROWS") {
 		t.Fatalf("expected footer rows, got %q", out)

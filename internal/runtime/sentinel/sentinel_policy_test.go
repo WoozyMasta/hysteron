@@ -369,3 +369,86 @@ func TestUpdateCluster_AppliesManualSwitchoverRequest(t *testing.T) {
 		t.Fatalf("expected manual switch request to be cleared")
 	}
 }
+
+func TestFindBestNewMasters_PriorityTieBreakOnEqualXLogPos(t *testing.T) {
+	s := &Sentinel{
+		dbConvergenceInfos: map[string]*DBConvergenceInfo{},
+	}
+
+	cd := &cluster.ClusterData{
+		Cluster: &cluster.Cluster{
+			UID: "cluster1",
+			Spec: &cluster.ClusterSpec{
+				SynchronousReplication: cluster.BoolP(false),
+				MaxStandbyLag:          cluster.Uint32P(cluster.DefaultMaxStandbyLag),
+			},
+			Status: cluster.ClusterStatus{
+				Master: "db1",
+			},
+		},
+		Keepers: cluster.Keepers{
+			"keeper1": {UID: "keeper1", Status: cluster.KeeperStatus{Healthy: true, MasterPriority: 100}},
+			"keeper2": {UID: "keeper2", Status: cluster.KeeperStatus{Healthy: true, MasterPriority: 10}},
+			"keeper3": {UID: "keeper3", Status: cluster.KeeperStatus{Healthy: true, MasterPriority: 200}},
+		},
+		DBs: cluster.DBs{
+			"db1": {
+				UID: "db1",
+				Spec: &cluster.DBSpec{
+					KeeperUID: "keeper1",
+					Role:      common.RoleMaster,
+				},
+				Status: cluster.DBStatus{
+					Healthy:           true,
+					CurrentGeneration: 1,
+					TimelineID:        1,
+					XLogPos:           500,
+				},
+			},
+			"db2": {
+				UID:        "db2",
+				Generation: 1,
+				Spec: &cluster.DBSpec{
+					KeeperUID: "keeper2",
+					Role:      common.RoleStandby,
+					FollowConfig: &cluster.FollowConfig{
+						Type:  cluster.FollowTypeInternal,
+						DBUID: "db1",
+					},
+				},
+				Status: cluster.DBStatus{
+					Healthy:           true,
+					CurrentGeneration: 1,
+					TimelineID:        1,
+					XLogPos:           400,
+				},
+			},
+			"db3": {
+				UID:        "db3",
+				Generation: 1,
+				Spec: &cluster.DBSpec{
+					KeeperUID: "keeper3",
+					Role:      common.RoleStandby,
+					FollowConfig: &cluster.FollowConfig{
+						Type:  cluster.FollowTypeInternal,
+						DBUID: "db1",
+					},
+				},
+				Status: cluster.DBStatus{
+					Healthy:           true,
+					CurrentGeneration: 1,
+					TimelineID:        1,
+					XLogPos:           400,
+				},
+			},
+		},
+	}
+
+	candidates := s.findBestNewMasters(cd, cd.DBs["db1"])
+	if len(candidates) < 2 {
+		t.Fatalf("expected at least two candidates, got %d", len(candidates))
+	}
+	if candidates[0].UID != "db3" {
+		t.Fatalf("expected highest-priority equal-xlog candidate first, got %q", candidates[0].UID)
+	}
+}

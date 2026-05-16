@@ -109,6 +109,7 @@ func NewPostgresKeeper(
 
 		canBeMaster:             &cfg.CanBeMaster,
 		canBeSynchronousReplica: &cfg.CanBeSynchronousReplica,
+		masterPriority:          &cfg.MasterPriority,
 
 		e:   e,
 		end: end,

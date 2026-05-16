@@ -92,6 +92,7 @@ func Run(target Target) error {
 			DataDir:                 target.Keeper.DataDir,
 			CanBeMaster:             target.Keeper.CanBeMaster,
 			CanBeSynchronousReplica: target.Keeper.CanBeSynchronousReplica,
+			MasterPriority:          target.Keeper.MasterPriority,
 			DisableDataDirLocking:   target.Keeper.DisableDataDirLocking,
 			AllowNewerPG:            target.Keeper.AllowNewerPG,
 			PG: keepercmd.RunPostgresOptions{

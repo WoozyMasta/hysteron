@@ -30,11 +30,11 @@ type rootCommand struct {
 }
 
 type keeperRuntimeCommand struct {
-	Kubernetes keeperRuntimeKubernetesCommand `command:"kubernetes" alias:"k8s"    description:"Run component with kubernetes backend"`
 	Component  string                         `no-flag:"true"`
 	Common     runtimeCommonOptions           `group:"Common"`
-	Keeper     keeperRuntimeOptions           `group:"Keeper"`
 	Etcd       keeperRuntimeEtcdCommand       `command:"etcd"       alias:"etcdv3" description:"Run component with etcd backend"`
+	Kubernetes keeperRuntimeKubernetesCommand `command:"kubernetes" alias:"k8s"    description:"Run component with kubernetes backend"`
+	Keeper     keeperRuntimeOptions           `group:"Keeper"`
 }
 
 type sentinelRuntimeCommand struct {
@@ -95,10 +95,10 @@ type proxyRuntimeEtcdCommand struct {
 }
 
 type keeperRuntimeEtcdCommand struct {
-	Common    runtimeCommonOptions `no-flag:"true"`
-	Keeper    keeperRuntimeOptions `no-flag:"true"`
 	Component string               `no-flag:"true"`
+	Common    runtimeCommonOptions `no-flag:"true"`
 	Etcd      runtimeEtcdOptions   `group:"Etcd" namespace:"etcd" env-namespace:"ETCD"`
+	Keeper    keeperRuntimeOptions `no-flag:"true"`
 }
 
 type keeperRuntimeKubernetesCommand struct {

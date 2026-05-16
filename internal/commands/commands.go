@@ -272,6 +272,7 @@ func keeperRuntimeOpts(opts keeperRuntimeOptions) *runtime.KeeperOptions {
 		DataDir:                 opts.DataDir,
 		CanBeMaster:             boolValueOrDefault(opts.CanBeMaster, true),
 		CanBeSynchronousReplica: boolValueOrDefault(opts.CanBeSynchronousReplica, true),
+		MasterPriority:          opts.MasterPriority,
 		DisableDataDirLocking:   opts.DisableDataDirLocking,
 		AllowNewerPG:            opts.AllowNewerPG,
 		PG: runtime.KeeperPostgresOptions{

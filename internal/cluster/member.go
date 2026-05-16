@@ -56,6 +56,8 @@ type KeeperInfo struct {
 	BootUUID string `json:"bootUUID,omitempty"`
 	// PostgresBinaryVersion is the PostgreSQL binary version detected by keeper.
 	PostgresBinaryVersion PostgresBinaryVersion `json:"postgresBinaryVersion,omitzero"`
+	// MasterPriority is keeper priority used as failover tie-break when candidates are otherwise equal.
+	MasterPriority int `json:"masterPriority,omitempty"`
 }
 
 // DeepCopy returns an independent copy of keeper info.

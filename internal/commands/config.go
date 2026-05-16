@@ -47,6 +47,8 @@ type keeperRuntimeOptions struct {
 
 	PG keeperPostgresOptions `group:"PostgreSQL" namespace:"pg" env-namespace:"PG"`
 
+	MasterPriority int `long:"master-priority" env:"MASTER_PRIORITY" default:"100" description:"keeper priority used as failover tie-break when candidates are otherwise equal"`
+
 	DisableDataDirLocking bool `long:"disable-data-dir-locking" env:"DISABLE_DATA_DIR_LOCKING" description:"disable locking on data dir. Warning! It'll cause data corruptions if two keepers are concurrently running with the same data dir."`
 	AllowNewerPG          bool `long:"allow-newer-postgres-version" env:"ALLOW_NEWER_POSTGRES_VERSION" description:"allow running with PostgreSQL major versions newer than the highest default-supported major. Older-than-supported versions are always rejected."`
 }

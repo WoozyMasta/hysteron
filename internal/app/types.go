@@ -55,6 +55,7 @@ type KeeperStatus struct {
 	DBUID               string `json:"db_uid"`
 	Role                string `json:"role"`
 	PGVersion           string `json:"pg_version"`
+	MasterPriority      int    `json:"master_priority"`
 	Healthy             bool   `json:"healthy"`
 	PgHealthy           bool   `json:"pg_healthy"`
 	CanBeMaster         bool   `json:"can_be_master"`

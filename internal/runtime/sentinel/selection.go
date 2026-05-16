@@ -315,6 +315,31 @@ func (p dbSlice) Swap(i, j int) {
 	p[i], p[j] = p[j], p[i]
 }
 
+func keeperMasterPriority(cd *cluster.ClusterData, db *cluster.DB) int {
+	if cd == nil || db == nil || db.Spec == nil {
+		return 0
+	}
+	keeper := cd.Keepers[db.Spec.KeeperUID]
+	if keeper == nil {
+		return 0
+	}
+	return keeper.Status.MasterPriority
+}
+
+func sortCandidateMasters(cd *cluster.ClusterData, candidates []*cluster.DB) {
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].Status.XLogPos != candidates[j].Status.XLogPos {
+			return candidates[i].Status.XLogPos < candidates[j].Status.XLogPos
+		}
+		pi := keeperMasterPriority(cd, candidates[i])
+		pj := keeperMasterPriority(cd, candidates[j])
+		if pi != pj {
+			return pi > pj
+		}
+		return candidates[i].UID < candidates[j].UID
+	})
+}
+
 func (s *Sentinel) findBestStandbys(cd *cluster.ClusterData, masterDB *cluster.DB) []*cluster.DB {
 	goodStandbys, _, _ := s.validStandbysByStatus(cd)
 	bestDBs := []*cluster.DB{}
@@ -408,10 +433,10 @@ func (s *Sentinel) findBestNewMasters(
 		bestNewMasters = append(bestNewMasters, db)
 	}
 
-	sort.Sort(dbSlice(bestNewMasters))
+	sortCandidateMasters(cd, bestNewMasters)
 	s.log.Debug().
 		Interface("candidate_masters", cluster.LogSummaryDBList(bestNewMasters)).
-		Msg("candidate databases for new master, ordered by XLog position")
+		Msg("candidate databases for new master, ordered by XLog position and keeper priority tie-break")
 
 	return bestNewMasters
 }

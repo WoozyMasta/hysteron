@@ -123,8 +123,9 @@ type sentinelRuntimeKubernetesCommand struct {
 }
 
 type clusterInitializeCommand struct {
-	File string                    `short:"f" long:"file" description:"file containing the initial cluster specification"`
-	Args clusterSpecPositionalArgs `positional-args:"true"`
+	File          string                    `short:"f" long:"file" description:"file containing the initial cluster specification"`
+	Args          clusterSpecPositionalArgs `positional-args:"true"`
+	SkipIfPresent bool                      `long:"skip-if-present" description:"exit successfully without changes when cluster data already exists"`
 	confirmationOptions
 }
 

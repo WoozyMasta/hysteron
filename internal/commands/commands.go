@@ -110,7 +110,13 @@ func (c *clusterInitializeCommand) Execute(_ []string) error {
 	if err != nil {
 		return fmt.Errorf("read cluster spec input: %w", err)
 	}
-	return app.InitializeCluster(commandContext(), clusterConfig(), specData, c.Yes)
+	return app.InitializeCluster(
+		commandContext(),
+		clusterConfig(),
+		specData,
+		c.Yes,
+		c.SkipIfPresent,
+	)
 }
 
 // Execute runs `hysteron cluster update`.

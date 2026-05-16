@@ -23,6 +23,88 @@ import (
 	"github.com/woozymasta/hysteron/internal/common"
 )
 
+func TestChooseBestNewMaster_RespectsEffectiveClusterSyncMode(t *testing.T) {
+	s := &Sentinel{
+		dbConvergenceInfos:      map[string]*DBConvergenceInfo{},
+		forceFailedKeeperUIDs:   map[string]struct{}{},
+		leaderRaceBackoffTimers: map[string]time.Time{},
+	}
+
+	cd := &cluster.ClusterData{
+		Cluster: &cluster.Cluster{
+			UID: "cluster1",
+			Spec: &cluster.ClusterSpec{
+				SynchronousReplication: cluster.BoolP(false),
+				MaxStandbyLag:          cluster.Uint32P(cluster.DefaultMaxStandbyLag),
+			},
+			Status: cluster.ClusterStatus{
+				Master: "db1",
+			},
+		},
+		Keepers: cluster.Keepers{
+			"keeper1": {
+				UID: "keeper1",
+				Status: cluster.KeeperStatus{
+					Healthy: true,
+				},
+			},
+			"keeper2": {
+				UID: "keeper2",
+				Status: cluster.KeeperStatus{
+					Healthy: true,
+				},
+			},
+		},
+		DBs: cluster.DBs{
+			"db1": {
+				UID: "db1",
+				Spec: &cluster.DBSpec{
+					KeeperUID:              "keeper1",
+					Role:                   common.RoleMaster,
+					SynchronousReplication: true,
+					SynchronousStandbys:    []string{"db3"},
+				},
+				Status: cluster.DBStatus{
+					Healthy:             false,
+					CurrentGeneration:   1,
+					TimelineID:          1,
+					XLogPos:             1000,
+					SynchronousStandbys: []string{"db3"},
+				},
+			},
+			"db2": {
+				UID:        "db2",
+				Generation: 1,
+				Spec: &cluster.DBSpec{
+					KeeperUID: "keeper2",
+					Role:      common.RoleStandby,
+					FollowConfig: &cluster.FollowConfig{
+						Type:  cluster.FollowTypeInternal,
+						DBUID: "db1",
+					},
+				},
+				Status: cluster.DBStatus{
+					Healthy:           true,
+					CurrentGeneration: 1,
+					TimelineID:        1,
+					XLogPos:           1000,
+				},
+			},
+		},
+	}
+
+	newMaster, ok := s.chooseBestNewMaster(cd, cd.DBs["db1"], 0)
+	if !ok {
+		t.Fatalf("expected a best new master candidate")
+	}
+	if newMaster == nil {
+		t.Fatalf("expected non-nil new master")
+	}
+	if newMaster.UID != "db2" {
+		t.Fatalf("unexpected new master uid, got: %q, want: %q", newMaster.UID, "db2")
+	}
+}
+
 func TestComputeOrphanMemberSlots(t *testing.T) {
 	now := time.Unix(1000, 0).UTC()
 	prevTS := time.Unix(900, 0).UTC()

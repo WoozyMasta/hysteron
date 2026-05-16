@@ -185,6 +185,22 @@ func TestClusterStatusWithoutStoreBackendFails(t *testing.T) {
 	}
 }
 
+func TestClusterInitializeSkipIfPresentFlagIsAccepted(t *testing.T) {
+	parser := newTestParser()
+	_, err := parser.ParseArgs([]string{
+		"cluster", "--cluster-name", "test", "initialize", "--skip-if-present",
+	})
+	if err == nil {
+		t.Fatal("expected initialize error")
+	}
+	if strings.Contains(err.Error(), "unknown flag") {
+		t.Fatalf("unexpected unknown flag error: %v", err)
+	}
+	if !strings.Contains(err.Error(), "unknown store backend") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestClusterSpecificationWithoutStoreBackendFails(t *testing.T) {
 	parser := newTestParser()
 	_, err := parser.ParseArgs([]string{"cluster", "--cluster-name", "test", "specification"})

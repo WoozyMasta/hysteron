@@ -177,7 +177,13 @@ func WriteClusterData(ctx context.Context, cfg *stconfig.CommonConfig, data []by
 }
 
 // InitializeCluster creates initial cluster data from cluster spec.
-func InitializeCluster(ctx context.Context, cfg *stconfig.CommonConfig, specData []byte, force bool) error {
+func InitializeCluster(
+	ctx context.Context,
+	cfg *stconfig.CommonConfig,
+	specData []byte,
+	force bool,
+	skipIfPresent bool,
+) error {
 	if err := stconfig.CheckCommonConfig(cfg); err != nil {
 		return err
 	}
@@ -193,6 +199,9 @@ func InitializeCluster(ctx context.Context, cfg *stconfig.CommonConfig, specData
 	existing, _, err := s.GetClusterData(ctx)
 	if err != nil {
 		return err
+	}
+	if existing != nil && skipIfPresent {
+		return nil
 	}
 	if existing != nil && !force {
 		return ErrClusterDataOverwriteRequiresYes

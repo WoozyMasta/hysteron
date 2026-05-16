@@ -14,6 +14,10 @@ The format is based on [Keep a Changelog][], and this project adheres to
   no-op initialization flows when cluster data already exists.
 * `hysteron cluster pause` / `cluster resume` management actions with
   optional pause reason and TTL, plus mutation guards while pause is active.
+* Targeted operator switch intents:
+  `hysteron cluster switchover --keeper-uid` and
+  `hysteron failover target --keeper-uid`, persisted in cluster status and
+  applied by sentinel only when target passes HA safety eligibility filters.
 * New embedded Sentinel web status UI,
   authenticated API endpoint, auto-refresh,
   and multi-cluster status tables (sentinels, keepers, databases, proxies).

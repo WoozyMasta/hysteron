@@ -251,6 +251,7 @@ func (s *Sentinel) updateCluster(cd *cluster.ClusterData, pis cluster.ProxiesInf
 		// Calculate current master status
 		curMasterDBUID := cd.Cluster.Status.Master
 		wantedMasterDBUID := curMasterDBUID
+		manualSwitchApplied := false
 
 		masterOK := true
 		curMasterDB := cd.DBs[curMasterDBUID]
@@ -263,6 +264,57 @@ func (s *Sentinel) updateCluster(cd *cluster.ClusterData, pis cluster.ProxiesInf
 		s.log.Debug().
 			Fields(cluster.LogSummaryDBBrief(curMasterDB)).
 			Msg("current master database record from cluster data")
+
+		if req := cd.Cluster.Status.ManualSwitch; req != nil {
+			targetKeeper := newcd.Keepers[req.TargetKeeperUID]
+			if targetKeeper == nil {
+				s.log.Warn().
+					Str("target_keeper_uid", req.TargetKeeperUID).
+					Str("mode", string(req.Mode)).
+					Msg("manual switch target keeper not found in current cluster data")
+			} else {
+				targetDB := newcd.FindDB(targetKeeper)
+				switch {
+				case targetDB == nil:
+					s.log.Warn().
+						Str("target_keeper_uid", req.TargetKeeperUID).
+						Str("mode", string(req.Mode)).
+						Msg("manual switch target keeper has no assigned database")
+				case targetDB.UID == curMasterDBUID:
+					newcd.Cluster.Status.ManualSwitch = nil
+					manualSwitchApplied = true
+					s.log.Info().
+						Str("mode", string(req.Mode)).
+						Str(slog.FieldKeeperUID, req.TargetKeeperUID).
+						Msg("manual switch target already current master; clearing request")
+				default:
+					candidates := s.findBestNewMasters(newcd, curMasterDB)
+					targetEligible := false
+					for _, c := range candidates {
+						if c.UID == targetDB.UID {
+							targetEligible = true
+							break
+						}
+					}
+					if targetEligible {
+						wantedMasterDBUID = targetDB.UID
+						newcd.Cluster.Status.ManualSwitch = nil
+						manualSwitchApplied = true
+						s.log.Info().
+							Str("mode", string(req.Mode)).
+							Str(slog.FieldKeeperUID, req.TargetKeeperUID).
+							Str(slog.FieldDBUID, targetDB.UID).
+							Msg("applying manual master switch request")
+					} else {
+						s.log.Warn().
+							Str("mode", string(req.Mode)).
+							Str(slog.FieldKeeperUID, req.TargetKeeperUID).
+							Str(slog.FieldDBUID, targetDB.UID).
+							Msg("manual switch target is not eligible under current HA safety filters")
+					}
+				}
+			}
+		}
 
 		if !curMasterDB.Status.Healthy {
 			s.log.Info().
@@ -284,7 +336,7 @@ func (s *Sentinel) updateCluster(cd *cluster.ClusterData, pis cluster.ProxiesInf
 			masterOK = false
 		}
 
-		if !masterOK {
+		if !masterOK && !manualSwitchApplied {
 			s.log.Info().
 				Msg("trying to find a new master to replace failed master")
 			bestNewMasterDB, clearBackoff := s.chooseBestNewMaster(

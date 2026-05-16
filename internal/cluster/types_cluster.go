@@ -146,6 +146,8 @@ type ClusterSpec struct { //nolint:revive
 type ClusterStatus struct { //nolint:revive
 	// PauseUntil is optional pause expiry time in UTC.
 	PauseUntil *time.Time `json:"pauseUntil,omitempty"`
+	// ManualSwitch stores pending operator-requested switch intent.
+	ManualSwitch *ManualSwitchRequest `json:"manualSwitch,omitempty"`
 	// Phase is current cluster lifecycle phase.
 	Phase ClusterPhase `json:"phase,omitempty"`
 	// Master DB UID

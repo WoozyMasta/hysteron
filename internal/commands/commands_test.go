@@ -234,6 +234,38 @@ func TestClusterResumeCommandIsAccepted(t *testing.T) {
 	}
 }
 
+func TestClusterSwitchoverCommandIsAccepted(t *testing.T) {
+	parser := newTestParser()
+	_, err := parser.ParseArgs([]string{
+		"cluster", "--cluster-name", "test", "switchover", "--keeper-uid", "keeper-01",
+	})
+	if err == nil {
+		t.Fatal("expected switchover error")
+	}
+	if strings.Contains(err.Error(), "unknown command") {
+		t.Fatalf("unexpected unknown command error: %v", err)
+	}
+	if !strings.Contains(err.Error(), "unknown store backend") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestFailoverTargetCommandIsAccepted(t *testing.T) {
+	parser := newTestParser()
+	_, err := parser.ParseArgs([]string{
+		"failover", "--cluster-name", "test", "target", "--keeper-uid", "keeper-01",
+	})
+	if err == nil {
+		t.Fatal("expected failover target error")
+	}
+	if strings.Contains(err.Error(), "unknown command") {
+		t.Fatalf("unexpected unknown command error: %v", err)
+	}
+	if !strings.Contains(err.Error(), "unknown store backend") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestClusterSpecificationWithoutStoreBackendFails(t *testing.T) {
 	parser := newTestParser()
 	_, err := parser.ParseArgs([]string{"cluster", "--cluster-name", "test", "specification"})

@@ -209,6 +209,15 @@ func (c *clusterResumeCommand) Execute(_ []string) error {
 	return app.ResumeCluster(commandContext(), clusterConfig())
 }
 
+// Execute runs `hysteron cluster switchover`.
+func (c *clusterSwitchoverCommand) Execute(_ []string) error {
+	return app.RequestManualSwitchover(
+		commandContext(),
+		clusterConfig(),
+		c.KeeperUID,
+	)
+}
+
 // Execute runs `hysteron cluster keeper remove`.
 func (c *clusterKeeperRemoveCommand) Execute(_ []string) error {
 	return app.RemoveKeeper(commandContext(), clusterConfig(), c.KeeperUID)
@@ -222,6 +231,15 @@ func (c *failoverKeeperCommand) Execute(_ []string) error {
 // Execute runs `hysteron failover force`.
 func (c *failoverForceCommand) Execute(_ []string) error {
 	return app.ForceFailover(commandContext(), failoverConfig())
+}
+
+// Execute runs `hysteron failover target`.
+func (c *failoverTargetCommand) Execute(_ []string) error {
+	return app.RequestManualFailover(
+		commandContext(),
+		failoverConfig(),
+		c.KeeperUID,
+	)
 }
 
 func runTypedRuntime(

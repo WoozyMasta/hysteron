@@ -21,12 +21,12 @@ import (
 )
 
 type rootCommand struct {
+	Cluster  clusterCommand         `command:"cluster"  command-group:"Management Commands" description:"Manage cluster control operations"`
+	Global   rootGlobalOptions      `group:"Global"`
 	Keeper   keeperRuntimeCommand   `command:"keeper"   command-group:"Runtime Commands"    description:"Run keeper runtime components"`
+	Failover failoverCommand        `command:"failover" command-group:"Management Commands" description:"Manage failover operations"`
 	Sentinel sentinelRuntimeCommand `command:"sentinel" command-group:"Runtime Commands"    description:"Run sentinel runtime components"`
 	Proxy    proxyRuntimeCommand    `command:"proxy"    command-group:"Runtime Commands"    description:"Run proxy runtime components"`
-	Global   rootGlobalOptions      `group:"Global"`
-	Failover failoverCommand        `command:"failover" command-group:"Management Commands" description:"Manage failover operations"`
-	Cluster  clusterCommand         `command:"cluster"  command-group:"Management Commands" description:"Manage cluster control operations"`
 }
 
 type keeperRuntimeCommand struct {
@@ -55,22 +55,24 @@ type proxyRuntimeCommand struct {
 }
 
 type clusterCommand struct {
+	Resume        clusterResumeCommand        `command:"resume"        description:"Resume mutating management operations"`
 	Keeper        clusterKeeperCommand        `command:"keeper"        description:"Manage keeper records in cluster data"`
 	List          clusterListCommand          `command:"list"          description:"List clusters in the configured store"              alias:"ls"`
 	Status        clusterStatusCommand        `command:"status"        description:"Display current cluster status"`
-	Pause         clusterPauseCommand         `command:"pause"         description:"Pause mutating management operations"`
-	Resume        clusterResumeCommand        `command:"resume"        description:"Resume mutating management operations"`
+	Switchover    clusterSwitchoverCommand    `command:"switchover"    description:"Request planned master switch to target keeper"`
 	Data          clusterDataCommand          `command:"data"          description:"Read and mutate cluster data documents"`
 	Initialize    clusterInitializeCommand    `command:"initialize"    description:"Initialize a new cluster"                           alias:"init"`
 	Update        clusterUpdateCommand        `command:"update"        description:"Replace or patch the current cluster specification"`
+	Pause         clusterPauseCommand         `command:"pause"         description:"Pause mutating management operations"`
 	Specification clusterSpecificationCommand `command:"specification" description:"Retrieve the current cluster specification"         alias:"spec"`
 	Common        managementCommonOptions     `group:"Common"`
 	Promote       clusterPromoteCommand       `command:"promote"       description:"Promote a standby cluster to primary"`
 }
 
 type failoverCommand struct {
-	Force  failoverForceCommand    `command:"force"  description:"Force failover to the best available candidate"`
-	Keeper failoverKeeperCommand   `command:"keeper" description:"Mark a keeper as failed"`
+	Force  failoverForceCommand    `command:"force"   description:"Force failover to the best available candidate"`
+	Keeper failoverKeeperCommand   `command:"keeper"  description:"Mark a keeper as failed"`
+	Target failoverTargetCommand   `command:"target"  description:"Request failover to target keeper"`
 	Common managementCommonOptions `group:"Common"`
 }
 
@@ -178,6 +180,10 @@ type clusterPauseCommand struct {
 
 type clusterResumeCommand struct{}
 
+type clusterSwitchoverCommand struct {
+	keeperUIDOptions
+}
+
 type clusterKeeperRemoveCommand struct {
 	keeperUIDOptions
 }
@@ -187,6 +193,10 @@ type failoverKeeperCommand struct {
 }
 
 type failoverForceCommand struct{}
+
+type failoverTargetCommand struct {
+	keeperUIDOptions
+}
 
 type confirmationOptions struct {
 	Yes bool `short:"y" long:"yes" description:"do not ask for confirmation"`

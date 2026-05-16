@@ -28,6 +28,7 @@ func (c *Cluster) DeepCopy() *Cluster {
 
 	nc := *c
 	nc.Spec = c.Spec.DeepCopy()
+	nc.Status.ManualSwitch = copyManualSwitchRequest(c.Status.ManualSwitch)
 	nc.Status.PauseUntil = copyTimePtr(c.Status.PauseUntil)
 	return &nc
 }
@@ -120,6 +121,14 @@ func copyTimePtr(v *time.Time) *time.Time {
 		return nil
 	}
 
+	nv := *v
+	return &nv
+}
+
+func copyManualSwitchRequest(v *ManualSwitchRequest) *ManualSwitchRequest {
+	if v == nil {
+		return nil
+	}
 	nv := *v
 	return &nv
 }

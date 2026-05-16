@@ -274,3 +274,98 @@ func TestUpdateCluster_SkipsMutationsWhenPaused(t *testing.T) {
 		t.Fatalf("updateCluster() mutated paused cluster data")
 	}
 }
+
+func TestUpdateCluster_AppliesManualSwitchoverRequest(t *testing.T) {
+	s := &Sentinel{
+		dbConvergenceInfos: map[string]*DBConvergenceInfo{},
+		UIDFn: func() string {
+			return "newdb"
+		},
+	}
+
+	cd := &cluster.ClusterData{
+		Cluster: &cluster.Cluster{
+			UID: "cluster1",
+			Spec: &cluster.ClusterSpec{
+				InitMode:               cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
+				Role:                   cluster.ClusterRoleP(cluster.ClusterRoleMaster),
+				SynchronousReplication: cluster.BoolP(false),
+				MaxStandbyLag:          cluster.Uint32P(cluster.DefaultMaxStandbyLag),
+			},
+			Status: cluster.ClusterStatus{
+				Phase:             cluster.ClusterPhaseNormal,
+				Master:            "db1",
+				CurrentGeneration: 1,
+				ManualSwitch: &cluster.ManualSwitchRequest{
+					TargetKeeperUID: "keeper2",
+					Mode:            cluster.ManualSwitchModeSwitchover,
+				},
+			},
+		},
+		Keepers: cluster.Keepers{
+			"keeper1": {
+				UID: "keeper1",
+				Status: cluster.KeeperStatus{
+					Healthy: true,
+				},
+			},
+			"keeper2": {
+				UID: "keeper2",
+				Status: cluster.KeeperStatus{
+					Healthy: true,
+				},
+			},
+		},
+		DBs: cluster.DBs{
+			"db1": {
+				UID:        "db1",
+				Generation: 1,
+				Spec: &cluster.DBSpec{
+					KeeperUID: "keeper1",
+					Role:      common.RoleMaster,
+					Followers: []string{"db2"},
+				},
+				Status: cluster.DBStatus{
+					Healthy:           true,
+					CurrentGeneration: 1,
+					TimelineID:        1,
+					XLogPos:           100,
+				},
+			},
+			"db2": {
+				UID:        "db2",
+				Generation: 1,
+				Spec: &cluster.DBSpec{
+					KeeperUID: "keeper2",
+					Role:      common.RoleStandby,
+					FollowConfig: &cluster.FollowConfig{
+						Type:  cluster.FollowTypeInternal,
+						DBUID: "db1",
+					},
+					Followers: []string{},
+				},
+				Status: cluster.DBStatus{
+					Healthy:           true,
+					CurrentGeneration: 1,
+					TimelineID:        1,
+					XLogPos:           100,
+				},
+			},
+		},
+		Proxy: &cluster.Proxy{},
+	}
+
+	got, err := s.updateCluster(cd, cluster.ProxiesInfo{})
+	if err != nil {
+		t.Fatalf("updateCluster() error: %v", err)
+	}
+	if got == nil {
+		t.Fatalf("updateCluster() returned nil cluster data")
+	}
+	if got.Cluster.Status.Master != "db2" {
+		t.Fatalf("expected new master db2, got %q", got.Cluster.Status.Master)
+	}
+	if got.Cluster.Status.ManualSwitch != nil {
+		t.Fatalf("expected manual switch request to be cleared")
+	}
+}

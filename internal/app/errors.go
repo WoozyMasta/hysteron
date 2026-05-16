@@ -43,4 +43,8 @@ var (
 	ErrNoMasterKeeper = errors.New("no master keeper available")
 	// ErrClusterPaused reports that cluster mutations are blocked by pause mode.
 	ErrClusterPaused = errors.New("cluster is paused; resume first")
+	// ErrManualSwitchTargetKeeperRequired reports missing target keeper uid.
+	ErrManualSwitchTargetKeeperRequired = errors.New("target keeper uid required")
+	// ErrManualSwitchTargetKeeperNotFound reports unknown target keeper.
+	ErrManualSwitchTargetKeeperNotFound = errors.New("target keeper not found")
 )

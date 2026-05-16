@@ -219,6 +219,12 @@ func (s *Sentinel) updateCluster(cd *cluster.ClusterData, pis cluster.ProxiesInf
 		}
 
 	case cluster.ClusterPhaseNormal:
+		if cd.Cluster.Status.PauseActive(time.Now().UTC()) {
+			s.log.Info().
+				Msg("cluster pause is active; skipping automatic HA state mutations")
+			return newcd, nil
+		}
+
 		// Remove old keepers
 		keepersToRemove := []*cluster.Keeper{}
 		for _, k := range newcd.Keepers {

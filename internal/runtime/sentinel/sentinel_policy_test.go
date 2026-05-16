@@ -215,3 +215,62 @@ func TestShouldDelayLeaderRace(t *testing.T) {
 		}
 	})
 }
+
+func TestUpdateCluster_SkipsMutationsWhenPaused(t *testing.T) {
+	s := &Sentinel{
+		dbConvergenceInfos: map[string]*DBConvergenceInfo{},
+		UIDFn: func() string {
+			return "newdb"
+		},
+	}
+
+	cd := &cluster.ClusterData{
+		Cluster: &cluster.Cluster{
+			UID: "cluster1",
+			Spec: &cluster.ClusterSpec{
+				InitMode: cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
+			},
+			Status: cluster.ClusterStatus{
+				Phase:             cluster.ClusterPhaseNormal,
+				Master:            "db1",
+				CurrentGeneration: 1,
+				Paused:            true,
+			},
+		},
+		Keepers: cluster.Keepers{
+			"keeper1": {
+				UID: "keeper1",
+				Status: cluster.KeeperStatus{
+					Healthy: true,
+				},
+			},
+		},
+		DBs: cluster.DBs{
+			"db1": {
+				UID:        "db1",
+				Generation: 1,
+				Spec: &cluster.DBSpec{
+					KeeperUID: "keeper1",
+					Role:      common.RoleMaster,
+					Followers: []string{},
+				},
+				Status: cluster.DBStatus{
+					Healthy:           true,
+					CurrentGeneration: 1,
+				},
+			},
+		},
+		Proxy: &cluster.Proxy{},
+	}
+
+	got, err := s.updateCluster(cd, cluster.ProxiesInfo{})
+	if err != nil {
+		t.Fatalf("updateCluster() error: %v", err)
+	}
+	if got == nil {
+		t.Fatalf("updateCluster() returned nil cluster data")
+	}
+	if !reflect.DeepEqual(got, cd) {
+		t.Fatalf("updateCluster() mutated paused cluster data")
+	}
+}

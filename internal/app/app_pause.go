@@ -21,22 +21,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/woozymasta/hysteron/internal/cluster"
 	stconfig "github.com/woozymasta/hysteron/internal/config"
 	"github.com/woozymasta/hysteron/internal/store"
 )
 
-func isPauseActive(now time.Time, paused bool, until *time.Time) bool {
-	if !paused {
-		return false
-	}
-	if until == nil {
-		return true
-	}
-	return now.Before(*until)
-}
-
 func ensureClusterNotPaused(cdPaused bool, cdPauseUntil *time.Time) error {
-	if !isPauseActive(time.Now().UTC(), cdPaused, cdPauseUntil) {
+	if !(cluster.ClusterStatus{
+		Paused:     cdPaused,
+		PauseUntil: cdPauseUntil,
+	}).PauseActive(time.Now().UTC()) {
 		return nil
 	}
 	return ErrClusterPaused

@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog][], and this project adheres to
 
 ### Added
 
+* `hysteron cluster initialize --skip-if-present` for idempotent
+  no-op initialization flows when cluster data already exists.
 * New embedded Sentinel web status UI,
   authenticated API endpoint, auto-refresh,
   and multi-cluster status tables (sentinels, keepers, databases, proxies).
@@ -71,6 +73,10 @@ The format is based on [Keep a Changelog][], and this project adheres to
   and legacy pollon dependency removed.
 * Go/runtime/dependency baseline was modernized
   (Go 1.26 line, updated PostgreSQL/Kubernetes/etcd client stacks).
+* Proxy check loop is now context-driven with per-check deadlines,
+  cancellation-safe destination handling, and graceful stop semantics.
+* Sentinel failover sync gating now aligns with effective cluster-level
+  synchronous replication mode to avoid stale per-DB sync constraints.
 
 ### Removed
 

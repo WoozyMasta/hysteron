@@ -103,6 +103,8 @@ type webBuildInfo struct {
 
 type webSentinelRow struct {
 	UID            string   `json:"uid"`
+	Hostname       string   `json:"hostname,omitempty"`
+	NodeName       string   `json:"node_name,omitempty"`
 	Clusters       []string `json:"clusters"`
 	LeaderClusters []string `json:"leader_clusters"`
 	IsLocal        bool     `json:"is_local"`
@@ -129,6 +131,8 @@ type webClusterStatus struct {
 
 type webKeeperRow struct {
 	UID                     string `json:"uid"`
+	Hostname                string `json:"hostname,omitempty"`
+	NodeName                string `json:"node_name,omitempty"`
 	ListenAddress           string `json:"listen_address"`
 	SyncRole                string `json:"sync_role"`
 	Generation              int64  `json:"generation"`
@@ -151,6 +155,8 @@ type webDBRow struct {
 
 type webProxyRow struct {
 	UID          string `json:"uid"`
+	Hostname     string `json:"hostname,omitempty"`
+	NodeName     string `json:"node_name,omitempty"`
 	Mode         string `json:"mode"`
 	RWAddress    string `json:"rw_address"`
 	ROAddress    string `json:"ro_address"`
@@ -452,6 +458,8 @@ func collectWebSnapshot(
 					row = &webSentinelRow{UID: si.UID}
 					sentinelRowsByUID[si.UID] = row
 				}
+				row.Hostname = si.Hostname
+				row.NodeName = si.NodeName
 				row.IsLocal = row.IsLocal || isLocal
 				row.IsLeader = row.IsLeader || isLeader
 				row.Clusters = append(row.Clusters, clusterName)
@@ -489,6 +497,8 @@ func collectWebSnapshot(
 				}
 				row := webKeeperRow{
 					UID:                     k.UID,
+					Hostname:                k.Status.Hostname,
+					NodeName:                k.Status.NodeName,
 					Healthy:                 k.Status.Healthy,
 					CanBeMaster:             k.Status.CanBeMaster != nil && *k.Status.CanBeMaster,
 					CanBeSynchronousReplica: k.Status.CanBeSynchronousReplica != nil && *k.Status.CanBeSynchronousReplica,
@@ -576,6 +586,8 @@ func collectWebSnapshot(
 				_, row.Enabled = enabled[uid]
 				if pi, ok := proxiesInfo[uid]; ok && pi != nil {
 					row.Seen = true
+					row.Hostname = pi.Hostname
+					row.NodeName = pi.NodeName
 					row.Generation = pi.Generation
 					row.ProxyTimeout = pi.ProxyTimeout.String()
 					row.Mode = webProxyMode(pi.Listeners)

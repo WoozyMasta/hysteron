@@ -108,6 +108,8 @@ func makeKeeperStatus(cd *cluster.ClusterData) []KeeperStatus {
 			SyncRole:       "-",
 			PGVersion:      "-",
 			MasterPriority: keeper.Status.MasterPriority,
+			Hostname:       keeper.Status.Hostname,
+			NodeName:       keeper.Status.NodeName,
 			ListenAddress:  "(no db assigned)",
 		}
 		if keeper.Status.PostgresBinaryVersion.Maj > 0 {

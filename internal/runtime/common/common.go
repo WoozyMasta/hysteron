@@ -20,6 +20,7 @@ package runtimecommon
 import (
 	"context"
 	"io"
+	"os"
 	"strings"
 	"time"
 
@@ -239,6 +240,21 @@ func normalizeClusterNames(values []string) []string {
 // multiple clusters.
 func CheckClusterName(cfg *CommonConfig) error {
 	return stconfig.CheckClusterName(toConfig(cfg))
+}
+
+// ResolveHostNodeMetadata returns host and optional node identity used for
+// diagnostic status fields.
+func ResolveHostNodeMetadata() (hostname, nodeName string) {
+	hostname, _ = os.Hostname()
+	hostname = strings.TrimSpace(hostname)
+	for _, key := range []string{"HYSTERON_NODE_NAME", "NODE_NAME"} {
+		value := strings.TrimSpace(os.Getenv(key))
+		if value != "" {
+			nodeName = value
+			break
+		}
+	}
+	return hostname, nodeName
 }
 
 // CheckClusterNames fails when no cluster names are provided or any duplicate

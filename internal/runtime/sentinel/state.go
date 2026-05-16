@@ -102,6 +102,8 @@ func (s *Sentinel) updateKeepersStatus(
 			k.Status.CanBeMaster = ki.CanBeMaster
 			k.Status.CanBeSynchronousReplica = ki.CanBeSynchronousReplica
 			k.Status.MasterPriority = ki.MasterPriority
+			k.Status.Hostname = ki.Hostname
+			k.Status.NodeName = ki.NodeName
 		}
 	}
 

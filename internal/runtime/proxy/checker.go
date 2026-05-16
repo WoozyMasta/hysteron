@@ -129,6 +129,7 @@ func (c *ClusterChecker) SetProxyInfo(
 		ProxyTimeout: proxyTimeout,
 		Listeners:    listeners,
 	}
+	proxyInfo.Hostname, proxyInfo.NodeName = runtimecommon.ResolveHostNodeMetadata()
 	log.Debug().
 		Fields(cluster.LogSummaryProxyInfo(proxyInfo)).
 		Msg("proxy registration payload before write to store")

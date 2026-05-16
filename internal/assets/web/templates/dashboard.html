@@ -11,6 +11,8 @@
     <thead>
       <tr>
         <th title="Sentinel unique identifier">UID</th>
+        <th title="Sentinel process hostname">Hostname</th>
+        <th title="Logical node name (if provided)">Node</th>
         <th title="True if this row is the currently opened sentinel process">This Sentinel</th>
         <th title="Clusters where this sentinel currently holds leader lease">Leader For</th>
         <th title="Clusters where this sentinel is visible in DCS">Clusters</th>
@@ -20,6 +22,8 @@
       {{ range .Sentinels }}
       <tr>
         <td><span class="mono">{{ .UID }}</span></td>
+        <td><span class="mono">{{ .Hostname }}</span></td>
+        <td><span class="mono">{{ .NodeName }}</span></td>
         <td><span class="bool-badge {{ if .IsLocal }}is-true{{ else }}is-neutral{{ end }}">{{ .IsLocal }}</span></td>
         <td>{{ if .LeaderClusters }}{{ range $i, $v := .LeaderClusters }}{{ if $i }},
           {{ end }}<span class="mono">{{ $v }}</span>{{ end }}{{ else }}-{{ end }}</td>
@@ -28,7 +32,7 @@
       </tr>
       {{ else }}
       <tr>
-        <td colspan="4">no sentinel data</td>
+        <td colspan="6">no sentinel data</td>
       </tr>
       {{ end }}
     </tbody>
@@ -56,6 +60,8 @@
       <thead>
         <tr>
           <th title="Keeper unique identifier">Keeper UID</th>
+          <th title="Keeper process hostname">Hostname</th>
+          <th title="Logical node name (if provided)">Node</th>
           <th title="Keeper health status reported to DCS">Healthy</th>
           <th title="PostgreSQL health for keeper's assigned database">PG Healthy</th>
           <th title="Replication sync role for keeper DB relative to current master">Sync Role</th>
@@ -69,6 +75,8 @@
         {{ range .KeeperRows }}
         <tr>
           <td>{{ .UID }}</td>
+          <td>{{ .Hostname }}</td>
+          <td>{{ .NodeName }}</td>
           <td>{{ .Healthy }}</td>
           <td>{{ .PGHealthy }}</td>
           <td>{{ .SyncRole }}</td>
@@ -79,7 +87,7 @@
         </tr>
         {{ else }}
         <tr>
-          <td colspan="8">no keeper rows</td>
+          <td colspan="10">no keeper rows</td>
         </tr>
         {{ end }}
       </tbody>
@@ -120,6 +128,8 @@
       <thead>
         <tr>
           <th title="Proxy unique identifier">Proxy UID</th>
+          <th title="Proxy process hostname">Hostname</th>
+          <th title="Logical node name (if provided)">Node</th>
           <th title="Active listener mode(s): write/read/write+read">Mode</th>
           <th title="Proxy listeners and runtime status">Listeners</th>
           <th title="Proxy heartbeat currently visible in DCS">Seen</th>
@@ -132,6 +142,8 @@
         {{ range .ProxyRows }}
         <tr>
           <td>{{ .UID }}</td>
+          <td>{{ .Hostname }}</td>
+          <td>{{ .NodeName }}</td>
           <td>{{ .Mode }}</td>
           <td>{{ if .RWAddress }}<span class="listener-pill {{ if .RWActive }}up{{ else }}down{{ end }}" title="RW: writable listener used for read/write client traffic">RW <span class="mono">{{ .RWAddress }}</span></span>{{ end }} {{ if .ROAddress }}<span class="listener-pill {{ if .ROActive }}up{{ else }}down{{ end }}" title="RO: read-only listener used for standby routing">RO <span class="mono">{{ .ROAddress }}</span></span>{{ end }}{{ if and (eq .RWAddress "") (eq .ROAddress "") }}-{{ end }}</td>
           <td>{{ .Seen }}</td>
@@ -141,7 +153,7 @@
         </tr>
         {{ else }}
         <tr>
-          <td colspan="7">no proxy rows</td>
+          <td colspan="9">no proxy rows</td>
         </tr>
         {{ end }}
       </tbody>

@@ -99,8 +99,10 @@ func GetClusterStatus(ctx context.Context, cfg *stconfig.CommonConfig) (Status, 
 	status.Sentinels = make([]SentinelStatus, 0, len(sentinelsInfo))
 	for _, si := range sentinelsInfo {
 		status.Sentinels = append(status.Sentinels, SentinelStatus{
-			UID:    si.UID,
-			Leader: leaderUID != "" && si.UID == leaderUID,
+			UID:      si.UID,
+			Hostname: si.Hostname,
+			NodeName: si.NodeName,
+			Leader:   leaderUID != "" && si.UID == leaderUID,
 		})
 	}
 
@@ -114,6 +116,8 @@ func GetClusterStatus(ctx context.Context, cfg *stconfig.CommonConfig) (Status, 
 	for _, pi := range proxies {
 		status.Proxies = append(status.Proxies, ProxyStatus{
 			UID:        pi.UID,
+			Hostname:   pi.Hostname,
+			NodeName:   pi.NodeName,
 			Mode:       proxyStatusMode(pi.Listeners),
 			Listeners:  proxyStatusListeners(pi.Listeners),
 			Generation: pi.Generation,

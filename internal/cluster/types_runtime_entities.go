@@ -37,6 +37,10 @@ type KeeperStatus struct {
 	CanBeSynchronousReplica *bool `json:"canBeSynchronousReplica,omitempty"`
 	// BootUUID identifies current keeper process boot.
 	BootUUID string `json:"bootUUID,omitempty"`
+	// Hostname is local OS hostname reported by keeper process.
+	Hostname string `json:"hostname,omitempty"`
+	// NodeName is optional logical node label (for example kubernetes node name).
+	NodeName string `json:"nodeName,omitempty"`
 	// PostgresBinaryVersion is PostgreSQL binary version detected by keeper.
 	PostgresBinaryVersion PostgresBinaryVersion `json:"postgresBinaryVersion,omitzero"`
 	// MasterPriority is keeper priority used as failover tie-break when candidates are otherwise equal.
@@ -69,6 +73,8 @@ func NewKeeperFromKeeperInfo(ki *KeeperInfo) *Keeper {
 			LastHealthyTime: time.Now(),
 			BootUUID:        ki.BootUUID,
 			MasterPriority:  ki.MasterPriority,
+			Hostname:        ki.Hostname,
+			NodeName:        ki.NodeName,
 		},
 	}
 }

@@ -63,27 +63,34 @@ func writeStatusTable(w io.Writer, status app.Status) error {
 		return err
 	}
 	sentinelTable := newStatusTable(w, "Sentinels")
-	sentinelTable.AppendHeader(table.Row{"UID", "Leader"})
+	sentinelTable.AppendHeader(table.Row{"UID", "Hostname", "Node", "Leader"})
 	for _, sentinel := range status.Sentinels {
-		sentinelTable.AppendRow(table.Row{sentinel.UID, sentinel.Leader})
+		sentinelTable.AppendRow(table.Row{
+			sentinel.UID,
+			valueOrDash(sentinel.Hostname),
+			valueOrDash(sentinel.NodeName),
+			sentinel.Leader,
+		})
 	}
-	sentinelTable.AppendFooter(table.Row{"Rows", len(status.Sentinels)})
+	sentinelTable.AppendFooter(table.Row{"Rows", "", "", len(status.Sentinels)})
 	sentinelTable.Render()
 
 	if err := writeLine(w); err != nil {
 		return err
 	}
 	proxyTable := newStatusTable(w, "Proxies")
-	proxyTable.AppendHeader(table.Row{"UID", "Mode", "Listeners", "Generation"})
+	proxyTable.AppendHeader(table.Row{"UID", "Hostname", "Node", "Mode", "Listeners", "Generation"})
 	for _, proxy := range status.Proxies {
 		proxyTable.AppendRow(table.Row{
 			proxy.UID,
+			valueOrDash(proxy.Hostname),
+			valueOrDash(proxy.NodeName),
 			valueOrDash(proxy.Mode),
 			valueOrDash(proxy.Listeners),
 			proxy.Generation,
 		})
 	}
-	proxyTable.AppendFooter(table.Row{"Rows", "", "", len(status.Proxies)})
+	proxyTable.AppendFooter(table.Row{"Rows", "", "", "", "", len(status.Proxies)})
 	proxyTable.Render()
 
 	if err := writeLine(w); err != nil {
@@ -97,6 +104,8 @@ func writeStatusTable(w io.Writer, status app.Status) error {
 		"Sync Role",
 		"PG Version",
 		"Master Priority",
+		"Hostname",
+		"Node",
 		"Healthy",
 		"Can Be Master",
 		"Can Be Sync Replica",
@@ -113,6 +122,8 @@ func writeStatusTable(w io.Writer, status app.Status) error {
 			valueOrDash(keeper.SyncRole),
 			valueOrDash(keeper.PGVersion),
 			keeper.MasterPriority,
+			valueOrDash(keeper.Hostname),
+			valueOrDash(keeper.NodeName),
 			keeper.Healthy,
 			keeper.CanBeMaster,
 			keeper.CanBeSyncReplica,
@@ -123,7 +134,7 @@ func writeStatusTable(w io.Writer, status app.Status) error {
 		})
 	}
 	keeperTable.AppendFooter(table.Row{
-		"Rows", "", "", "", "", "", "", "", "", "", "", "", len(status.Keepers),
+		"Rows", "", "", "", "", "", "", "", "", "", "", "", "", "", len(status.Keepers),
 	})
 	keeperTable.Render()
 

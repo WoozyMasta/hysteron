@@ -130,6 +130,7 @@ func (s *Sentinel) setSentinelInfo(
 	sentinelInfo := &cluster.SentinelInfo{
 		UID: s.uid,
 	}
+	sentinelInfo.Hostname, sentinelInfo.NodeName = runtimecommon.ResolveHostNodeMetadata()
 	s.log.Debug().
 		Str("sentinel_uid", sentinelInfo.UID).
 		Msg("sentinel registration payload before write to store")

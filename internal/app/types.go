@@ -36,13 +36,17 @@ type KeeperTreeNode struct {
 
 // SentinelStatus is the status output for one sentinel.
 type SentinelStatus struct {
-	UID    string `json:"uid"`
-	Leader bool   `json:"leader"`
+	UID      string `json:"uid"`
+	Hostname string `json:"hostname,omitempty"`
+	NodeName string `json:"node_name,omitempty"`
+	Leader   bool   `json:"leader"`
 }
 
 // ProxyStatus is the status output for one proxy.
 type ProxyStatus struct {
 	UID        string `json:"uid"`
+	Hostname   string `json:"hostname,omitempty"`
+	NodeName   string `json:"node_name,omitempty"`
 	Mode       string `json:"mode"`
 	Listeners  string `json:"listeners"`
 	Generation int64  `json:"generation"`
@@ -56,13 +60,15 @@ type KeeperStatus struct {
 	Role                string `json:"role"`
 	SyncRole            string `json:"sync_role"`
 	PGVersion           string `json:"pg_version"`
+	Hostname            string `json:"hostname,omitempty"`
+	NodeName            string `json:"node_name,omitempty"`
 	MasterPriority      int    `json:"master_priority"`
+	PgWantedGeneration  int64  `json:"pg_wanted_generation"`
+	PgCurrentGeneration int64  `json:"pg_current_generation"`
 	Healthy             bool   `json:"healthy"`
 	PgHealthy           bool   `json:"pg_healthy"`
 	CanBeMaster         bool   `json:"can_be_master"`
 	CanBeSyncReplica    bool   `json:"can_be_sync_replica"`
-	PgWantedGeneration  int64  `json:"pg_wanted_generation"`
-	PgCurrentGeneration int64  `json:"pg_current_generation"`
 }
 
 // ClusterStatus is the status output for the cluster summary.

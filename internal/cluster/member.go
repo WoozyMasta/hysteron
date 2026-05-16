@@ -54,6 +54,10 @@ type KeeperInfo struct {
 	ClusterUID string `json:"clusterUID,omitempty"`
 	// BootUUID identifies the current keeper process boot.
 	BootUUID string `json:"bootUUID,omitempty"`
+	// Hostname is local OS hostname reported by keeper process.
+	Hostname string `json:"hostname,omitempty"`
+	// NodeName is optional logical node label (for example kubernetes node name).
+	NodeName string `json:"nodeName,omitempty"`
 	// PostgresBinaryVersion is the PostgreSQL binary version detected by keeper.
 	PostgresBinaryVersion PostgresBinaryVersion `json:"postgresBinaryVersion,omitzero"`
 	// MasterPriority is keeper priority used as failover tie-break when candidates are otherwise equal.
@@ -163,7 +167,9 @@ func (s SentinelsInfo) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 
 // SentinelInfo is the state published by one sentinel.
 type SentinelInfo struct {
-	UID string
+	UID      string `json:"uid,omitempty"`
+	Hostname string `json:"hostname,omitempty"`
+	NodeName string `json:"nodeName,omitempty"`
 }
 
 // ProxyInfo is the state published by one proxy.
@@ -174,6 +180,10 @@ type ProxyInfo struct {
 
 	// UID is the proxy UID.
 	UID string
+	// Hostname is local OS hostname reported by proxy process.
+	Hostname string `json:"hostname,omitempty"`
+	// NodeName is optional logical node label (for example kubernetes node name).
+	NodeName string `json:"nodeName,omitempty"`
 
 	// Listeners describes proxy listeners and their runtime state.
 	Listeners []ProxyListenerInfo `json:"listeners,omitempty"`

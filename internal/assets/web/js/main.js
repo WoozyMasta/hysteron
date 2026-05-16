@@ -139,7 +139,7 @@
     var body = document.getElementById("sentinels-body");
     if (!body) return;
     if (!rows || rows.length === 0) {
-      body.innerHTML = '<tr><td colspan="4">no sentinel data</td></tr>';
+      body.innerHTML = '<tr><td colspan="6">no sentinel data</td></tr>';
       return;
     }
 
@@ -152,20 +152,24 @@
     body.innerHTML = rows.map(function (row) {
       return "<tr>" +
         "<td>" + detailToggle("sentinel", row.uid, row) + " " + mono(row.uid) + "</td>" +
+        "<td>" + mono(row.hostname || "-") + "</td>" +
+        "<td>" + mono(row.node_name || "-") + "</td>" +
         "<td>" + boolBadge(row.is_local, "is-neutral") + "</td>" +
         "<td>" + codeList(row.leader_clusters) + "</td>" +
         "<td>" + codeList(row.clusters) + "</td>" +
-        "</tr>" + detailRow(4);
+        "</tr>" + detailRow(6);
     }).join("");
   }
 
   function renderKeepers(rows) {
     if (!rows || rows.length === 0) {
-      return '<tr><td colspan="8">no keeper rows</td></tr>';
+      return '<tr><td colspan="10">no keeper rows</td></tr>';
     }
     return rows.map(function (row) {
       return "<tr>" +
         "<td>" + detailToggle("keeper", row.uid, row) + " " + mono(row.uid) + "</td>" +
+        "<td>" + mono(row.hostname || "-") + "</td>" +
+        "<td>" + mono(row.node_name || "-") + "</td>" +
         "<td>" + boolBadge(row.healthy) + "</td>" +
         "<td>" + boolBadge(row.pg_healthy) + "</td>" +
         "<td>" + mono(row.sync_role || "-") + "</td>" +
@@ -173,7 +177,7 @@
         "<td>" + boolBadge(row.can_be_synchronous_replica) + "</td>" +
         "<td>" + mono(row.master_priority) + "</td>" +
         "<td>" + mono(row.listen_address) + "</td>" +
-        "</tr>" + detailRow(8);
+        "</tr>" + detailRow(10);
     }).join("");
   }
 
@@ -227,18 +231,20 @@
 
   function renderProxies(rows) {
     if (!rows || rows.length === 0) {
-      return '<tr><td colspan="7">no proxy rows</td></tr>';
+      return '<tr><td colspan="9">no proxy rows</td></tr>';
     }
     return rows.map(function (row) {
       return "<tr>" +
         "<td>" + detailToggle("proxy", row.uid, row) + " " + mono(row.uid) + "</td>" +
+        "<td>" + mono(row.hostname || "-") + "</td>" +
+        "<td>" + mono(row.node_name || "-") + "</td>" +
         "<td>" + mono(row.mode || "-") + "</td>" +
         "<td>" + renderProxyListeners(row) + "</td>" +
         "<td>" + boolBadge(row.seen) + "</td>" +
         "<td>" + boolBadge(row.enabled) + "</td>" +
         "<td>" + mono(row.generation) + "</td>" +
         "<td>" + mono(row.proxy_timeout) + "</td>" +
-        "</tr>" + detailRow(7);
+        "</tr>" + detailRow(9);
     }).join("");
   }
 
@@ -265,6 +271,8 @@
         "<h3>Keepers</h3>" +
         "<table><thead><tr>" +
         '<th title="Keeper unique identifier">Keeper UID</th>' +
+        '<th title="Keeper process hostname">Hostname</th>' +
+        '<th title="Logical node name (if provided)">Node</th>' +
         '<th title="Keeper health status reported to DCS">Healthy</th>' +
         '<th title="PostgreSQL health for keeper\'s assigned database">PG Healthy</th>' +
         '<th title="Replication sync role for keeper DB relative to current master">Sync Role</th>' +
@@ -286,6 +294,8 @@
         "<h3>Proxies</h3>" +
         "<table><thead><tr>" +
         '<th title="Proxy unique identifier">Proxy UID</th>' +
+        '<th title="Proxy process hostname">Hostname</th>' +
+        '<th title="Logical node name (if provided)">Node</th>' +
         '<th title="Active listener mode(s): write/read/write+read">Mode</th>' +
         '<th title="Proxy listeners and runtime status">Listeners</th>' +
         '<th title="Proxy heartbeat currently visible in DCS">Seen</th>' +

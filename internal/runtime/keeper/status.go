@@ -23,6 +23,7 @@ import (
 
 	"github.com/woozymasta/hysteron/internal/cluster"
 	"github.com/woozymasta/hysteron/internal/common"
+	runtimecommon "github.com/woozymasta/hysteron/internal/runtime/common"
 	"github.com/woozymasta/hysteron/internal/utils/id"
 )
 
@@ -192,6 +193,7 @@ func (p *PostgresKeeper) updateKeeperInfo() error {
 		CanBeMaster:             p.canBeMaster,
 		CanBeSynchronousReplica: p.canBeSynchronousReplica,
 	}
+	keeperInfo.Hostname, keeperInfo.NodeName = runtimecommon.ResolveHostNodeMetadata()
 	if p.masterPriority != nil {
 		keeperInfo.MasterPriority = *p.masterPriority
 	}

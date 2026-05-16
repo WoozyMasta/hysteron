@@ -16,8 +16,12 @@
 package proxy
 
 import (
+	"context"
 	"fmt"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -102,7 +106,18 @@ func runProxy() error {
 	if err != nil {
 		return fmt.Errorf("failed to create cluster checker: %w", err)
 	}
-	if err = clusterChecker.Start(); err != nil {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(sigs)
+	go func() {
+		sig := <-sigs
+		log.Info().Str("signal", sig.String()).Msg("received shutdown signal")
+		cancel()
+	}()
+
+	if err = clusterChecker.Start(ctx); err != nil {
 		return fmt.Errorf("cluster checker stopped: %w", err)
 	}
 	return nil

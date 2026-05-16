@@ -101,6 +101,7 @@ func NewClusterChecker(
 
 // SetProxyInfo updates this proxy's liveness and generation information.
 func (c *ClusterChecker) SetProxyInfo(
+	ctx context.Context,
 	generation int64,
 	proxyTimeout time.Duration,
 ) error {
@@ -132,7 +133,7 @@ func (c *ClusterChecker) SetProxyInfo(
 		Fields(cluster.LogSummaryProxyInfo(proxyInfo)).
 		Msg("proxy registration payload before write to store")
 
-	if err := c.e.SetProxyInfo(context.TODO(), proxyInfo, 2*proxyTimeout); err != nil {
+	if err := c.e.SetProxyInfo(ctx, proxyInfo, 2*proxyTimeout); err != nil {
 		return err
 	}
 	return nil
@@ -144,6 +145,13 @@ func (c *ClusterChecker) updateRuntimeConfig(proxyCheckInterval, proxyTimeout ti
 	defer c.configMutex.Unlock()
 	c.proxyCheckInterval = proxyCheckInterval
 	c.proxyTimeout = proxyTimeout
+}
+
+// runtimeConfigSnapshot returns current periodic check interval and timeout.
+func (c *ClusterChecker) runtimeConfigSnapshot() (time.Duration, time.Duration) {
+	c.configMutex.Lock()
+	defer c.configMutex.Unlock()
+	return c.proxyCheckInterval, c.proxyTimeout
 }
 
 // clearDestinations disables both writable and read-only routing destinations.

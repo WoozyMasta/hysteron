@@ -116,7 +116,15 @@ func (s *Sentinel) chooseBestNewMaster(
 		return nil, false
 	}
 
-	if !curMasterDB.Spec.SynchronousReplication {
+	synchronousReplicationEnabled := curMasterDB.Spec.SynchronousReplication
+	if newcd != nil && newcd.Cluster != nil && newcd.Cluster.Spec != nil {
+		clusterSpec := newcd.Cluster.DefSpec()
+		if clusterSpec.SynchronousReplication != nil {
+			synchronousReplicationEnabled = synchronousReplicationEnabled &&
+				*clusterSpec.SynchronousReplication
+		}
+	}
+	if !synchronousReplicationEnabled {
 		return bestNewMasters[0], true
 	}
 

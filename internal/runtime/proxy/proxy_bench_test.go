@@ -30,14 +30,14 @@ import (
 func BenchmarkProxyCheckEnabledMaster(b *testing.B) {
 	c := benchmarkProxyChecker(benchmarkProxyClusterData(true))
 	defer c.writable.stop()
-	if err := c.Check(); err != nil {
+	if err := c.Check(context.Background()); err != nil {
 		b.Fatal(err)
 	}
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if err := c.Check(); err != nil {
+		if err := c.Check(context.Background()); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -46,14 +46,14 @@ func BenchmarkProxyCheckEnabledMaster(b *testing.B) {
 func BenchmarkProxyCheckDisabledProxy(b *testing.B) {
 	c := benchmarkProxyChecker(benchmarkProxyClusterData(false))
 	defer c.writable.stop()
-	if err := c.Check(); err != nil {
+	if err := c.Check(context.Background()); err != nil {
 		b.Fatal(err)
 	}
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if err := c.Check(); err != nil {
+		if err := c.Check(context.Background()); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -64,7 +64,7 @@ func BenchmarkProxySetProxyInfo(b *testing.B) {
 
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		if err := c.SetProxyInfo(cluster.InitialGeneration, cluster.DefaultProxyTimeout); err != nil {
+		if err := c.SetProxyInfo(context.Background(), cluster.InitialGeneration, cluster.DefaultProxyTimeout); err != nil {
 			b.Fatal(err)
 		}
 	}

@@ -17,6 +17,7 @@ package proxy
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"slices"
@@ -27,13 +28,17 @@ import (
 )
 
 // Check reads the cluster data and applies the right proxy configuration.
-func (c *ClusterChecker) Check() error {
+func (c *ClusterChecker) Check(ctx context.Context) error {
 	start := time.Now()
 	defer func() {
 		checkDurationSeconds.Observe(time.Since(start).Seconds())
 	}()
 
-	cd, _, err := c.e.GetClusterData(context.TODO())
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	cd, _, err := c.e.GetClusterData(ctx)
 	if err != nil {
 		checkErrorsTotal.WithLabelValues("get_cluster_data").Inc()
 		return fmt.Errorf("cannot get cluster data: %v", err)
@@ -88,7 +93,7 @@ func (c *ClusterChecker) Check() error {
 		c.clearDestinations()
 		if c.writable != nil {
 			// ignore errors on setting proxy info
-			if err = c.SetProxyInfo(cluster.NoGeneration, proxyTimeout); err != nil {
+			if err = c.SetProxyInfo(ctx, cluster.NoGeneration, proxyTimeout); err != nil {
 				log.Error().Err(err).Msg("failed to update proxyInfo")
 				return nil
 			}
@@ -105,7 +110,7 @@ func (c *ClusterChecker) Check() error {
 		c.clearDestinations()
 		if c.writable != nil {
 			// ignore errors on setting proxy info
-			if err = c.SetProxyInfo(proxy.Generation, proxyTimeout); err != nil {
+			if err = c.SetProxyInfo(ctx, proxy.Generation, proxyTimeout); err != nil {
 				log.Error().Err(err).Msg("failed to update proxyInfo")
 				return nil
 			}
@@ -128,7 +133,7 @@ func (c *ClusterChecker) Check() error {
 		Str("tcp_addr", addr.String()).
 		Msg("resolved current master address")
 	if c.writable != nil {
-		if err = c.SetProxyInfo(proxy.Generation, proxyTimeout); err != nil {
+		if err = c.SetProxyInfo(ctx, proxy.Generation, proxyTimeout); err != nil {
 			checkErrorsTotal.WithLabelValues("set_proxy_info").Inc()
 			// if we failed to update our proxy info when a master is defined we
 			// cannot ignore this error since the sentinel won't know that we exist
@@ -157,44 +162,12 @@ func (c *ClusterChecker) Check() error {
 	return nil
 }
 
-// TimeoutChecker closes proxy connections when cluster checks stop succeeding.
-func (c *ClusterChecker) TimeoutChecker(checkOkCh chan struct{}) {
-	c.configMutex.Lock()
-	timeoutTimer := time.NewTimer(c.proxyTimeout)
-	c.configMutex.Unlock()
-
-	for {
-		select {
-		case <-timeoutTimer.C:
-			checkErrorsTotal.WithLabelValues("check_timeout").Inc()
-			log.Info().Msg("check timeout timer fired")
-			// if the check timeouts close all connections and stop listening
-			// (for example to avoid load balancers forward connections to us
-			// since we aren't ready or in a bad state)
-			c.clearDestinations()
-			if c.stopListening {
-				c.writable.stop()
-				c.readOnly.stop()
-			}
-
-		case <-checkOkCh:
-			log.Debug().Msg("check ok message received")
-
-			// ignore if stop succeeded or not due to timer already expired
-			timeoutTimer.Stop()
-
-			c.configMutex.Lock()
-			timeoutTimer = time.NewTimer(c.proxyTimeout)
-			c.configMutex.Unlock()
-		}
-	}
-}
-
 // Start runs the cluster checker loop.
-func (c *ClusterChecker) Start() error {
-	checkOkCh := make(chan struct{})
-	checkCh := make(chan error)
-	timerCh := time.NewTimer(0).C
+func (c *ClusterChecker) Start(ctx context.Context) error {
+	timer := time.NewTimer(0)
+	defer timer.Stop()
+
+	timerCh := timer.C
 	var writableEndCh <-chan error
 	if c.writable != nil {
 		writableEndCh = c.writable.endTCPProxyCh
@@ -204,31 +177,40 @@ func (c *ClusterChecker) Start() error {
 		readOnlyEndCh = c.readOnly.endTCPProxyCh
 	}
 
-	// TimeoutChecker force-closes destinations if Check blocks or stops
-	// succeeding. A future context-driven checker flow could replace this
-	// watchdog once store/check plumbing is fully context-aware.
-	go c.TimeoutChecker(checkOkCh)
-
 	for {
 		select {
-		case <-timerCh:
-			go func() {
-				checkCh <- c.Check()
-			}()
-		case err := <-checkCh:
-			if err != nil {
-				checkErrorsTotal.WithLabelValues("check_failed").Inc()
-				// don't report check ok since it returned an error
-				log.Error().
-					Err(err).
-					Msg("cluster check failed")
-			} else {
-				// report that check was ok
-				checkOkCh <- struct{}{}
+		case <-ctx.Done():
+			c.clearDestinations()
+			if c.stopListening {
+				c.writable.stop()
+				c.readOnly.stop()
 			}
-			c.configMutex.Lock()
-			timerCh = time.NewTimer(c.proxyCheckInterval).C
-			c.configMutex.Unlock()
+			return nil
+		case <-timerCh:
+			_, proxyTimeout := c.runtimeConfigSnapshot()
+			checkCtx, cancel := context.WithTimeout(ctx, proxyTimeout)
+			err := c.Check(checkCtx)
+			cancel()
+
+			if err != nil {
+				if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+					checkErrorsTotal.WithLabelValues("check_timeout").Inc()
+					log.Warn().Err(err).Msg("cluster check timed out or was canceled")
+					c.clearDestinations()
+					if c.stopListening {
+						c.writable.stop()
+						c.readOnly.stop()
+					}
+				} else {
+					checkErrorsTotal.WithLabelValues("check_failed").Inc()
+					log.Error().Err(err).Msg("cluster check failed")
+				}
+			} else {
+				log.Debug().Msg("cluster check completed successfully")
+			}
+			proxyCheckInterval, _ := c.runtimeConfigSnapshot()
+			timer.Reset(proxyCheckInterval)
+			timerCh = timer.C
 
 		case err := <-writableEndCh:
 			if err != nil {

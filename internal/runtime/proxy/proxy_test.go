@@ -15,6 +15,7 @@
 package proxy
 
 import (
+	"context"
 	"net"
 	"reflect"
 	"testing"
@@ -208,7 +209,7 @@ func TestReadOnlyOnlyCheckDoesNotRegisterWritableProxy(t *testing.T) {
 	}
 	defer c.readOnly.stop()
 
-	if err := c.Check(); err != nil {
+	if err := c.Check(context.Background()); err != nil {
 		t.Fatalf("Check() failed: %v", err)
 	}
 	if store.proxyInfo != nil {

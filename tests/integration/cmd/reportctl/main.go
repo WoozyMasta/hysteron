@@ -164,11 +164,9 @@ func parseResults(path string) (_ []testResult, _ string, _ float64, err error) 
 					FailureOutput: nil,
 				}
 			}
-		} else {
-			if ev.Action == "pass" || ev.Action == "fail" {
-				pkgStatus = ev.Action
-				pkgElapsed = ev.Elapsed
-			}
+		} else if ev.Action == "pass" || ev.Action == "fail" {
+			pkgStatus = ev.Action
+			pkgElapsed = ev.Elapsed
 		}
 	}
 	if err := scanner.Err(); err != nil {
@@ -288,7 +286,7 @@ func populateReportSummary(entry *reportIndexEntry) {
 
 func extractBacktickedValue(text string, field string) string {
 	prefix := "* " + field + ": `"
-	for _, line := range strings.Split(text, "\n") {
+	for line := range strings.SplitSeq(text, "\n") {
 		if !strings.HasPrefix(line, prefix) {
 			continue
 		}

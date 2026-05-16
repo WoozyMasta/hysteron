@@ -144,17 +144,17 @@ type ClusterSpec struct { //nolint:revive
 
 // ClusterStatus is the observed cluster status.
 type ClusterStatus struct { //nolint:revive
+	// PauseUntil is optional pause expiry time in UTC.
+	PauseUntil *time.Time `json:"pauseUntil,omitempty"`
 	// Phase is current cluster lifecycle phase.
 	Phase ClusterPhase `json:"phase,omitempty"`
 	// Master DB UID
-	Master            string `json:"master,omitempty"`
+	Master string `json:"master,omitempty"`
+	// PauseReason is optional operator-provided pause rationale.
+	PauseReason       string `json:"pauseReason,omitempty"`
 	CurrentGeneration int64  `json:"currentGeneration,omitempty"`
 	// Paused reports whether mutating management operations are blocked.
 	Paused bool `json:"paused,omitempty"`
-	// PauseReason is optional operator-provided pause rationale.
-	PauseReason string `json:"pauseReason,omitempty"`
-	// PauseUntil is optional pause expiry time in UTC.
-	PauseUntil *time.Time `json:"pauseUntil,omitempty"`
 }
 
 // Cluster is the top-level cluster object in cluster data.

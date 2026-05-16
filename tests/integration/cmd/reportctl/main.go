@@ -43,8 +43,8 @@ type goTestEvent struct {
 type testResult struct {
 	Name          string
 	Status        string
-	Elapsed       float64
 	FailureOutput []string
+	Elapsed       float64
 }
 
 func main() {
@@ -92,10 +92,10 @@ type reportIndexEntry struct {
 	PGMajor       string
 	Timestamp     string
 	PackageStatus string
-	TestsTotal    int
-	TestsFailed   int
 	MDPath        string
 	JSONPath      string
+	TestsTotal    int
+	TestsFailed   int
 }
 
 func runIndex(args []string) error {

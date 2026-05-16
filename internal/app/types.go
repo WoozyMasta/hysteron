@@ -68,7 +68,6 @@ type ClusterStatus struct {
 	MasterKeeperUID string `json:"master_keeper_uid"`
 	MasterDBUID     string `json:"master_db_uid"`
 	Phase           string `json:"phase"`
-	Paused          bool   `json:"paused"`
 	PauseReason     string `json:"pause_reason,omitempty"`
 	PauseUntil      string `json:"pause_until,omitempty"`
 	Generation      int64  `json:"generation"`
@@ -78,5 +77,6 @@ type ClusterStatus struct {
 	DBsTotal        int    `json:"dbs_total"`
 	DBsHealthy      int    `json:"dbs_healthy"`
 	ProxiesSeen     int    `json:"proxies_seen"`
+	Paused          bool   `json:"paused"`
 	Available       bool   `json:"available"`
 }

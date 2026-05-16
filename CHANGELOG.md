@@ -24,6 +24,22 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Sentinel web admin API endpoints for management parity:
   `pause`, `resume`, `switchover`, `failover-target`, and `reinit`
   operations over HTTP JSON.
+* Cluster spec replication TLS policy for internal connections:
+  `replicationTLSMode` with
+  `prefer|require|verify-ca|verify-full` modes.
+* Optional `checkpointBeforePgrewind` cluster-spec flag to force
+  `CHECKPOINT` on primary before `pg_rewind` for safer rewind detection.
+* Keeper failover tie-break priority support (`--master-priority`) with
+  status visibility in CLI/web outputs.
+* Optional unsafe auto-failback controls:
+  `unsafeAutoFailback`, `autoFailbackMinUptime`, and
+  `autoFailbackCooldown`.
+* Status enrichment with replication sync-role plus keeper/sentinel/proxy
+  hostname and node metadata for diagnostics.
+* Runtime auto-provisioning of keeper identity/listen defaults from
+  deployment signals (explicit flags/env always win).
+* Cluster-spec `pgIdent` support for managed `pg_ident.conf` rendering
+  and PostgreSQL reload-driven updates.
 * New embedded Sentinel web status UI,
   authenticated API endpoint, auto-refresh,
   and multi-cluster status tables (sentinels, keepers, databases, proxies).
@@ -36,7 +52,7 @@ The format is based on [Keep a Changelog][], and this project adheres to
   with PG-version-aware behavior and standby readiness/advance safeguards.
 * Multi-cluster sentinel operation in one process
   (`--cluster-name` repeated, per-cluster initial spec overrides).
-* Cluster listing command (`stolon cluster list`).
+* Cluster listing command (`hysteron cluster list`).
 * Kubernetes store support for Secret-backed cluster data
   (`--kube-resource-kind=secret`).
 * Optional sentinel-managed Kubernetes Service/EndpointSlice publishing

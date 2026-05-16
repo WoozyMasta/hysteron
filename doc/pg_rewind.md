@@ -1,15 +1,42 @@
 # pg_rewind
 
-Hysteron can use [pg_rewind](http://www.postgresql.org/docs/current/static/app-pgrewind.html) to speedup instance resynchronization (for example resyncing an old master or a slave ahead of the current master) without the need to copy all the new master data.
+Hysteron can use
+[pg_rewind](http://www.postgresql.org/docs/current/static/app-pgrewind.html)
+to speedup instance resynchronization
+(for example resyncing an old master or a slave ahead of the current master)
+without the need to copy all the new master data.
 
 ## Enabling
 
-It can be enabled setting to true the cluster specification option `usePgrewind` (defaults to false):
+It can be enabled setting to true
+the cluster specification option `usePgrewind` (defaults to false):
 
 ``` bash
 hysteron cluster [cluster-options] update --patch '{ "usePgrewind" : true }'
 ```
 
-This will also enable the `wal_log_hints` postgresql parameter. If previously `wal_log_hints` wasn't enabled you should restart the postgresql instances (you can do so restarting the `hysteron keeper`)
+This will also enable the `wal_log_hints` postgresql parameter.
+If previously `wal_log_hints` wasn't enabled you should restart
+the postgresql instances (you can do so restarting the `hysteron keeper`)
 
-pg_rewind needs to connect to the master database with a superuser role (see the [Hysteron Architecture and Requirements](architecture.md)).
+pg_rewind needs to connect to the master database with a superuser role
+(see the [Hysteron Architecture and Requirements](architecture.md)).
+
+## Optional forced checkpoint before rewind
+
+If you need a more aggressive rewind path after promotion/timeline switch,
+you can enable:
+
+* `checkpointBeforePgrewind: true`
+
+Example:
+
+```bash
+hysteron cluster [cluster-options] update \
+  --patch '{ "checkpointBeforePgrewind": true }'
+```
+
+When enabled, keeper asks current primary to run `CHECKPOINT`
+before invoking `pg_rewind`.
+This can improve rewind reliability on some timeline edge cases,
+but adds extra I/O and latency on primary.

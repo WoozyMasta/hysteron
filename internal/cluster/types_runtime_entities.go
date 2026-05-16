@@ -111,6 +111,8 @@ type DBSpec struct {
 	// PrePromoteCommand defines a fencing command executed by keeper before
 	// promoting this standby to primary.
 	PrePromoteCommand string `json:"prePromoteCommand,omitempty"`
+	// ReplicationTLSMode sets sslmode for internal replication connections.
+	ReplicationTLSMode ReplicationTLSMode `json:"replicationTLSMode,omitempty"`
 	// AdditionalReplicationSlots is a list of additional replication slots.
 	// Replication slots not defined here will be dropped from the instance
 	// (i.e. manually created replication slots will be removed).
@@ -149,6 +151,8 @@ type DBSpec struct {
 	SynchronousReplication bool `json:"synchronousReplication,omitempty"`
 	// Whether to use pg_rewind
 	UsePgrewind bool `json:"usePgrewind,omitempty"`
+	// Whether to force CHECKPOINT on source primary before pg_rewind.
+	CheckpointBeforePgrewind bool `json:"checkpointBeforePgrewind,omitempty"`
 	// Whether to include previous postgresql.conf
 	IncludeConfig bool `json:"includePreviousConfig,omitempty"`
 }

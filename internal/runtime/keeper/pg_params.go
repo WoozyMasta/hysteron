@@ -130,14 +130,18 @@ func (p *PostgresKeeper) mandatoryPGParameters(
 func (p *PostgresKeeper) getSUConnParams(
 	db, followedDB *cluster.DB,
 ) postgresql.ConnParams {
+	sslMode := "prefer"
+	if db != nil && db.Spec != nil && db.Spec.ReplicationTLSMode != "" {
+		sslMode = string(db.Spec.ReplicationTLSMode)
+	}
 	connParams := postgresql.ConnParams{
 		"user":             p.pgSUUsername,
 		"host":             followedDB.Status.ListenAddress,
 		"port":             followedDB.Status.Port,
 		"application_name": common.HysteronName(db.UID),
 		"dbname":           "postgres",
-		// prefer ssl if available (already the default for postgres libpq but not for golang lib pq)
-		"sslmode": "prefer",
+		// Explicitly set sslmode for Go pg clients.
+		"sslmode": sslMode,
 	}
 	if p.pgSUAuthMethod != "trust" {
 		connParams.Set("password", p.pgSUPassword)
@@ -149,13 +153,17 @@ func (p *PostgresKeeper) getSUConnParams(
 func (p *PostgresKeeper) getReplConnParams(
 	db, followedDB *cluster.DB,
 ) postgresql.ConnParams {
+	sslMode := "prefer"
+	if db != nil && db.Spec != nil && db.Spec.ReplicationTLSMode != "" {
+		sslMode = string(db.Spec.ReplicationTLSMode)
+	}
 	connParams := postgresql.ConnParams{
 		"user":             p.pgReplUsername,
 		"host":             followedDB.Status.ListenAddress,
 		"port":             followedDB.Status.Port,
 		"application_name": common.HysteronName(db.UID),
-		// prefer ssl if available (already the default for postgres libpq but not for golang lib pq)
-		"sslmode": "prefer",
+		// Explicitly set sslmode for Go pg clients.
+		"sslmode": sslMode,
 	}
 	if p.pgReplAuthMethod != "trust" {
 		connParams.Set("password", p.pgReplPassword)

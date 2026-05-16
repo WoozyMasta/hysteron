@@ -101,6 +101,16 @@ func (c *ClusterSpec) Validate() error {
 	if *s.MaxSynchronousStandbys < *s.MinSynchronousStandbys {
 		return errors.New("maxSynchronousStandbys must be greater or equal to minSynchronousStandbys")
 	}
+	if s.ReplicationTLSMode != nil {
+		switch *s.ReplicationTLSMode {
+		case ReplicationTLSModePrefer,
+			ReplicationTLSModeRequire,
+			ReplicationTLSModeVerifyCA,
+			ReplicationTLSModeVerifyFull:
+		default:
+			return fmt.Errorf("unknown replicationTLSMode: %q", *s.ReplicationTLSMode)
+		}
+	}
 	if s.InitMode == nil {
 		return errors.New("initMode undefined")
 	}

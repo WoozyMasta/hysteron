@@ -126,7 +126,11 @@ func (p *PostgresKeeper) resync(
 			Str(log.FieldKeeperUID, followedDB.Spec.KeeperUID).
 			Msg("attempting pg_rewind against current primary to sync data directory")
 		pgrewindStart := time.Now()
-		if err := pgManager.SyncFromFollowedPGRewind(connParams, p.pgSUPassword); err != nil {
+		if err := pgManager.SyncFromFollowedPGRewind(
+			connParams,
+			p.pgSUPassword,
+			db.Spec.CheckpointBeforePgrewind,
+		); err != nil {
 			pgrewindDurationSeconds.Observe(time.Since(pgrewindStart).Seconds())
 			pgrewindTotal.WithLabelValues("error").Inc()
 			// log pg_rewind error and fallback to pg_basebackup

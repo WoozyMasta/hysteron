@@ -142,6 +142,7 @@ func TestClusterSpecValidate(t *testing.T) {
 	standbyRole := ClusterRoleStandby
 	strictAccess := SUReplAccessStrict
 	unknownAccess := SUReplAccessMode("unknown")
+	unknownTLSMode := ReplicationTLSMode("unknown")
 	negativeDuration := &Duration{Duration: -time.Second}
 	oneSecond := &Duration{Duration: time.Second}
 	twoSeconds := &Duration{Duration: 2 * time.Second}
@@ -487,6 +488,11 @@ func TestClusterSpecValidate(t *testing.T) {
 			name:    "unknown su repl access is rejected",
 			spec:    &ClusterSpec{InitMode: &newMode, DefaultSUReplAccessMode: &unknownAccess},
 			wantErr: `unknown defaultSUReplAccessMode: "unknown"`,
+		},
+		{
+			name:    "unknown replication tls mode is rejected",
+			spec:    &ClusterSpec{InitMode: &newMode, ReplicationTLSMode: &unknownTLSMode},
+			wantErr: `unknown replicationTLSMode: "unknown"`,
 		},
 	}
 

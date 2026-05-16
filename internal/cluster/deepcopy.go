@@ -59,6 +59,7 @@ func (c *ClusterSpec) DeepCopy() *ClusterSpec {
 	nc.MaxStandbysPerSender = copyUint16Ptr(c.MaxStandbysPerSender)
 	nc.MaxStandbyLag = copyUint32Ptr(c.MaxStandbyLag)
 	nc.SynchronousReplication = copyBoolPtr(c.SynchronousReplication)
+	nc.ReplicationTLSMode = copyReplicationTLSModePtr(c.ReplicationTLSMode)
 	nc.UnsafeAutoFailback = copyBoolPtr(c.UnsafeAutoFailback)
 	nc.AutoFailbackMinUptime = copyDurationPtr(c.AutoFailbackMinUptime)
 	nc.AutoFailbackCooldown = copyDurationPtr(c.AutoFailbackCooldown)
@@ -66,6 +67,7 @@ func (c *ClusterSpec) DeepCopy() *ClusterSpec {
 	nc.MaxSynchronousStandbys = copyUint16Ptr(c.MaxSynchronousStandbys)
 	nc.AdditionalWalSenders = copyUint16Ptr(c.AdditionalWalSenders)
 	nc.UsePgrewind = copyBoolPtr(c.UsePgrewind)
+	nc.CheckpointBeforePgrewind = copyBoolPtr(c.CheckpointBeforePgrewind)
 	nc.InitMode = copyClusterInitModePtr(c.InitMode)
 	nc.MergePgParameters = copyBoolPtr(c.MergePgParameters)
 	nc.Role = copyClusterRolePtr(c.Role)
@@ -182,6 +184,15 @@ func copyClusterRolePtr(v *ClusterRole) *ClusterRole {
 }
 
 func copySUReplAccessModePtr(v *SUReplAccessMode) *SUReplAccessMode {
+	if v == nil {
+		return nil
+	}
+
+	nv := *v
+	return &nv
+}
+
+func copyReplicationTLSModePtr(v *ReplicationTLSMode) *ReplicationTLSMode {
 	if v == nil {
 		return nil
 	}

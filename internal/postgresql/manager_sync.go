@@ -28,7 +28,11 @@ import (
 )
 
 // SyncFromFollowedPGRewind synchronizes from a source using pg_rewind.
-func (p *Manager) SyncFromFollowedPGRewind(followedConnParams ConnParams, password string) error {
+func (p *Manager) SyncFromFollowedPGRewind(
+	followedConnParams ConnParams,
+	password string,
+	checkpointBeforeRewind bool,
+) error {
 	// Remove postgresql.auto.conf since pg_rewind will error if it's a symlink to /dev/null.
 	pgAutoConfPath := filepath.Join(p.dataDir, postgresAutoConf)
 	if err := os.Remove(pgAutoConfPath); err != nil && !os.IsNotExist(err) {
@@ -56,6 +60,13 @@ func (p *Manager) SyncFromFollowedPGRewind(followedConnParams ConnParams, passwo
 	followedConnParams.Set("options", "-c synchronous_commit=off")
 	followedConnString := followedConnParams.ConnString()
 
+	if checkpointBeforeRewind {
+		zl().Info().Msg("issuing checkpoint on primary before pg_rewind")
+		if err := p.issueCheckpoint(followedConnParams); err != nil {
+			return fmt.Errorf("issue checkpoint before pg_rewind: %w", err)
+		}
+	}
+
 	zl().Info().Msg("running pg_rewind")
 	name := filepath.Join(p.pgBinPath, "pg_rewind")
 	cmd := exec.Command(name, "--debug", "-D", p.dataDir, "--source-server="+followedConnString)
@@ -67,6 +78,22 @@ func (p *Manager) SyncFromFollowedPGRewind(followedConnParams ConnParams, passwo
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("error: %v", err)
+	}
+	return nil
+}
+
+func (p *Manager) issueCheckpoint(connParams ConnParams) error {
+	ctx, cancel := context.WithTimeout(context.Background(), p.requestTimeoutValue())
+	defer cancel()
+
+	db, err := openDB(connParams)
+	if err != nil {
+		return err
+	}
+	defer ignoreClose(db)
+
+	if _, err := dbExec(ctx, db, "CHECKPOINT"); err != nil {
+		return err
 	}
 	return nil
 }

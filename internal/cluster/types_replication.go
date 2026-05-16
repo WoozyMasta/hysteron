@@ -60,6 +60,28 @@ const (
 	SUReplAccessStrict SUReplAccessMode = "strict"
 )
 
+// ReplicationTLSMode identifies libpq sslmode used for internal replication
+// connections between managed instances.
+type ReplicationTLSMode string
+
+const (
+	// ReplicationTLSModePrefer prefers TLS when available (libpq default-like behavior).
+	ReplicationTLSModePrefer ReplicationTLSMode = "prefer"
+	// ReplicationTLSModeRequire requires TLS encryption without CA/CN verification.
+	ReplicationTLSModeRequire ReplicationTLSMode = "require"
+	// ReplicationTLSModeVerifyCA requires TLS with CA chain verification.
+	ReplicationTLSModeVerifyCA ReplicationTLSMode = "verify-ca"
+	// ReplicationTLSModeVerifyFull requires TLS with CA and host/CN verification.
+	ReplicationTLSModeVerifyFull ReplicationTLSMode = "verify-full"
+)
+
+// ReplicationTLSModeP returns a pointer to s.
+//
+//go:fix inline
+func ReplicationTLSModeP(s ReplicationTLSMode) *ReplicationTLSMode {
+	return new(s)
+}
+
 // SUReplAccessModeP returns a pointer to s.
 func SUReplAccessModeP(s SUReplAccessMode) *SUReplAccessMode {
 	return new(s)

@@ -74,6 +74,9 @@ type ClusterSpec struct { //nolint:revive
 	MaxStandbyLag *uint32 `json:"maxStandbyLag,omitempty"`
 	// Use Synchronous replication between master and its standbys
 	SynchronousReplication *bool `json:"synchronousReplication,omitempty"`
+	// ReplicationTLSMode sets sslmode for internal replication connections
+	// between managed instances.
+	ReplicationTLSMode *ReplicationTLSMode `json:"replicationTLSMode,omitempty"`
 	// UnsafeAutoFailback enables automatic switchback to a higher-priority keeper
 	// when it becomes safely eligible again. Disabled by default.
 	UnsafeAutoFailback *bool `json:"unsafeAutoFailback,omitempty"`
@@ -94,6 +97,8 @@ type ClusterSpec struct { //nolint:revive
 	AdditionalWalSenders *uint16 `json:"additionalWalSenders"`
 	// Whether to use pg_rewind
 	UsePgrewind *bool `json:"usePgrewind,omitempty"`
+	// Whether to force CHECKPOINT on primary before running pg_rewind.
+	CheckpointBeforePgrewind *bool `json:"checkpointBeforePgrewind,omitempty"`
 	// InitMode defines the cluster initialization mode. Current modes are: new, existing, pitr
 	InitMode *ClusterInitMode `json:"initMode,omitempty"`
 	// Whether to merge pgParameters of the initialized db cluster, useful

@@ -57,6 +57,8 @@ const (
 	DefaultMaxStandbyLag = 1024 * 1204
 	// DefaultSynchronousReplication is the default synchronous replication setting.
 	DefaultSynchronousReplication = false
+	// DefaultReplicationTLSMode is the default sslmode for internal replication.
+	DefaultReplicationTLSMode ReplicationTLSMode = ReplicationTLSModePrefer
 	// DefaultUnsafeAutoFailback controls unsafe automatic switchback behavior.
 	DefaultUnsafeAutoFailback = false
 	// DefaultAutoFailbackMinUptime is the default minimum healthy time before

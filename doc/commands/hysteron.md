@@ -267,6 +267,8 @@ Initialize a new cluster
 
 * `-f`, `--file` -
   file containing the initial cluster specification
+* `--skip-if-present` -
+  exit successfully without changes when cluster data already exists
 * `-y`, `--yes` -
   do not ask for confirmation
 
@@ -335,6 +337,26 @@ List clusters in the configured store
 * `-v`, `--version` -
   Show version information
 
+### cluster pause
+
+Pause mutating management operations
+
+**Usage:** `hysteron [OPTIONS] cluster [cluster-OPTIONS] pause [pause-OPTIONS]`
+
+#### Pause mutating management operations
+
+* `--reason` -
+  optional pause reason
+* `--ttl` -
+  optional pause duration, for example 30m or 2h
+
+#### Help Options
+
+* `-h`, `--help` -
+  Show this help message
+* `-v`, `--version` -
+  Show version information
+
 ### cluster promote
 
 Promote a standby cluster to primary
@@ -345,6 +367,37 @@ Promote a standby cluster to primary
 
 * `-y`, `--yes` -
   do not ask for confirmation
+
+#### Help Options
+
+* `-h`, `--help` -
+  Show this help message
+* `-v`, `--version` -
+  Show version information
+
+### cluster reinit
+
+Request replica reinitialize on target keeper
+
+**Usage:** `hysteron [OPTIONS] cluster [cluster-OPTIONS] reinit [reinit-OPTIONS]`
+
+#### Request replica reinitialize on target keeper
+
+* `--keeper-uid` -
+  keeper uid
+
+#### Help Options
+
+* `-h`, `--help` -
+  Show this help message
+* `-v`, `--version` -
+  Show version information
+
+### cluster resume
+
+Resume mutating management operations
+
+**Usage:** `hysteron [OPTIONS] cluster [cluster-OPTIONS] resume`
 
 #### Help Options
 
@@ -392,6 +445,24 @@ Display current cluster status
   output format
   * Defaults: `plain`
   * Choices: `plain, yaml, json`
+
+#### Help Options
+
+* `-h`, `--help` -
+  Show this help message
+* `-v`, `--version` -
+  Show version information
+
+### cluster switchover
+
+Request planned master switch to target keeper
+
+**Usage:** `hysteron [OPTIONS] cluster [cluster-OPTIONS] switchover [switchover-OPTIONS]`
+
+#### Request planned master switch to target keeper
+
+* `--keeper-uid` -
+  keeper uid
 
 #### Help Options
 
@@ -526,6 +597,24 @@ Mark a keeper as failed
 * `-v`, `--version` -
   Show version information
 
+### failover target
+
+Request failover to target keeper
+
+**Usage:** `hysteron [OPTIONS] failover [failover-OPTIONS] target [target-OPTIONS]`
+
+#### Request failover to target keeper
+
+* `--keeper-uid` -
+  keeper uid
+
+#### Help Options
+
+* `-h`, `--help` -
+  Show this help message
+* `-v`, `--version` -
+  Show version information
+
 **Runtime Commands**
 
 ### keeper
@@ -562,6 +651,10 @@ Run keeper runtime components
 * `-d`, `--data-dir` -
   data directory
   * Environment: `$HYSTERON_DATA_DIR`
+* `--master-priority` -
+  keeper priority used as failover tie-break when candidates are otherwise equal
+  * Defaults: `100`
+  * Environment: `$HYSTERON_MASTER_PRIORITY`
 * `--disable-data-dir-locking` -
   disable locking on data dir. Warning! It'll cause data corruptions if two
   keepers are concurrently running with the same data dir.
@@ -914,10 +1007,10 @@ Run sentinel runtime components
   maximum duration before timing out writes of the response
   * Defaults: `10s`
   * Environment: `$HYSTERON_WEB_WRITE_TIMEOUT`
-* `--web-allow-unsafe-admin-without-auth` -
-  allow admin API endpoints when web auth is disabled (unsafe; intended only for
+* `--web-unsafe-no-auth` -
+  allow admin API endpoints without web auth (unsafe; intended only for
   controlled environments)
-  * Environment: `$HYSTERON_WEB_ALLOW_UNSAFE_ADMIN_WITHOUT_AUTH`
+  * Environment: `$HYSTERON_WEB_UNSAFE_NO_AUTH`
 
 #### Help Options
 

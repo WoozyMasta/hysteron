@@ -121,6 +121,69 @@ func getLogicalSlotConfirmedFlushLSN(q Querier, slotName string) (uint64, error)
 	return uint64(lsn), nil
 }
 
+func TestReplicationTLSModeAndPGIdentPropagation(t *testing.T) {
+	t.Parallel()
+
+	dir, err := os.MkdirTemp("", "")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	clusterName := uuid.NewString()
+	initialClusterSpec := &cluster.ClusterSpec{
+		InitMode:               cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
+		SleepInterval:          &cluster.Duration{Duration: 2 * time.Second},
+		RequestTimeout:         &cluster.Duration{Duration: 1 * time.Second},
+		FailInterval:           &cluster.Duration{Duration: 5 * time.Second},
+		ConvergenceTimeout:     &cluster.Duration{Duration: 30 * time.Second},
+		ReplicationTLSMode:     cluster.ReplicationTLSModeP(cluster.ReplicationTLSModeRequire),
+		PGIdent:                []string{"mymap postgres postgres"},
+		SynchronousReplication: cluster.BoolP(false),
+		PGParameters:           defaultPGParameters,
+	}
+
+	tks, tss, tp, tstore := setupServersCustom(t, clusterName, dir, 1, 1, initialClusterSpec)
+	defer shutdown(tks, tss, tp, tstore)
+
+	storePath := filepath.Join(common.StorePrefix, clusterName)
+	sm := store.NewKVBackedStore(tstore.store, storePath)
+
+	masterUID, err := WaitClusterDataWithMaster(sm, 60*time.Second)
+	if err != nil {
+		t.Fatalf("expected a master in cluster view")
+	}
+	masterKeeper := tks[masterUID]
+	if masterKeeper == nil {
+		t.Fatalf("master keeper %q not found", masterUID)
+	}
+	waitKeeperReady(t, sm, masterKeeper)
+
+	cd, _, err := sm.GetClusterData(context.TODO())
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	masterDB := cd.DBs[cd.Cluster.Status.Master]
+	if masterDB == nil {
+		t.Fatalf("master db %q not found", cd.Cluster.Status.Master)
+	}
+	if masterDB.Spec.ReplicationTLSMode != cluster.ReplicationTLSModeRequire {
+		t.Fatalf(
+			"unexpected replication tls mode: got %q want %q",
+			masterDB.Spec.ReplicationTLSMode,
+			cluster.ReplicationTLSModeRequire,
+		)
+	}
+
+	identData, err := os.ReadFile(filepath.Join(masterKeeper.dataDir, "postgres", "pg_ident.conf"))
+	if err != nil {
+		t.Fatalf("read pg_ident.conf: %v", err)
+	}
+	if !strings.Contains(string(identData), "mymap postgres postgres") {
+		t.Fatalf("pg_ident.conf missing expected mapping, got:\n%s", string(identData))
+	}
+}
+
 func waitLogicalSlotConfirmedFlushLSNGreaterThan(
 	q Querier,
 	slotName string,
@@ -1685,6 +1748,9 @@ func TestManagedLogicalReplicationSlotsFailoverRejoinContinuity(t *testing.T) {
 	if err := waitLogicalSlotContainsAllIDs(master, slotName, []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, 30*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
+	if err := waitTableRowCountAtLeast(standby, "logic_cont_t", 10, 60*time.Second); err != nil {
+		t.Fatalf("expected standby to replay base table writes before failover: %v", err)
+	}
 
 	t.Logf("Stopping current master keeper: %s", master.uid)
 	master.Stop()
@@ -1722,6 +1788,42 @@ func TestManagedLogicalReplicationSlotsFailoverRejoinContinuity(t *testing.T) {
 	if err := waitLogicalSlotContainsAllIDs(standby, slotName, []int{21, 22, 23, 24, 25}, 30*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
+}
+
+func waitTableRowCountAtLeast(tk *TestKeeper, tableName string, minCount int, timeout time.Duration) error {
+	start := time.Now()
+	for time.Since(start) < timeout {
+		rows, err := tk.Query(fmt.Sprintf("SELECT count(*) FROM %s", tableName))
+		if err != nil {
+			if strings.Contains(err.Error(), `does not exist`) {
+				time.Sleep(sleepInterval)
+				continue
+			}
+			time.Sleep(sleepInterval)
+			continue
+		}
+
+		var count int
+		scanErr := error(nil)
+		if rows.Next() {
+			scanErr = rows.Scan(&count)
+		}
+		closeErr := rows.Close()
+		if scanErr != nil {
+			time.Sleep(sleepInterval)
+			continue
+		}
+		if closeErr != nil {
+			time.Sleep(sleepInterval)
+			continue
+		}
+		if count >= minCount {
+			return nil
+		}
+		time.Sleep(sleepInterval)
+	}
+
+	return fmt.Errorf("timeout waiting for table %q row count >= %d", tableName, minCount)
 }
 
 func TestManagedLogicalReplicationSlotsFailoverRejoinContinuityTightTiming(t *testing.T) {
@@ -3136,6 +3238,10 @@ func TestLogicalSlotFailoverGateRepeatedFailoverCycles(t *testing.T) {
 				oldMasterUID,
 			)
 			if err != nil {
+				if strings.Contains(err.Error(), "unable to complete atomic operation") {
+					time.Sleep(2 * sleepInterval)
+					continue
+				}
 				t.Fatalf("unexpected err: %v", err)
 			}
 
@@ -3298,6 +3404,10 @@ func TestLogicalSlotFailoverGateSoakFailoverCycles(t *testing.T) {
 				oldMasterUID,
 			)
 			if err != nil {
+				if strings.Contains(err.Error(), "unable to complete atomic operation") {
+					time.Sleep(2 * sleepInterval)
+					continue
+				}
 				t.Fatalf("unexpected err: %v", err)
 			}
 

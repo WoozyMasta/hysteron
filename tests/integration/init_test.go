@@ -85,6 +85,109 @@ func TestInit(t *testing.T) {
 	t.Logf("database is up")
 }
 
+func TestInitSkipIfPresent(t *testing.T) {
+	t.Parallel()
+
+	dir, err := os.MkdirTemp("", "")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	tstore := setupStore(t, dir)
+	defer tstore.Stop()
+
+	storeEndpoints := fmt.Sprintf("%s:%s", tstore.listenAddress, tstore.port)
+	clusterName := uuid.NewString()
+	storePath := filepath.Join(common.StorePrefix, clusterName)
+	sm := store.NewKVBackedStore(tstore.store, storePath)
+
+	initialClusterSpec := &cluster.ClusterSpec{
+		InitMode:           cluster.ClusterInitModeP(cluster.ClusterInitModeNew),
+		SleepInterval:      &cluster.Duration{Duration: 2 * time.Second},
+		RequestTimeout:     &cluster.Duration{Duration: 1 * time.Second},
+		FailInterval:       &cluster.Duration{Duration: 5 * time.Second},
+		ConvergenceTimeout: &cluster.Duration{Duration: 30 * time.Second},
+		PGParameters:       defaultPGParameters,
+	}
+	initialClusterSpecFile, err := writeClusterSpec(dir, initialClusterSpec)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	if err := HysteronCluster(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		"initialize",
+		"-y",
+		"-f",
+		initialClusterSpecFile,
+	); err != nil {
+		t.Fatalf("initial initialize failed: %v", err)
+	}
+
+	cd, _, err := sm.GetClusterData(context.TODO())
+	if err != nil {
+		t.Fatalf("get cluster data failed: %v", err)
+	}
+	if cd == nil || cd.Cluster == nil {
+		t.Fatal("expected initialized cluster data")
+	}
+	clusterUID := cd.Cluster.UID
+	clusterGeneration := cd.Cluster.Generation
+
+	if err := HysteronCluster(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		"initialize",
+		"-y",
+		"-f",
+		initialClusterSpecFile,
+		"--skip-if-present",
+	); err != nil {
+		t.Fatalf("initialize with --skip-if-present failed: %v", err)
+	}
+
+	cd, _, err = sm.GetClusterData(context.TODO())
+	if err != nil {
+		t.Fatalf("get cluster data failed: %v", err)
+	}
+	if cd.Cluster.UID != clusterUID || cd.Cluster.Generation != clusterGeneration {
+		t.Fatalf(
+			"expected no-op initialize with --skip-if-present, got uid/gen %q/%d -> %q/%d",
+			clusterUID,
+			clusterGeneration,
+			cd.Cluster.UID,
+			cd.Cluster.Generation,
+		)
+	}
+
+	if err := HysteronCluster(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		"initialize",
+		"-y",
+		"-f",
+		initialClusterSpecFile,
+	); err != nil {
+		t.Fatalf("expected initialize with -y to overwrite existing cluster data: %v", err)
+	}
+
+	cd, _, err = sm.GetClusterData(context.TODO())
+	if err != nil {
+		t.Fatalf("get cluster data failed: %v", err)
+	}
+	if cd.Cluster.UID == clusterUID {
+		t.Fatalf("expected overwrite initialize with -y to rotate cluster uid, still %q", clusterUID)
+	}
+}
+
 func TestInitNewMerge(t *testing.T) {
 	t.Parallel()
 	testInitNew(t, true)

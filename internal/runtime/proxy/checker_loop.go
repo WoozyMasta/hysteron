@@ -41,19 +41,19 @@ func (c *ClusterChecker) Check(ctx context.Context) error {
 	cd, _, err := c.e.GetClusterData(ctx)
 	if err != nil {
 		checkErrorsTotal.WithLabelValues("get_cluster_data").Inc()
-		return fmt.Errorf("cannot get cluster data: %v", err)
+		return fmt.Errorf("cannot get cluster data: %w", err)
 	}
 
 	if c.writable != nil {
 		if err = c.writable.start(); err != nil {
 			checkErrorsTotal.WithLabelValues("start_writable_listener").Inc()
-			return fmt.Errorf("failed to start writable proxy: %v", err)
+			return fmt.Errorf("failed to start writable proxy: %w", err)
 		}
 	}
 	if c.readOnly != nil {
 		if err = c.readOnly.start(); err != nil {
 			checkErrorsTotal.WithLabelValues("start_read_only_listener").Inc()
-			return fmt.Errorf("failed to start read-only proxy: %v", err)
+			return fmt.Errorf("failed to start read-only proxy: %w", err)
 		}
 	}
 
@@ -74,7 +74,7 @@ func (c *ClusterChecker) Check(ctx context.Context) error {
 	if err = cd.Cluster.Spec.Validate(); err != nil {
 		checkErrorsTotal.WithLabelValues("invalid_cluster_spec").Inc()
 		c.clearDestinations()
-		return fmt.Errorf("clusterdata validation failed: %v", err)
+		return fmt.Errorf("clusterdata validation failed: %w", err)
 	}
 
 	cdProxyCheckInterval := cd.Cluster.DefSpec().ProxyCheckInterval.Duration
@@ -139,7 +139,7 @@ func (c *ClusterChecker) Check(ctx context.Context) error {
 			// cannot ignore this error since the sentinel won't know that we exist
 			// and are sending connections to a master so, when electing a new
 			// master, it'll not wait for us to close connections to the old one.
-			return fmt.Errorf("failed to update proxyInfo: %v", err)
+			return fmt.Errorf("failed to update proxyInfo: %w", err)
 		}
 	}
 	c.updateRuntimeConfig(cdProxyCheckInterval, cdProxyTimeout)

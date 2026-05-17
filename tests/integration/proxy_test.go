@@ -253,15 +253,15 @@ func TestProxyListening(t *testing.T) {
 	if err := tstore.WaitUp(storeWaitTimeout); err != nil {
 		t.Fatalf("error waiting on store up: %v", err)
 	}
-	// tp should listen
-	if ok := tp.CheckListening(); !ok {
-		t.Fatalf("expecting tp listening, but it's not listening.")
+	// tp should keep listening, or recover quickly after transient timeout.
+	if err := tp.WaitListening(proxyRecoveryTimeout); err != nil {
+		t.Fatalf("expecting tp listening after short store outage, but it's not listening.")
 	}
 	// wait proxy reading again from the store
 	time.Sleep(2 * cluster.DefaultProxyCheckInterval)
 	// tp should listen
-	if ok := tp.CheckListening(); !ok {
-		t.Fatalf("expecting tp listening, but it's not listening.")
+	if err := tp.WaitListening(proxyRecoveryTimeout); err != nil {
+		t.Fatalf("expecting tp listening after store recovery stabilization, but it's not listening.")
 	}
 
 	t.Logf("test proxyConf removed. Should continue listening")

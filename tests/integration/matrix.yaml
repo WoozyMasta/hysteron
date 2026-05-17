@@ -83,6 +83,7 @@ groups:
     profiles: ["merge", "full"]
     selectors:
       - "^TestInit(Users|UsersSCRAMSHA256|New.*|Existing.*|PasswordTrailingNewLine|InitialClusterSpec)$"
+      - "^TestInitSkipIfPresent$"
       - "^Test(InitialClusterSpec|PasswordTrailingNewLine)$"
       - "^TestServerParameters$"
       - "^TestWal(Level|KeepSegments)$"
@@ -91,6 +92,7 @@ groups:
       - "^TestBeforeStopCommandHook$"
       - "^TestAdvertise$"
       - "^TestFailsafeModeValidationAndUpdate$"
+      - "^TestReplicationTLSModeAndPGIdentPropagation$"
 
   - name: logical-slots
     criticality: critical

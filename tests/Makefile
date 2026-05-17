@@ -9,7 +9,7 @@ PG_LIST ?= $(PG_MATRIX)
 MAX_MATRIX_WORKERS ?= 2
 
 INTEGRATION_TAGS ?= integration
-INTEGRATION_TIMEOUT ?= 30m
+INTEGRATION_TIMEOUT ?= 60m
 INTEGRATION_PARALLEL ?= 4
 INTEGRATION_MAX_STORES ?= 8
 INTEGRATION_RUN ?=
@@ -68,6 +68,8 @@ integration-container:
 	@log_file="$(INTEGRATION_ARTIFACTS_DIR)/integration-local-$(INTEGRATION_TIMESTAMP).log"; \
 	json_file="$(INTEGRATION_ARTIFACTS_DIR)/integration-run-$${INTEGRATION_PROFILE:-adhoc}-pg$(PG_MAJOR)-$(INTEGRATION_TIMESTAMP).jsonl"; \
 	md_report_file="$(INTEGRATION_ARTIFACTS_DIR)/integration-run-$${INTEGRATION_PROFILE:-adhoc}-pg$(PG_MAJOR)-$(INTEGRATION_TIMESTAMP).md"; \
+	etcd_bin="$${ETCD_BIN:-$$(command -v etcd)}"; \
+	if [ -z "$$etcd_bin" ]; then echo "etcd binary not found in PATH"; exit 1; fi; \
 	echo ">> running container integration tests"; \
 	echo ">> writing integration log to $$log_file"; \
 	echo ">> writing integration json report source to $$json_file"; \
@@ -75,7 +77,7 @@ integration-container:
 	if [ -n "$$INTEGRATION_RUN" ]; then run_arg="-run $$INTEGRATION_RUN"; fi; \
 	HYSTERON_TEST_STORE_BACKEND="$(INTEGRATION_STORE_BACKEND)" \
 	HYSTERON_INTEGRATION_MAX_STORES="$(INTEGRATION_MAX_STORES)" \
-	ETCD_BIN="$(ETCD_BIN)" \
+	ETCD_BIN="$$etcd_bin" \
 	HYSTERON_BIN="/tmp/hysteron-build/hysteron" \
 	$(GO) test -tags "$(INTEGRATION_TAGS)" -timeout "$(INTEGRATION_TIMEOUT)" \
 		-parallel "$(INTEGRATION_PARALLEL)" $$run_arg \

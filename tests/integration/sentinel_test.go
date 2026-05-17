@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -29,6 +30,25 @@ import (
 	"github.com/woozymasta/hysteron/internal/common"
 	"github.com/woozymasta/hysteron/internal/store"
 )
+
+func waitClusterPausedState(
+	sm *store.KVBackedStore,
+	wantPaused bool,
+	timeout time.Duration,
+) error {
+	start := time.Now()
+	for start.Add(timeout).After(time.Now()) {
+		cd, _, err := sm.GetClusterData(context.TODO())
+		if err != nil {
+			return err
+		}
+		if cd != nil && cd.Cluster != nil && cd.Cluster.Status.Paused == wantPaused {
+			return nil
+		}
+		time.Sleep(sleepInterval)
+	}
+	return fmt.Errorf("timeout waiting paused=%t", wantPaused)
+}
 
 func TestSentinelEnabledProxies(t *testing.T) {
 	t.Parallel()
@@ -169,5 +189,127 @@ func TestSentinelEnabledProxies(t *testing.T) {
 	}
 	if err := WaitClusterDataEnabledProxies(sm, enabledProxiesTwo, 60*time.Second); err != nil {
 		t.Fatalf("unexpected err: %v", err)
+	}
+}
+
+func TestSentinelPauseGuardsAndManualSwitchover(t *testing.T) {
+	t.Parallel()
+
+	dir, err := os.MkdirTemp("", "hysteron")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	clusterName := uuid.NewString()
+	tks, tss, tp, tstore := setupServers(t, clusterName, dir, 2, 1, false, false, nil)
+	defer shutdown(tks, tss, tp, tstore)
+
+	storePath := filepath.Join(common.StorePrefix, clusterName)
+	sm := store.NewKVBackedStore(tstore.store, storePath)
+	storeEndpoints := fmt.Sprintf("%s:%s", tstore.listenAddress, tstore.port)
+
+	masterUID, err := WaitClusterDataWithMaster(sm, 60*time.Second)
+	if err != nil {
+		t.Fatalf("expected a master in cluster view")
+	}
+
+	targetUID := ""
+	for uid := range tks {
+		if uid != masterUID {
+			targetUID = uid
+			break
+		}
+	}
+	if targetUID == "" {
+		t.Fatal("failed to find standby keeper for switchover")
+	}
+
+	if err := HysteronCluster(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		"pause",
+		"--reason=integration-test",
+		"--ttl=2m",
+	); err != nil {
+		t.Fatalf("pause failed: %v", err)
+	}
+
+	if err := waitClusterPausedState(sm, true, 30*time.Second); err != nil {
+		t.Fatalf("pause state wasn't applied: %v", err)
+	}
+
+	if output, err := HysteronClusterOutput(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		"switchover",
+		fmt.Sprintf("--keeper-uid=%s", targetUID),
+	); err == nil || !strings.Contains(output, "cluster is paused; resume first") {
+		t.Fatalf("expected paused switchover error, got err=%v output=%q", err, output)
+	}
+
+	if output, err := HysteronFailoverOutput(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		"target",
+		fmt.Sprintf("--keeper-uid=%s", targetUID),
+	); err == nil || !strings.Contains(output, "cluster is paused; resume first") {
+		t.Fatalf("expected paused failover-target error, got err=%v output=%q", err, output)
+	}
+
+	if output, err := HysteronClusterOutput(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		"reinit",
+		fmt.Sprintf("--keeper-uid=%s", targetUID),
+	); err == nil || !strings.Contains(output, "cluster is paused; resume first") {
+		t.Fatalf("expected paused reinit error, got err=%v output=%q", err, output)
+	}
+
+	if err := HysteronCluster(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		"resume",
+	); err != nil {
+		t.Fatalf("resume failed: %v", err)
+	}
+	if err := waitClusterPausedState(sm, false, 30*time.Second); err != nil {
+		t.Fatalf("resume state wasn't applied: %v", err)
+	}
+
+	if err := HysteronCluster(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		"switchover",
+		fmt.Sprintf("--keeper-uid=%s", targetUID),
+	); err != nil {
+		t.Fatalf("switchover failed after resume: %v", err)
+	}
+
+	if err := WaitClusterDataMaster(targetUID, sm, 60*time.Second); err != nil {
+		t.Fatalf("expected switchover to target %s: %v", targetUID, err)
+	}
+
+	if output, err := HysteronClusterOutput(
+		t,
+		clusterName,
+		tstore.storeBackend,
+		storeEndpoints,
+		"reinit",
+		fmt.Sprintf("--keeper-uid=%s", targetUID),
+	); err == nil || !strings.Contains(output, "cannot reinitialize current master database") {
+		t.Fatalf("expected reinit master rejection, got err=%v output=%q", err, output)
 	}
 }

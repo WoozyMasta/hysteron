@@ -15,6 +15,7 @@ primary concepts and avoid possible mistakes.
 * [Kubernetes Service Publishing](kubernetes_service_publishing.md)
 * [Runtime Auto-Provisioning](runtime_autoprovision.md)
 * [Management Operations](management_operations.md)
+* [HA Timing Tuning](ha_timing_tuning.md)
 * [Web Admin API](web_admin_api.md)
 * [Setting instance parameters](postgres_parameters.md)
 * [Metrics Guidelines](metrics.md)

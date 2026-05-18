@@ -1,0 +1,19 @@
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: hysteron-keeper
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/app: hysteron-second
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: hysteron-sentinel
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/app: hysteron-second

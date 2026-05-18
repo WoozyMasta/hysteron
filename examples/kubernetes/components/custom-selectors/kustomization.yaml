@@ -1,0 +1,16 @@
+---
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+labels:
+  - includeSelectors: false
+    includeTemplates: true
+    pairs:
+      app.kubernetes.io/app: hysteron-second
+
+patches:
+  - path: workload-selectors.yaml
+  - path: service-selectors.yaml
+  - path: pdb-selectors.yaml
+  - path: monitoring-selectors.yaml
+  - path: keeper-affinity.yaml

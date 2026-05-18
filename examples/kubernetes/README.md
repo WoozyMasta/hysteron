@@ -4,24 +4,31 @@ This directory contains a modular Kustomize layout for Hysteron.
 
 ## Structure
 
-Base resources:
+Base layers:
 
-* `base/common`: shared runtime objects (state secret, service account, RBAC,
-  common env config).
-* `base/keeper`: keeper StatefulSet, service, PDB, keeper env.
-* `base/sentinel`: sentinel Deployment, service, PDB, sentinel env.
-* `base/proxy`: proxy Deployment, service, PDB, HPA, proxy env.
+* [base][]:
+  aggregate convenience layer (`common + keeper + sentinel + proxy`).
+* [base/common][]:
+  shared runtime objects (state, RBAC, bootstrap job, common config).
+* [base/keeper][]: keeper StatefulSet and service.
+* [base/sentinel][]: sentinel Deployment and service.
+* [base/proxy][]: proxy Deployment and service.
 
-And additional components:
+Optional components:
 
-* `components/kube-service-publishing`: optional RW/RO services managed by
-  sentinel (used for keeper+sentinel mode without proxy).
-* `components/monitoring`: optional Prometheus Operator monitors.
-* `components/storage-pvc`: optional standalone PVC mode for keeper data.
-* `components/storage-claimtemplate`: optional `volumeClaimTemplates` mode for
-  keeper data.
+* [components/anti-affinity][]: keeper anti-affinity patch.
+* [components/pdb][]: PDBs for keeper and sentinel.
+* [components/hpa][]: proxy HPA.
+* [components/monitoring][]: PodMonitor/ServiceMonitor resources.
+* [components/kube-service][]:
+   sentinel-managed RW/RO services for topology without proxy.
+* [components/storage-pvc][]: standalone PVC storage mode example.
+* [components/storage-claimtemplate][]:
+  `volumeClaimTemplates` storage mode example.
+* [components/custom-selectors][]: custom selector example component.
 
-Root `kustomization.yaml` builds `base` and enables selected components.
+Root `kustomization.yaml` builds `base`
+and enables selected components by default.
 
 ## Quick Start
 
@@ -56,20 +63,8 @@ kubectl apply -k examples/kubernetes
 * Base storage is `emptyDir`;
   persistent storage requires one of storage components.
 
-## Monitoring
-
-`components/monitoring` requires Prometheus Operator CRDs:
-
-* `monitoring.coreos.com/v1 ServiceMonitor`
-* `monitoring.coreos.com/v1 PodMonitor`
-
-Current monitoring component uses:
-
-* `PodMonitor` for keeper.
-* `ServiceMonitor` for sentinel and proxy.
-
-Do not add overlapping monitors for the same metrics endpoint unless you
-explicitly want duplicated scrape series.
+Monitoring details are documented in
+[components/monitoring][].
 
 ## Cluster Initialization
 
@@ -85,24 +80,8 @@ hysteron cluster \
   initialize --skip-if-present
 ```
 
-The job has:
-
-* `backoffLimit: 6`
-* `activeDeadlineSeconds: 300`
-* `ttlSecondsAfterFinished: 300`
-
-Default initial cluster spec (`base/common/cluster-spec.json`):
-
-```json
-{
-  "initMode": "new",
-  "synchronousReplication": false,
-  "minSynchronousStandbys": 1,
-  "maxSynchronousStandbys": 1,
-  "maxStandbys": 20,
-  "maxStandbysPerSender": 3
-}
-```
+Bootstrap job and initial spec details are documented in
+[base/common][].
 
 ## Remote Usage Examples
 
@@ -134,7 +113,6 @@ labels:
   - includeSelectors: false
     includeTemplates: true
     pairs:
-      app.kubernetes.io/app: hysteron
       app.kubernetes.io/version: *version
 
 generatorOptions:
@@ -162,7 +140,7 @@ resources:
   - https://github.com/woozymasta/hysteron//examples/kubernetes/base/sentinel?timeout=120&ref=v0.18.0
 
 components:
-  - https://github.com/woozymasta/hysteron//examples/kubernetes/components/kube-service-publishing?timeout=120&ref=v0.18.0
+  - https://github.com/woozymasta/hysteron//examples/kubernetes/components/kube-service?timeout=120&ref=v0.18.0
 ```
 
 > [!NOTE]
@@ -170,3 +148,17 @@ components:
 > In production, use the secret workflow that matches your operations model:
 > pre-created Kubernetes Secret (for example via `kubectl create secret`)
 > or an external secret management system.
+
+[base]: ./base
+[base/common]: ./base/common
+[base/keeper]: ./base/keeper
+[base/sentinel]: ./base/sentinel
+[base/proxy]: ./base/proxy
+[components/anti-affinity]: ./components/anti-affinity
+[components/pdb]: ./components/pdb
+[components/hpa]: ./components/hpa
+[components/monitoring]: ./components/monitoring
+[components/kube-service]: ./components/kube-service
+[components/storage-pvc]: ./components/storage-pvc
+[components/storage-claimtemplate]: ./components/storage-claimtemplate
+[components/custom-selectors]: ./components/custom-selectors

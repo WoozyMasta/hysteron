@@ -13,14 +13,6 @@ spec:
       securityContext:
         fsGroup: 1000
 
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100
-              podAffinityTerm:
-                topologyKey: kubernetes.io/hostname
-                labelSelector: {}
-
       containers:
         - name: keeper
           image: docker.io/woozymasta/hysteron-pg:latest

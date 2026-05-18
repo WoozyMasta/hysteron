@@ -1,0 +1,29 @@
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: hysteron-keeper
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/app: hysteron-second
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hysteron-sentinel
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/app: hysteron-second
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hysteron-proxy
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/app: hysteron-second

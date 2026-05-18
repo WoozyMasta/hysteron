@@ -1,6 +1,6 @@
 {
   "initMode": "new",
-  "synchronousReplication": false,
+  "synchronousReplication": true,
   "minSynchronousStandbys": 1,
   "maxSynchronousStandbys": 1,
   "maxStandbys": 20,

@@ -1,0 +1,29 @@
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: hysteron-keeper
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/app: hysteron-second
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: hysteron-sentinel
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/app: hysteron-second
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: hysteron-proxy
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/app: hysteron-second

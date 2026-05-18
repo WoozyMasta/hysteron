@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog][], and this project adheres to
 
 ### Added
 
+* Supported PostgreSQL major-version line was advanced and validated for
+  PostgreSQL 14 through 18.
 * `hysteron cluster initialize --skip-if-present` for idempotent
   no-op initialization flows when cluster data already exists.
 * `hysteron cluster pause` / `cluster resume` management actions with

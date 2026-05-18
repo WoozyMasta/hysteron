@@ -1,0 +1,25 @@
+﻿---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: hysteron-sentinel
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: sentinel
+  endpoints:
+    - port: metrics
+      interval: 15s
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: hysteron-proxy
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: proxy
+  endpoints:
+    - port: metrics
+      interval: 15s

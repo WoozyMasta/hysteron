@@ -1,0 +1,35 @@
+﻿---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - deploy.yaml
+  - service.yaml
+  - pdb.yaml
+  - hpa.yaml
+
+configMapGenerator:
+  - name: hysteron-proxy-env
+    envs:
+      - proxy.env
+
+labels:
+  - includeSelectors: true
+    includeTemplates: true
+    pairs:
+      app.kubernetes.io/app: hysteron
+      app.kubernetes.io/component: proxy
+
+replacements:
+  - source:
+      kind: Deployment
+      name: hysteron-proxy
+      fieldPath: spec.selector
+    targets:
+      - select:
+          kind: PodDisruptionBudget
+          name: hysteron-proxy
+        fieldPaths:
+          - spec.selector
+        options:
+          create: true

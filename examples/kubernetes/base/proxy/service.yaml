@@ -1,0 +1,16 @@
+﻿---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hysteron-proxy
+spec:
+  ports:
+    - name: postgres-rw
+      port: 5432
+      targetPort: postgres-rw
+    - name: postgres-ro
+      port: 5433
+      targetPort: postgres-ro
+    - name: metrics
+      port: 8080
+      targetPort: metrics

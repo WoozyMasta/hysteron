@@ -1,0 +1,25 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - state-secret.yaml
+  - serviceaccount.yaml
+  - role.yaml
+  - rolebinding.yaml
+
+configMapGenerator:
+  - name: hysteron-common-env
+    literals:
+      - HYSTERON_CLUSTER_NAME=kube-hysteron
+      - HYSTERON_K8S_RESOURCE_NAME=hysteron-state
+    options:
+      disableNameSuffixHash: true
+      immutable: true
+
+labels:
+  - includeSelectors: true
+    includeTemplates: true
+    pairs:
+      app.kubernetes.io/app: hysteron
+      app.kubernetes.io/component: keeper

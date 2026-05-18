@@ -1,0 +1,12 @@
+﻿apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: hysteron-keeper
+spec:
+  replicas: 1
+  template:
+    spec:
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: keeper-data

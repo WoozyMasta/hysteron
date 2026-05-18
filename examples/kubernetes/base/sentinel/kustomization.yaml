@@ -1,0 +1,34 @@
+﻿---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - deploy.yaml
+  - service.yaml
+  - pdb.yaml
+
+configMapGenerator:
+  - name: hysteron-sentinel-env
+    envs:
+      - sentinel.env
+
+labels:
+  - includeSelectors: true
+    includeTemplates: true
+    pairs:
+      app.kubernetes.io/app: hysteron
+      app.kubernetes.io/component: sentinel
+
+replacements:
+  - source:
+      kind: Deployment
+      name: hysteron-sentinel
+      fieldPath: spec.selector
+    targets:
+      - select:
+          kind: PodDisruptionBudget
+          name: hysteron-sentinel
+        fieldPaths:
+          - spec.selector
+        options:
+          create: true

@@ -44,7 +44,7 @@ import (
 const (
 	kubeEndpointSliceManagedBy  = "hysteron-sentinel"
 	kubeServicePortName         = "postgres"
-	kubeEndpointSliceSuffix     = "-hysteron"
+	kubeEndpointSliceSuffix     = "-eps"
 	kubeEndpointSliceHashLength = 8
 )
 

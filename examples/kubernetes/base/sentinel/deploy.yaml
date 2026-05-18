@@ -1,0 +1,51 @@
+﻿apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hysteron-sentinel
+spec:
+  replicas: 2
+  template:
+    spec:
+      serviceAccountName: hysteron
+      containers:
+        - name: sentinel
+          image: docker.io/woozymasta/hysteron:latest
+          command:
+            - /bin/hysteron
+            - sentinel
+            - kubernetes
+
+          envFrom:
+            - configMapRef:
+                name: hysteron-common-env
+            - configMapRef:
+                name: hysteron-sentinel-env
+
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+
+          ports:
+            - name: web
+              containerPort: 8081
+            - name: metrics
+              containerPort: 8080
+
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: web
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: web
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 6

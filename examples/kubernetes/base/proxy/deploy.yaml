@@ -1,0 +1,52 @@
+﻿---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hysteron-proxy
+spec:
+  replicas: 2
+  template:
+    spec:
+      serviceAccountName: hysteron
+      containers:
+        - name: proxy
+          image: docker.io/woozymasta/hysteron:latest
+          command:
+            - /bin/hysteron
+            - proxy
+            - kubernetes
+
+          resources:
+            requests:
+              cpu: 150m
+              memory: 192Mi
+            limits:
+              cpu: 600m
+              memory: 384Mi
+
+          envFrom:
+            - configMapRef:
+                name: hysteron-common-env
+            - configMapRef:
+                name: hysteron-proxy-env
+
+          ports:
+            - name: postgres-rw
+              containerPort: 5432
+            - name: postgres-ro
+              containerPort: 5433
+            - name: metrics
+              containerPort: 8080
+
+          livenessProbe:
+            tcpSocket:
+              port: postgres-rw
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
+          readinessProbe:
+            tcpSocket:
+              port: postgres-rw
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 6

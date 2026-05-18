@@ -1,0 +1,79 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: hysteron
+rules:
+  # Pod annotations are used as runtime status transport between components.
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - get
+      - list
+      - patch
+
+  # Cluster data state object (k8s store backend: secret).
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    resourceNames:
+      - hysteron-state
+    verbs:
+      - get
+      - create
+      - update
+      - patch
+
+  # Sentinel-managed writable/read-only service publishing targets.
+  - apiGroups:
+      - ""
+    resources:
+      - services
+    resourceNames:
+      - hysteron-rw
+      - hysteron-ro
+    verbs:
+      - get
+      - create
+      - update
+      - patch
+
+  # Sentinel-managed EndpointSlices for writable/read-only services.
+  - apiGroups:
+      - discovery.k8s.io
+    resources:
+      - endpointslices
+    resourceNames:
+      - hysteron-rw-eps
+      - hysteron-ro-eps
+    verbs:
+      - get
+      - create
+      - update
+      - patch
+
+  # Leader election lease object.
+  - apiGroups:
+      - coordination.k8s.io
+    resources:
+      - leases
+    resourceNames:
+      - hysteron-state
+    verbs:
+      - get
+      - create
+      - update
+      - patch
+
+  # Optional event emission for operator diagnostics.
+  - apiGroups:
+      - ""
+    resources:
+      - events
+    verbs:
+      - create
+      - update
+      - patch

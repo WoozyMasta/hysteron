@@ -1,0 +1,12 @@
+﻿---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: hysteron-keeper
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: keeper
+  podMetricsEndpoints:
+    - port: metrics
+      interval: 15s

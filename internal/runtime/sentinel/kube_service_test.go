@@ -78,7 +78,7 @@ func TestKubeServicePublisherPublishesWritableEndpointSlice(t *testing.T) {
 		t.Fatalf("Service ports = %#v, want one port 5432", service.Spec.Ports)
 	}
 
-	slice, err := client.DiscoveryV1().EndpointSlices("default").Get(ctx, "hysteron-cluster-test-rw-hysteron", metav1.GetOptions{})
+	slice, err := client.DiscoveryV1().EndpointSlices("default").Get(ctx, "hysteron-cluster-test-rw-eps", metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("EndpointSlices.Get() error = %v", err)
 	}
@@ -110,7 +110,7 @@ func TestKubeServicePublisherClearsWritableEndpoints(t *testing.T) {
 		t.Fatalf("Publish() clear error = %v", err)
 	}
 
-	slice, err := client.DiscoveryV1().EndpointSlices("default").Get(ctx, "hysteron-cluster-test-rw-hysteron", metav1.GetOptions{})
+	slice, err := client.DiscoveryV1().EndpointSlices("default").Get(ctx, "hysteron-cluster-test-rw-eps", metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("EndpointSlices.Get() error = %v", err)
 	}
@@ -168,7 +168,7 @@ func TestKubeServicePublisherPublishesReadOnlyEndpoints(t *testing.T) {
 		t.Fatalf("Publish() error = %v", err)
 	}
 
-	slice, err := client.DiscoveryV1().EndpointSlices("default").Get(ctx, "hysteron-cluster-test-ro-hysteron", metav1.GetOptions{})
+	slice, err := client.DiscoveryV1().EndpointSlices("default").Get(ctx, "hysteron-cluster-test-ro-eps", metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("EndpointSlices.Get() error = %v", err)
 	}
@@ -210,7 +210,7 @@ func TestKubeServicePublisherReadOnlyFallbackToPrimary(t *testing.T) {
 		t.Fatalf("Publish() error = %v", err)
 	}
 
-	slice, err := client.DiscoveryV1().EndpointSlices("default").Get(ctx, "hysteron-cluster-test-ro-hysteron", metav1.GetOptions{})
+	slice, err := client.DiscoveryV1().EndpointSlices("default").Get(ctx, "hysteron-cluster-test-ro-eps", metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("EndpointSlices.Get() error = %v", err)
 	}

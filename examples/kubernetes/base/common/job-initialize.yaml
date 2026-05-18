@@ -1,0 +1,38 @@
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: hysteron-initialize
+spec:
+  backoffLimit: 6
+  activeDeadlineSeconds: 300
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      serviceAccountName: hysteron
+      restartPolicy: OnFailure
+      containers:
+        - name: initialize
+          image: docker.io/woozymasta/hysteron:latest
+
+          command:
+            - /bin/hysteron
+            - cluster
+            - --store-backend=kubernetes
+            - --k8s-resource-kind=secret
+            - initialize
+            - --file=/etc/hysteron-init/cluster-spec.json
+            - --skip-if-present
+
+          envFrom:
+            - configMapRef:
+                name: hysteron-common-env
+
+          volumeMounts:
+            - name: initialize-spec
+              mountPath: /etc/hysteron-init
+              readOnly: true
+      volumes:
+        - name: initialize-spec
+          configMap:
+            name: hysteron-initialize-spec

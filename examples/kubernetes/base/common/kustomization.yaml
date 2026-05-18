@@ -4,6 +4,7 @@ kind: Kustomization
 
 resources:
   - state-secret.yaml
+  - job-initialize.yaml
   - serviceaccount.yaml
   - role.yaml
   - rolebinding.yaml
@@ -13,6 +14,12 @@ configMapGenerator:
     literals:
       - HYSTERON_CLUSTER_NAME=kube-hysteron
       - HYSTERON_K8S_RESOURCE_NAME=hysteron-state
+    options:
+      disableNameSuffixHash: true
+      immutable: true
+  - name: hysteron-initialize-spec
+    files:
+      - cluster-spec.json
     options:
       disableNameSuffixHash: true
       immutable: true

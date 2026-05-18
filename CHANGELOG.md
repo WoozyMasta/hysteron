@@ -46,12 +46,17 @@ The format is based on [Keep a Changelog][], and this project adheres to
   authenticated API endpoint, auto-refresh,
   and multi-cluster status tables (sentinels, keepers, databases, proxies).
 * Expanded HA observability across sentinel/keeper/proxy/store:
-  failover, reconcile, DCS health, routing, PostgreSQL state,
-  and slot-related metrics, with updated `doc/metrics.md` examples.
+  failover, reconcile, DCS (Distributed Configuration Store) health, routing,
+  PostgreSQL state, and slot-related metrics,
+  with updated `doc/metrics.md` examples.
+* Additional logical-slot failover observability metrics for standby advance
+  planning, retry-backoff queues, skip reasons, and operation outcomes.
 * Managed logical replication slots support in cluster spec and runtime
   reconciliation (`managedLogicalReplicationSlots`) with strict validation.
 * Optional logical-slot failover feature gate (`enableLogicalSlotFailover`)
   with PG-version-aware behavior and standby readiness/advance safeguards.
+* Native PostgreSQL 17+ logical failover slot path support under
+  `enableLogicalSlotFailover`, including failover-flag-aware slot handling.
 * Multi-cluster sentinel operation in one process
   (`--cluster-name` repeated, per-cluster initial spec overrides).
 * Cluster listing command (`hysteron cluster list`).
@@ -68,6 +73,7 @@ The format is based on [Keep a Changelog][], and this project adheres to
 * Profile-based integration test matrix runs (`tests/integration/matrix.yaml`)
   with markdown/json reporting and stronger HA/storage/logical-slot
   integrity assertions across failover/rejoin scenarios.
+* Kubernetes examples were rebuilt to modular Kustomize profiles/components.
 
 ### Changed
 

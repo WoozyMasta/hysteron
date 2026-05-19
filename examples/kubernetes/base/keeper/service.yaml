@@ -7,5 +7,5 @@ spec:
   clusterIP: None
   ports:
     - name: metrics
-      port: 8080
+      port: 9108
       targetPort: metrics

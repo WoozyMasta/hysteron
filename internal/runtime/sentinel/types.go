@@ -17,6 +17,7 @@ package sentinel
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -113,6 +114,8 @@ type Sentinel struct {
 
 	// Marks whether DCS retrieval failures happened in current leadership epoch.
 	dcsDegradedSeen bool
+	// Last successful reconciliation timestamp as UnixNano.
+	lastCheckSuccessUnixNano atomic.Int64
 }
 
 // KeeperInfoHistory tracks the latest keeper info observed by the sentinel.

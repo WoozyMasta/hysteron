@@ -17,8 +17,10 @@ package proxy
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/woozymasta/hysteron/internal/cluster"
@@ -49,9 +51,18 @@ type ClusterChecker struct {
 	proxyTimeout time.Duration
 	// Guards mutable runtime configuration updates.
 	configMutex sync.Mutex
+	// Guards last destination tracking fields.
+	routeStateMutex sync.Mutex
 	// Stop listener when critical store errors happen.
 	stopListening bool
+	// Last successful cluster check timestamp as UnixNano.
+	lastCheckSuccessUnixNano atomic.Int64
 }
+
+var (
+	errProxyStartupIncomplete = errors.New("proxy startup is not complete yet")
+	errProxyNotReady          = errors.New("proxy has no writable route")
+)
 
 // NewClusterChecker creates a ClusterChecker from proxy configuration.
 func NewClusterChecker(
@@ -159,4 +170,27 @@ func (c *ClusterChecker) runtimeConfigSnapshot() (time.Duration, time.Duration) 
 func (c *ClusterChecker) clearDestinations() {
 	c.setWritableDestination(nil)
 	c.setReadOnlyDestinations(nil)
+}
+
+func (c *ClusterChecker) probeStartup(context.Context) error {
+	if c.lastCheckSuccessUnixNano.Load() <= 0 {
+		return errProxyStartupIncomplete
+	}
+	return nil
+}
+
+func (c *ClusterChecker) probeReady(context.Context) error {
+	if c.lastCheckSuccessUnixNano.Load() <= 0 {
+		return errProxyStartupIncomplete
+	}
+	c.routeStateMutex.Lock()
+	writableDestination := c.lastWritableDestination
+	c.routeStateMutex.Unlock()
+	if c.writable != nil && writableDestination == "" {
+		return errProxyNotReady
+	}
+	if c.writable != nil && !c.writable.isActive() {
+		return errProxyNotReady
+	}
+	return nil
 }

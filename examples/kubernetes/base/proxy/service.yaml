@@ -12,5 +12,5 @@ spec:
       port: 5433
       targetPort: postgres-ro
     - name: metrics
-      port: 8080
+      port: 9108
       targetPort: metrics

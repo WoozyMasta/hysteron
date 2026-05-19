@@ -50,25 +50,36 @@ spec:
             - name: postgres
               containerPort: 5432
             - name: metrics
-              containerPort: 8080
+              containerPort: 9108
+            - name: health
+              containerPort: 8081
 
           startupProbe:
-            tcpSocket:
-              port: postgres
+            httpGet:
+              path: /health/startup
+              port: health
             periodSeconds: 10
             failureThreshold: 30
           livenessProbe:
-            tcpSocket:
-              port: postgres
+            httpGet:
+              path: /health/live
+              port: health
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 6
+            # Optional alternative:
+            # tcpSocket:
+            #   port: postgres
           readinessProbe:
-            tcpSocket:
-              port: postgres
+            httpGet:
+              path: /health/ready
+              port: health
             periodSeconds: 5
             timeoutSeconds: 3
             failureThreshold: 6
+            # Optional alternative:
+            # tcpSocket:
+            #   port: postgres
 
           volumeMounts:
             - name: data

@@ -30,6 +30,7 @@ import (
 // writable routing metrics/state transitions.
 func (c *ClusterChecker) setWritableDestination(addr *net.TCPAddr) {
 	if c.writable != nil {
+		c.routeStateMutex.Lock()
 		next := ""
 		if addr != nil {
 			next = addr.String()
@@ -38,6 +39,7 @@ func (c *ClusterChecker) setWritableDestination(addr *net.TCPAddr) {
 			backendSwitchesTotal.WithLabelValues(string(proxyModeWritable)).Inc()
 			c.lastWritableDestination = next
 		}
+		c.routeStateMutex.Unlock()
 		if addr == nil {
 			routeStateGauge.WithLabelValues(string(proxyModeWritable), "enabled").Set(0)
 			routeStateGauge.WithLabelValues(string(proxyModeWritable), "disabled").Set(1)
@@ -53,6 +55,7 @@ func (c *ClusterChecker) setWritableDestination(addr *net.TCPAddr) {
 // read-only routing metrics/state transitions.
 func (c *ClusterChecker) setReadOnlyDestinations(addrs []*net.TCPAddr) {
 	if c.readOnly != nil {
+		c.routeStateMutex.Lock()
 		keys := make([]string, 0, len(addrs))
 		for _, addr := range addrs {
 			if addr != nil {
@@ -65,6 +68,7 @@ func (c *ClusterChecker) setReadOnlyDestinations(addrs []*net.TCPAddr) {
 			backendSwitchesTotal.WithLabelValues(string(proxyModeReadOnly)).Inc()
 			c.lastReadOnlyDestinations = next
 		}
+		c.routeStateMutex.Unlock()
 		readOnlyDestinationsGauge.Set(float64(len(keys)))
 		if len(keys) == 0 {
 			routeStateGauge.WithLabelValues(string(proxyModeReadOnly), "enabled").Set(0)

@@ -21,7 +21,8 @@ x-runtime-env: &runtime-env
 
 # Shared sentinel runtime options.
 x-sentinel-env: &sentinel-env
-  HYSTERON_METRICS_LISTEN_ADDRESS: 0.0.0.0:9090
+  HYSTERON_METRICS_LISTEN_ADDRESS: 0.0.0.0:9108
+  HYSTERON_HEALTH_LISTEN_ADDRESS: 0.0.0.0:8081
   HYSTERON_WEB_LISTEN_ADDRESS: 0.0.0.0:8080
   HYSTERON_WEB_AUTH_USERNAME: hysteron
   HYSTERON_WEB_AUTH_PASSWORD: hysteron
@@ -29,7 +30,8 @@ x-sentinel-env: &sentinel-env
 # Shared keeper runtime options.
 x-keeper-env: &keeper-env
   HYSTERON_DATA_DIR: /var/lib/postgresql/data
-  HYSTERON_METRICS_LISTEN_ADDRESS: 0.0.0.0:9187
+  HYSTERON_METRICS_LISTEN_ADDRESS: 0.0.0.0:9108
+  HYSTERON_HEALTH_LISTEN_ADDRESS: 0.0.0.0:8081
   HYSTERON_PG_REPL_USERNAME: replication
   HYSTERON_PG_REPL_PASSWORDFILE: /run/secrets/pg_repl
   HYSTERON_PG_SU_USERNAME: postgres
@@ -37,7 +39,8 @@ x-keeper-env: &keeper-env
 
 # Shared proxy runtime options.
 x-proxy-env: &proxy-env
-  HYSTERON_METRICS_LISTEN_ADDRESS: 0.0.0.0:9190
+  HYSTERON_METRICS_LISTEN_ADDRESS: 0.0.0.0:9108
+  HYSTERON_HEALTH_LISTEN_ADDRESS: 0.0.0.0:8081
 
 services:
   # Single-node etcd for local demo only.

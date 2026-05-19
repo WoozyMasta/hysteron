@@ -207,6 +207,7 @@ func (c *ClusterChecker) Start(ctx context.Context) error {
 				}
 			} else {
 				log.Debug().Msg("cluster check completed successfully")
+				c.lastCheckSuccessUnixNano.Store(time.Now().UnixNano())
 			}
 			proxyCheckInterval, _ := c.runtimeConfigSnapshot()
 			timer.Reset(proxyCheckInterval)

@@ -29,6 +29,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	stconfig "github.com/woozymasta/hysteron/internal/config"
+	"github.com/woozymasta/hysteron/internal/health"
 	slog "github.com/woozymasta/hysteron/internal/log"
 	"github.com/woozymasta/hysteron/internal/postgresql"
 	runtimecommon "github.com/woozymasta/hysteron/internal/runtime/common"
@@ -256,29 +257,89 @@ func runSentinel() error {
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	go sigHandler(sigs, cancel)
 
-	if cfg.Metrics.ListenAddress != "" {
-		metricsMux := http.NewServeMux()
-		metricsMux.Handle("/metrics", promhttp.Handler())
-		metricsServer := http.Server{
-			Addr:              cfg.Metrics.ListenAddress,
-			Handler:           metricsMux,
+	webRegistry := newSentinelWebRegistry(uid)
+	healthAddr := cfg.Health.ListenAddress
+	if healthAddr == "" {
+		if cfg.Web.ListenAddress != "" {
+			healthAddr = cfg.Web.ListenAddress
+		} else {
+			healthAddr = cfg.Metrics.ListenAddress
+		}
+	}
+	plan := health.BuildListenerPlan(map[health.RouteGroup]string{
+		health.RouteGroupWeb:     cfg.Web.ListenAddress,
+		health.RouteGroupMetrics: cfg.Metrics.ListenAddress,
+		health.RouteGroupHealth:  healthAddr,
+	})
+	checker := health.CheckerFuncs{
+		LiveFn: func(context.Context) error {
+			return nil
+		},
+		StartupFn: func(ctx context.Context) error {
+			for _, clusterName := range clusterNames {
+				runner := webRegistry.Runner(clusterName)
+				if runner == nil {
+					return errSentinelStartupIncomplete
+				}
+				if err := runner.probeStartup(ctx); err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+		ReadyFn: func(ctx context.Context) error {
+			maxStaleness := 2 * time.Minute
+			for _, clusterName := range clusterNames {
+				runner := webRegistry.Runner(clusterName)
+				if runner == nil {
+					return errSentinelStartupIncomplete
+				}
+				if err := runner.probeReady(ctx, maxStaleness); err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+	}
+	for addr, groups := range plan {
+		listenAddr := addr
+		listenGroups := groups
+		mux := http.NewServeMux()
+		server := http.Server{
+			Addr:              listenAddr,
+			Handler:           mux,
 			ReadHeaderTimeout: 5 * time.Second,
 		}
-		go func() {
-			err := metricsServer.ListenAndServe()
-			if err != nil {
-				log.Error().Err(err).Msg("metrics http server error")
-				cancel()
+		for _, group := range listenGroups {
+			switch group {
+			case health.RouteGroupWeb:
+				registerWebRoutes(
+					mux,
+					normalizeWebBasePath(cfg.Web.BasePath),
+					&cfg,
+					clusterNames,
+					webRegistry,
+				)
+				server.ReadTimeout = cfg.Web.ReadTimeout
+				server.WriteTimeout = cfg.Web.WriteTimeout
+			case health.RouteGroupMetrics:
+				mux.Handle(
+					"/metrics",
+					health.WrapBasicAuth(
+						"hysteron-metrics",
+						cfg.Metrics.AuthUsername,
+						cfg.Metrics.AuthPassword,
+						promhttp.Handler(),
+					),
+				)
+			case health.RouteGroupHealth:
+				health.RegisterRoutes(mux, checker)
 			}
-		}()
-	}
-	webRegistry := newSentinelWebRegistry(uid)
-	if cfg.Web.ListenAddress != "" {
-		webServer := newWebServer(&cfg, clusterNames, webRegistry)
+		}
 		go func() {
-			err := webServer.ListenAndServe()
+			err := server.ListenAndServe()
 			if err != nil && !errors.Is(err, http.ErrServerClosed) {
-				log.Error().Err(err).Msg("web http server error")
+				log.Error().Err(err).Str("addr", listenAddr).Msg("HTTP server error")
 				cancel()
 			}
 		}()

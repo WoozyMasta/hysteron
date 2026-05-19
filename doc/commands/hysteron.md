@@ -10,6 +10,44 @@
 
 `hysteron [OPTIONS]`
 
+## Table of Contents
+
+* [OPTIONS](#options)
+* [COMMANDS](#commands)
+  * [help](#help)
+  * [version](#version)
+  * [cluster](#cluster)
+  * [cluster data](#cluster-data)
+  * [cluster data patch](#cluster-data-patch)
+  * [cluster data read](#cluster-data-read)
+  * [cluster data write](#cluster-data-write)
+  * [cluster initialize](#cluster-initialize)
+  * [cluster keeper](#cluster-keeper)
+  * [cluster keeper remove](#cluster-keeper-remove)
+  * [cluster list](#cluster-list)
+  * [cluster pause](#cluster-pause)
+  * [cluster promote](#cluster-promote)
+  * [cluster reinit](#cluster-reinit)
+  * [cluster resume](#cluster-resume)
+  * [cluster specification](#cluster-specification)
+  * [cluster status](#cluster-status)
+  * [cluster switchover](#cluster-switchover)
+  * [cluster update](#cluster-update)
+  * [completion](#completion)
+  * [failover](#failover)
+  * [failover force](#failover-force)
+  * [failover keeper](#failover-keeper)
+  * [failover target](#failover-target)
+  * [keeper](#keeper)
+  * [keeper etcd](#keeper-etcd)
+  * [keeper kubernetes](#keeper-kubernetes)
+  * [proxy](#proxy)
+  * [proxy etcd](#proxy-etcd)
+  * [proxy kubernetes](#proxy-kubernetes)
+  * [sentinel](#sentinel)
+  * [sentinel etcd](#sentinel-etcd)
+  * [sentinel kubernetes](#sentinel-kubernetes)
+
 ## OPTIONS
 
 ### Help Options
@@ -632,8 +670,20 @@ Run keeper runtime components
 #### Metrics
 
 * `--metrics-listen-address` -
-  metrics listen address i.e "0.0.0.0:8080" (disabled by default)
+  metrics listen address i.e "0.0.0.0:9108" (disabled by default)
   * Environment: `$HYSTERON_METRICS_LISTEN_ADDRESS`
+* `--metrics-auth-username` -
+  optional HTTP Basic auth username for metrics endpoints
+  * Environment: `$HYSTERON_METRICS_AUTH_USERNAME`
+* `--metrics-auth-password` -
+  optional HTTP Basic auth password for metrics endpoints
+  * Environment: `$HYSTERON_METRICS_AUTH_PASSWORD`
+
+#### Health
+
+* `--health-listen-address` -
+  health listen address i.e "0.0.0.0:8081" (disabled by default)
+  * Environment: `$HYSTERON_HEALTH_LISTEN_ADDRESS`
 
 #### Keeper
 
@@ -832,8 +882,20 @@ Run proxy runtime components
 #### Metrics
 
 * `--metrics-listen-address` -
-  metrics listen address i.e "0.0.0.0:8080" (disabled by default)
+  metrics listen address i.e "0.0.0.0:9108" (disabled by default)
   * Environment: `$HYSTERON_METRICS_LISTEN_ADDRESS`
+* `--metrics-auth-username` -
+  optional HTTP Basic auth username for metrics endpoints
+  * Environment: `$HYSTERON_METRICS_AUTH_USERNAME`
+* `--metrics-auth-password` -
+  optional HTTP Basic auth password for metrics endpoints
+  * Environment: `$HYSTERON_METRICS_AUTH_PASSWORD`
+
+#### Health
+
+* `--health-listen-address` -
+  health listen address i.e "0.0.0.0:8081" (disabled by default)
+  * Environment: `$HYSTERON_HEALTH_LISTEN_ADDRESS`
 
 #### Proxy
 
@@ -969,8 +1031,20 @@ Run sentinel runtime components
 #### Metrics
 
 * `--metrics-listen-address` -
-  metrics listen address i.e "0.0.0.0:8080" (disabled by default)
+  metrics listen address i.e "0.0.0.0:9108" (disabled by default)
   * Environment: `$HYSTERON_METRICS_LISTEN_ADDRESS`
+* `--metrics-auth-username` -
+  optional HTTP Basic auth username for metrics endpoints
+  * Environment: `$HYSTERON_METRICS_AUTH_USERNAME`
+* `--metrics-auth-password` -
+  optional HTTP Basic auth password for metrics endpoints
+  * Environment: `$HYSTERON_METRICS_AUTH_PASSWORD`
+
+#### Health
+
+* `--health-listen-address` -
+  health listen address i.e "0.0.0.0:8081" (disabled by default)
+  * Environment: `$HYSTERON_HEALTH_LISTEN_ADDRESS`
 
 #### Sentinel
 
@@ -986,7 +1060,7 @@ Run sentinel runtime components
 #### Web
 
 * `--web-listen-address` -
-  web status dashboard listen address, for example 0.0.0.0:8081 (disabled by
+  web status dashboard listen address, for example 0.0.0.0:8080 (disabled by
   default)
   * Environment: `$HYSTERON_WEB_LISTEN_ADDRESS`
 * `--web-base-path` -

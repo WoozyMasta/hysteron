@@ -26,6 +26,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	stconfig "github.com/woozymasta/hysteron/internal/config"
+	"github.com/woozymasta/hysteron/internal/health"
 	slog "github.com/woozymasta/hysteron/internal/log"
 	runtimecommon "github.com/woozymasta/hysteron/internal/runtime/common"
 	"github.com/woozymasta/hysteron/internal/tcpproxy"
@@ -85,26 +86,59 @@ func runProxy() error {
 	uid := id.UID()
 	log.Info().Str(slog.FieldProxyUID, uid).Msg("proxy UID assigned")
 
-	if cfg.Metrics.ListenAddress != "" {
-		http.Handle("/metrics", promhttp.Handler())
-		go func() {
-			server := &http.Server{
-				Addr:              cfg.Metrics.ListenAddress,
-				ReadHeaderTimeout: 5 * time.Second,
-			}
-			err := server.ListenAndServe()
-			if err != nil {
-				log.Fatal().
-					Err(err).
-					Str("addr", cfg.Metrics.ListenAddress).
-					Msg("metrics HTTP server failed")
-			}
-		}()
-	}
-
 	clusterChecker, err := NewClusterChecker(uid, cfg)
 	if err != nil {
 		return fmt.Errorf("failed to create cluster checker: %w", err)
+	}
+	if cfg.Metrics.ListenAddress != "" || cfg.Health.ListenAddress != "" {
+		healthAddr := cfg.Health.ListenAddress
+		if healthAddr == "" {
+			healthAddr = cfg.Metrics.ListenAddress
+		}
+		plan := health.BuildListenerPlan(map[health.RouteGroup]string{
+			health.RouteGroupMetrics: cfg.Metrics.ListenAddress,
+			health.RouteGroupHealth:  healthAddr,
+		})
+		checker := health.CheckerFuncs{
+			LiveFn:    func(context.Context) error { return nil },
+			ReadyFn:   clusterChecker.probeReady,
+			StartupFn: clusterChecker.probeStartup,
+		}
+		for addr, groups := range plan {
+			listenAddr := addr
+			listenGroups := groups
+			mux := http.NewServeMux()
+			for _, group := range listenGroups {
+				switch group {
+				case health.RouteGroupMetrics:
+					mux.Handle(
+						"/metrics",
+						health.WrapBasicAuth(
+							"hysteron-metrics",
+							cfg.Metrics.AuthUsername,
+							cfg.Metrics.AuthPassword,
+							promhttp.Handler(),
+						),
+					)
+				case health.RouteGroupHealth:
+					health.RegisterRoutes(mux, checker)
+				}
+			}
+			go func() {
+				server := &http.Server{
+					Addr:              listenAddr,
+					Handler:           mux,
+					ReadHeaderTimeout: 5 * time.Second,
+				}
+				err := server.ListenAndServe()
+				if err != nil {
+					log.Fatal().
+						Err(err).
+						Str("addr", listenAddr).
+						Msg("HTTP server failed")
+				}
+			}()
+		}
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

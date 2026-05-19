@@ -31,21 +31,23 @@ spec:
 
           ports:
             - name: web
-              containerPort: 8081
-            - name: metrics
               containerPort: 8080
+            - name: metrics
+              containerPort: 9108
+            - name: health
+              containerPort: 8081
 
           livenessProbe:
             httpGet:
               path: /health/live
-              port: web
+              port: health
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 6
           readinessProbe:
             httpGet:
               path: /health/ready
-              port: web
+              port: health
             periodSeconds: 5
             timeoutSeconds: 3
             failureThreshold: 6

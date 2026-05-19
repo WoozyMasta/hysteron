@@ -460,5 +460,6 @@ func (s *Sentinel) clusterSentinelCheck(pctx context.Context) {
 	// We only update this metric when we've completed all actions in this method
 	// successfully. That enables us to alert on when Sentinels are failing to
 	// correctly sync.
+	s.lastCheckSuccessUnixNano.Store(time.Now().UnixNano())
 	lastCheckSuccessSeconds.WithLabelValues(s.clusterName).SetToCurrentTime()
 }

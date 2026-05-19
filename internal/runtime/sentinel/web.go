@@ -16,7 +16,6 @@ package sentinel
 
 import (
 	"context"
-	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"html/template"
@@ -32,13 +31,14 @@ import (
 	"github.com/woozymasta/hysteron/internal/assets"
 	"github.com/woozymasta/hysteron/internal/cluster"
 	stconfig "github.com/woozymasta/hysteron/internal/config"
+	"github.com/woozymasta/hysteron/internal/health"
 	"github.com/woozymasta/hysteron/internal/operations"
 	runtimecommon "github.com/woozymasta/hysteron/internal/runtime/common"
 	"github.com/woozymasta/hysteron/internal/utils/buildflags"
 )
 
 type webOptions struct {
-	ListenAddress string `long:"listen-address" env:"LISTEN_ADDRESS" description:"web status dashboard listen address, for example 0.0.0.0:8081 (disabled by default)"`
+	ListenAddress string `long:"listen-address" env:"LISTEN_ADDRESS" description:"web status dashboard listen address, for example 0.0.0.0:8080 (disabled by default)"`
 	BasePath      string `long:"base-path" env:"BASE_PATH" default:"/" validate-regex:"^/.*" description:"base path prefix for web UI and API routes"`
 
 	AuthUsername string `long:"auth-username" env:"AUTH_USERNAME" and:"web-auth" description:"optional HTTP Basic auth username for web endpoints"`
@@ -84,6 +84,12 @@ func (r *sentinelWebRegistry) LocalLeadership(clusterName string) bool {
 	}
 	leader, _ := s.leaderInfo()
 	return leader
+}
+
+func (r *sentinelWebRegistry) Runner(clusterName string) *Sentinel {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.runners[clusterName]
 }
 
 type webSnapshot struct {
@@ -208,19 +214,6 @@ func validateWebConfig(cfg *config) error {
 	return nil
 }
 
-func newWebServer(cfg *config, clusterNames []string, registry *sentinelWebRegistry) *http.Server {
-	basePath := normalizeWebBasePath(cfg.Web.BasePath)
-	mux := http.NewServeMux()
-	registerWebRoutes(mux, basePath, cfg, clusterNames, registry)
-	return &http.Server{
-		Addr:              cfg.Web.ListenAddress,
-		Handler:           mux,
-		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       cfg.Web.ReadTimeout,
-		WriteTimeout:      cfg.Web.WriteTimeout,
-	}
-}
-
 func normalizeWebBasePath(raw string) string {
 	p := strings.TrimSpace(raw)
 	if p == "" || p == "/" {
@@ -250,12 +243,6 @@ func registerWebRoutes(
 		log.Fatal().Err(err).Msg("failed to prepare embedded web assets filesystem")
 	}
 	static := http.FileServer(http.FS(webFS))
-	mux.Handle("/health", healthHandler())
-	mux.Handle("/healthz", healthHandler())
-	mux.Handle("/health/live", healthHandler())
-	mux.Handle("/health/ready", healthHandler())
-	mux.Handle("/health/startup", healthHandler())
-
 	root := webAuthMiddleware(cfg, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		snapshot := collectWebSnapshot(r.Context(), cfg, clusterNames, basePath, registry)
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -388,14 +375,6 @@ func registerWebRoutes(
 		basePath+"/static/",
 		http.StripPrefix(path.Clean(basePath)+"/static/", static),
 	)
-}
-
-func healthHandler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok\n"))
-	})
 }
 
 func collectWebSnapshot(
@@ -719,26 +698,12 @@ func webAuthMiddleware(cfg *config, next http.Handler) http.Handler {
 	if username == "" {
 		return next
 	}
-
-	password := cfg.Web.AuthPassword
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		user, pass, ok := r.BasicAuth()
-		if !ok || !compareConstantTime(user, username) || !compareConstantTime(pass, password) {
-			w.Header().Set("WWW-Authenticate", `Basic realm="hysteron-sentinel-web", charset="UTF-8"`)
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
-func compareConstantTime(got, want string) bool {
-	gotBytes := []byte(got)
-	wantBytes := []byte(want)
-	if len(gotBytes) != len(wantBytes) {
-		return false
-	}
-	return subtle.ConstantTimeCompare(gotBytes, wantBytes) == 1
+	return health.WrapBasicAuth(
+		"hysteron-sentinel-web",
+		username,
+		cfg.Web.AuthPassword,
+		next,
+	)
 }
 
 func webAdminClusterConfig(cfg *config, clusterName string) *stconfig.CommonConfig {

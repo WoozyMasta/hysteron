@@ -18,18 +18,20 @@ import (
 	"strings"
 	"time"
 
+	"github.com/woozymasta/hysteron/internal/health"
 	stlog "github.com/woozymasta/hysteron/internal/log"
 )
 
 // CommonConfig groups options shared by unified CLI runtime and management
 // command flows.
 type CommonConfig struct {
-	Metrics      MetricsOptions  `group:"Metrics"`
-	K8s          K8sOptions      `group:"Kubernetes"`
-	ClusterNames []string        `short:"c" long:"cluster-name" env:"CLUSTER_NAME" description:"cluster name. Can be repeated by components that support multiple clusters"`
-	Log          stlog.FlagGroup `group:"Logging" namespace:"log" env-namespace:"LOG"`
-	Store        StoreOptions    `group:"Store" namespace:"store" env-namespace:"STORE"`
-	Debug        bool            `long:"debug" env:"DEBUG" hidden:"true" description:"deprecated: forces debug logging"`
+	Metrics      MetricsOptions   `group:"Metrics"`
+	Health       health.FlagGroup `group:"Health"`
+	K8s          K8sOptions       `group:"Kubernetes"`
+	ClusterNames []string         `short:"c" long:"cluster-name" env:"CLUSTER_NAME" description:"cluster name. Can be repeated by components that support multiple clusters"`
+	Log          stlog.FlagGroup  `group:"Logging" namespace:"log" env-namespace:"LOG"`
+	Store        StoreOptions     `group:"Store" namespace:"store" env-namespace:"STORE"`
+	Debug        bool             `long:"debug" env:"DEBUG" hidden:"true" description:"deprecated: forces debug logging"`
 }
 
 // StoreOptions configures etcd v3 or kubernetes-backed cluster-data storage.
@@ -46,7 +48,9 @@ type StoreOptions struct {
 
 // MetricsOptions configures metrics endpoint options.
 type MetricsOptions struct {
-	ListenAddress string `long:"metrics-listen-address" env:"METRICS_LISTEN_ADDRESS" description:"metrics listen address i.e \"0.0.0.0:8080\" (disabled by default)"`
+	ListenAddress string `long:"metrics-listen-address" env:"METRICS_LISTEN_ADDRESS" description:"metrics listen address i.e \"0.0.0.0:9108\" (disabled by default)"`
+	AuthUsername  string `long:"metrics-auth-username" env:"METRICS_AUTH_USERNAME" and:"metrics-auth" description:"optional HTTP Basic auth username for metrics endpoints"`
+	AuthPassword  string `long:"metrics-auth-password" env:"METRICS_AUTH_PASSWORD" and:"metrics-auth" secret:"true" description:"optional HTTP Basic auth password for metrics endpoints"`
 }
 
 // K8sOptions configures kubernetes storage integration.

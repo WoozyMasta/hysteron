@@ -18,12 +18,14 @@ import (
 	"time"
 
 	stconfig "github.com/woozymasta/hysteron/internal/config"
+	sthealth "github.com/woozymasta/hysteron/internal/health"
 	stlog "github.com/woozymasta/hysteron/internal/log"
 	"github.com/woozymasta/hysteron/internal/utils/readonly"
 )
 
 type runtimeCommonOptions struct {
 	Metrics runtimeMetricsOpts `group:"Metrics"`
+	Health  sthealth.FlagGroup `group:"Health"`
 	clusterSelectionOptions
 }
 
@@ -80,7 +82,7 @@ type keeperPostgresSUOptions struct {
 }
 
 type sentinelWebOptions struct {
-	ListenAddress string `long:"listen-address" env:"LISTEN_ADDRESS" description:"web status dashboard listen address, for example 0.0.0.0:8081 (disabled by default)"`
+	ListenAddress string `long:"listen-address" env:"LISTEN_ADDRESS" description:"web status dashboard listen address, for example 0.0.0.0:8080 (disabled by default)"`
 	BasePath      string `long:"base-path" env:"BASE_PATH" default:"/" validate-regex:"^/.*" description:"base path prefix for web UI and API routes"`
 
 	AuthUsername string `long:"auth-username" env:"AUTH_USERNAME" and:"web-auth" description:"optional HTTP Basic auth username for web endpoints"`
@@ -140,7 +142,9 @@ type runtimeEtcdOptions struct {
 }
 
 type runtimeMetricsOpts struct {
-	ListenAddress ListenEndpoint `long:"metrics-listen-address" env:"METRICS_LISTEN_ADDRESS" description:"metrics listen address i.e \"0.0.0.0:8080\" (disabled by default)"`
+	ListenAddress ListenEndpoint `long:"metrics-listen-address" env:"METRICS_LISTEN_ADDRESS" description:"metrics listen address i.e \"0.0.0.0:9108\" (disabled by default)"`
+	AuthUsername  string         `long:"metrics-auth-username" env:"METRICS_AUTH_USERNAME" and:"metrics-auth" description:"optional HTTP Basic auth username for metrics endpoints"`
+	AuthPassword  string         `long:"metrics-auth-password" env:"METRICS_AUTH_PASSWORD" and:"metrics-auth" secret:"true" description:"optional HTTP Basic auth password for metrics endpoints"`
 }
 
 func runtimeEtcdConfig(common runtimeCommonOptions, etcd runtimeEtcdOptions) *stconfig.CommonConfig {
@@ -196,6 +200,11 @@ func toRuntimeBackendConfig(
 		ClusterNames: common.ClusterNames,
 		Metrics: stconfig.MetricsOptions{
 			ListenAddress: string(common.Metrics.ListenAddress),
+			AuthUsername:  common.Metrics.AuthUsername,
+			AuthPassword:  common.Metrics.AuthPassword,
+		},
+		Health: sthealth.FlagGroup{
+			ListenAddress: common.Health.ListenAddress,
 		},
 		Store: stconfig.StoreOptions{
 			Endpoints:     etcd.Endpoints,

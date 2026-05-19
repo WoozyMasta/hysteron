@@ -6,18 +6,18 @@ scrape_configs:
   - job_name: hysteron-sentinel
     static_configs:
       - targets:
-          - sentinel1:9090
-          - sentinel2:9090
+          - sentinel1:9108
+          - sentinel2:9108
   - job_name: hysteron-keeper
     static_configs:
       - targets:
-          - keeper-a-1:9187
-          - keeper-a-2:9187
-          - keeper-b-1:9187
-          - keeper-b-2:9187
+          - keeper-a-1:9108
+          - keeper-a-2:9108
+          - keeper-b-1:9108
+          - keeper-b-2:9108
   - job_name: hysteron-proxy
     static_configs:
       - targets:
-          - proxy-a-1:9190
-          - proxy-a-2:9190
-          - proxy-b-1:9190
+          - proxy-a-1:9108
+          - proxy-a-2:9108
+          - proxy-b-1:9108

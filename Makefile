@@ -115,7 +115,7 @@ cli-docs:
 	@bin="$(OUTPUT_DIR)/$(BINARY)$(NATIVE_EXTENSION)"; \
 	out="$(DOC_COMMANDS_DIR)/hysteron.md"; \
 	echo ">> generating $$out"; \
-	"$$bin" docs md --style "$(DOC_RENDER_STYLE)" "$$out"
+	"$$bin" docs md --style "$(DOC_RENDER_STYLE)" --template=list --toc --trim-descriptions "$$out"
 
 release: clean
 	@mkdir -p $(OUTPUT_DIR)

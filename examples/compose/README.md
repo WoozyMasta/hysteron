@@ -64,8 +64,10 @@ docker compose up -d
 Sentinel health endpoints (not under `web-base-path`):
 
 ```bash
-# Readiness probe for sentinel1 web endpoint.
-curl -s http://localhost:8080/health/ready
+# Readiness probe for sentinel1 dedicated health listener.
+docker run --rm --network compose_default curlimages/curl:8.10.1 \
+  -s http://sentinel1:8081/health/ready
+
 # Full dashboard API payload (requires basic auth).
 curl -u hysteron:hysteron -s http://localhost:8080/api/v1/status | jq .
 ```

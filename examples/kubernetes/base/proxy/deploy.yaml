@@ -36,17 +36,27 @@ spec:
             - name: postgres-ro
               containerPort: 5433
             - name: metrics
-              containerPort: 8080
+              containerPort: 9108
+            - name: health
+              containerPort: 8081
 
           livenessProbe:
-            tcpSocket:
-              port: postgres-rw
+            httpGet:
+              path: /health/live
+              port: health
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 6
+            # Optional alternative:
+            # tcpSocket:
+            #   port: postgres-rw
           readinessProbe:
-            tcpSocket:
-              port: postgres-rw
+            httpGet:
+              path: /health/ready
+              port: health
             periodSeconds: 5
             timeoutSeconds: 3
             failureThreshold: 6
+            # Optional alternative:
+            # tcpSocket:
+            #   port: postgres-rw

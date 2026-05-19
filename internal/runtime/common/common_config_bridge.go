@@ -14,13 +14,21 @@
 
 package runtimecommon
 
-import stconfig "github.com/woozymasta/hysteron/internal/config"
+import (
+	stconfig "github.com/woozymasta/hysteron/internal/config"
+	"github.com/woozymasta/hysteron/internal/health"
+)
 
 // FromConfigCommon converts unified config contract to daemon common config.
 func FromConfigCommon(commonConfig stconfig.CommonConfig) CommonConfig {
 	return CommonConfig{
 		Metrics: MetricsOptions{
 			ListenAddress: commonConfig.Metrics.ListenAddress,
+			AuthUsername:  commonConfig.Metrics.AuthUsername,
+			AuthPassword:  commonConfig.Metrics.AuthPassword,
+		},
+		Health: health.FlagGroup{
+			ListenAddress: commonConfig.Health.ListenAddress,
 		},
 		Kube: KubeOptions{
 			Config:       commonConfig.K8s.Config,

@@ -40,6 +40,12 @@ The format is based on [Keep a Changelog][], and this project adheres to
   hostname and node metadata for diagnostics.
 * Runtime auto-provisioning of keeper identity/listen defaults from
   deployment signals (explicit flags/env always win).
+* Shared health subsystem for runtime components:
+  unified `/health*` endpoints, dedicated health listener option,
+  role-aware readiness/startup checks (keeper/proxy/sentinel),
+  and listener coalescing for shared web/metrics/health addresses.
+* Optional metrics endpoint Basic auth:
+  `metricsAuthUsername` and `metricsAuthPassword`.
 * Cluster-spec `pgIdent` support for managed `pg_ident.conf` rendering
   and PostgreSQL reload-driven updates.
 * New embedded Sentinel web status UI,

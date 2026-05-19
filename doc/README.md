@@ -15,6 +15,7 @@ primary concepts and avoid possible mistakes.
 * [Kubernetes Service Publishing](kubernetes_service_publishing.md)
 * [Kubernetes Naming Templates](kubernetes_naming_templates.md)
 * [Runtime Auto-Provisioning](runtime_autoprovision.md)
+* [Health Endpoints And Listener Layout](health_endpoints.md)
 * [Management Operations](management_operations.md)
 * [HA Timing Tuning](ha_timing_tuning.md)
 * [Lifecycle Migrations (Draft)](operations/lifecycle_migrations_draft.md)

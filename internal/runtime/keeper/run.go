@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/woozymasta/hysteron/internal/config"
+	"github.com/woozymasta/hysteron/internal/health"
 	"github.com/woozymasta/hysteron/internal/log"
 	"github.com/woozymasta/hysteron/internal/postgresql"
 	runtimecommon "github.com/woozymasta/hysteron/internal/runtime/common"
@@ -319,29 +320,61 @@ func runKeeper() error {
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	go sigHandler(sigs, cancel)
 
-	if cfg.Metrics.ListenAddress != "" {
-		metricsMux := http.NewServeMux()
-		metricsMux.Handle("/metrics", promhttp.Handler())
-		metricsServer := http.Server{
-			Addr:              cfg.Metrics.ListenAddress,
-			Handler:           metricsMux,
-			ReadHeaderTimeout: 5 * time.Second,
-		}
-		go func() {
-			err = metricsServer.ListenAndServe()
-			if err != nil {
-				kl.Error().
-					Err(err).
-					Str("addr", cfg.Metrics.ListenAddress).
-					Msg("metrics HTTP server failed")
-				cancel()
-			}
-		}()
-	}
-
 	p, err := NewPostgresKeeper(&cfg, end)
 	if err != nil {
 		return fmt.Errorf("failed to create postgres keeper: %w", err)
+	}
+
+	if cfg.Metrics.ListenAddress != "" || cfg.Health.ListenAddress != "" {
+		healthAddr := cfg.Health.ListenAddress
+		if healthAddr == "" {
+			healthAddr = cfg.Metrics.ListenAddress
+		}
+		plan := health.BuildListenerPlan(map[health.RouteGroup]string{
+			health.RouteGroupMetrics: cfg.Metrics.ListenAddress,
+			health.RouteGroupHealth:  healthAddr,
+		})
+		checker := health.CheckerFuncs{
+			LiveFn:    func(context.Context) error { return nil },
+			ReadyFn:   p.probeReady,
+			StartupFn: p.probeStartup,
+		}
+		for addr, groups := range plan {
+			listenAddr := addr
+			listenGroups := groups
+			mux := http.NewServeMux()
+			server := http.Server{
+				Addr:              listenAddr,
+				Handler:           mux,
+				ReadHeaderTimeout: 5 * time.Second,
+			}
+			for _, group := range listenGroups {
+				switch group {
+				case health.RouteGroupMetrics:
+					mux.Handle(
+						"/metrics",
+						health.WrapBasicAuth(
+							"hysteron-metrics",
+							cfg.Metrics.AuthUsername,
+							cfg.Metrics.AuthPassword,
+							promhttp.Handler(),
+						),
+					)
+				case health.RouteGroupHealth:
+					health.RegisterRoutes(mux, checker)
+				}
+			}
+			go func() {
+				err = server.ListenAndServe()
+				if err != nil {
+					kl.Error().
+						Err(err).
+						Str("addr", listenAddr).
+						Msg("HTTP server failed")
+					cancel()
+				}
+			}()
+		}
 	}
 	go p.Start(ctx)
 

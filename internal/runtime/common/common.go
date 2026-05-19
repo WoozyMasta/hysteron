@@ -29,6 +29,7 @@ import (
 	"github.com/woozymasta/flags"
 	"github.com/woozymasta/hysteron/internal/common"
 	stconfig "github.com/woozymasta/hysteron/internal/config"
+	"github.com/woozymasta/hysteron/internal/health"
 	stlog "github.com/woozymasta/hysteron/internal/log"
 	"github.com/woozymasta/hysteron/internal/store"
 	"github.com/woozymasta/hysteron/internal/utils/buildflags"
@@ -41,12 +42,13 @@ import (
 // `kube`/`KUBE`) from a single declaration. Defaults are expressed via
 // `default:` tags; we never mutate the struct before parse.
 type CommonConfig struct {
-	Metrics      MetricsOptions  `group:"Metrics"`
-	Kube         KubeOptions     `group:"Kubernetes"`
-	ClusterNames []string        `short:"c" long:"cluster-name" env:"CLUSTER_NAME" description:"cluster name. Can be repeated by components that support multiple clusters"`
-	Log          stlog.FlagGroup `group:"Logging" namespace:"log" env-namespace:"LOG"`
-	Store        StoreOptions    `group:"Store" namespace:"store" env-namespace:"STORE"`
-	Debug        bool            `long:"debug" env:"DEBUG" hidden:"true" description:"deprecated: forces debug logging"`
+	Metrics      MetricsOptions   `group:"Metrics"`
+	Health       health.FlagGroup `group:"Health"`
+	Kube         KubeOptions      `group:"Kubernetes"`
+	ClusterNames []string         `short:"c" long:"cluster-name" env:"CLUSTER_NAME" description:"cluster name. Can be repeated by components that support multiple clusters"`
+	Log          stlog.FlagGroup  `group:"Logging" namespace:"log" env-namespace:"LOG"`
+	Store        StoreOptions     `group:"Store" namespace:"store" env-namespace:"STORE"`
+	Debug        bool             `long:"debug" env:"DEBUG" hidden:"true" description:"deprecated: forces debug logging"`
 }
 
 // StoreOptions configures the cluster data store backend (etcd v3 or
@@ -65,7 +67,9 @@ type StoreOptions struct {
 
 // MetricsOptions configures metrics serving for Hysteron binaries.
 type MetricsOptions struct {
-	ListenAddress string `long:"metrics-listen-address" env:"METRICS_LISTEN_ADDRESS" description:"metrics listen address i.e \"0.0.0.0:8080\" (disabled by default)"`
+	ListenAddress string `long:"metrics-listen-address" env:"METRICS_LISTEN_ADDRESS" description:"metrics listen address i.e \"0.0.0.0:9108\" (disabled by default)"`
+	AuthUsername  string `long:"metrics-auth-username" env:"METRICS_AUTH_USERNAME" and:"metrics-auth" description:"optional HTTP Basic auth username for metrics endpoints"`
+	AuthPassword  string `long:"metrics-auth-password" env:"METRICS_AUTH_PASSWORD" and:"metrics-auth" secret:"true" description:"optional HTTP Basic auth password for metrics endpoints"`
 }
 
 // KubeOptions configures the kubernetes-backed store. Long names are explicit
@@ -270,6 +274,11 @@ func toConfig(cfg *CommonConfig) *stconfig.CommonConfig {
 	return &stconfig.CommonConfig{
 		Metrics: stconfig.MetricsOptions{
 			ListenAddress: cfg.Metrics.ListenAddress,
+			AuthUsername:  cfg.Metrics.AuthUsername,
+			AuthPassword:  cfg.Metrics.AuthPassword,
+		},
+		Health: health.FlagGroup{
+			ListenAddress: cfg.Health.ListenAddress,
 		},
 		K8s: stconfig.K8sOptions{
 			Config:       cfg.Kube.Config,
